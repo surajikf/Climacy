@@ -3,15 +3,16 @@ import prisma from "@/lib/prisma";
 
 export async function PATCH(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
         const body = await request.json();
         const { subject, body: emailBody } = body;
 
         // Fetch original record to merge output
         const original = await prisma.campaignHistory.findUnique({
-            where: { id: params.id }
+            where: { id }
         });
 
         if (!original) {
@@ -26,7 +27,7 @@ export async function PATCH(
         });
 
         const updated = await prisma.campaignHistory.update({
-            where: { id: params.id },
+            where: { id },
             data: { generatedOutput: updatedOutput },
             include: { client: true }
         });
