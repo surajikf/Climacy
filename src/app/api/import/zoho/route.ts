@@ -103,6 +103,8 @@ export async function POST(req: Request) {
 
         logMsg(`Deals after filtering: ${filteredDeals.length}`);
 
+        let importCount = 0;
+        let conflictCount = 0;
         const syncedExternalIds: string[] = [];
 
         for (const deal of filteredDeals) {
