@@ -62,7 +62,7 @@ async function main() {
                 industry: client.industry,
                 relationshipLevel: client.relationshipLevel,
                 services: {
-                    connect: dbServices.map(s => ({ id: s.id }))
+                    connect: dbServices.map((s: any) => ({ id: s.id }))
                 }
             }
         });
