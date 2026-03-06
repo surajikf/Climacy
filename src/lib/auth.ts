@@ -12,30 +12,47 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Password", type: "password" },
             },
             async authorize(credentials) {
+                console.log("[AUTH] Attempting authorization for:", credentials?.email);
+
                 if (!credentials?.email || !credentials?.password) {
+                    console.error("[AUTH] Missing email or password");
                     throw new Error("Missing credentials");
                 }
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email },
-                });
 
-                if (!user || !user.passwordHash) {
-                    throw new Error("Invalid credentials");
+                try {
+                    const user = await prisma.user.findUnique({
+                        where: { email: credentials.email },
+                    });
+
+                    if (!user) {
+                        console.error("[AUTH] User not found:", credentials.email);
+                        throw new Error("Invalid credentials");
+                    }
+
+                    if (!user.passwordHash) {
+                        console.error("[AUTH] User has no password hash:", credentials.email);
+                        throw new Error("Invalid credentials");
+                    }
+
+                    const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
+
+                    if (!isPasswordValid) {
+                        console.error("[AUTH] Invalid password for:", credentials.email);
+                        throw new Error("Invalid credentials");
+                    }
+
+                    console.log("[AUTH] Authorization successful for:", credentials.email);
+                    return {
+                        id: user.id,
+                        email: user.email,
+                        name: user.name,
+                        role: user.role,
+                        status: user.status,
+                    };
+                } catch (err: any) {
+                    console.error("[AUTH] Database or bcrypt error:", err);
+                    throw err;
                 }
-
-                const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
-
-                if (!isPasswordValid) {
-                    throw new Error("Invalid credentials");
-                }
-
-                return {
-                    id: user.id,
-                    email: user.email,
-                    name: user.name,
-                    role: user.role,
-                    status: user.status,
-                };
             },
         }),
     ],
