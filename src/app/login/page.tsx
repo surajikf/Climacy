@@ -1,17 +1,22 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, Server } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
 export default function LoginPage() {
+    const [mounted, setMounted] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,6 +37,8 @@ export default function LoginPage() {
             router.refresh();
         }
     };
+
+    if (!mounted) return null;
 
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-50">
