@@ -103,8 +103,7 @@ export async function POST(req: Request) {
 
         logMsg(`Deals after filtering: ${filteredDeals.length}`);
 
-        let importCount = 0;
-        let conflictCount = 0;
+        const syncedExternalIds: string[] = [];
 
         for (const deal of filteredDeals) {
             try {
@@ -125,6 +124,7 @@ export async function POST(req: Request) {
                 const clientName = contact.Account_Name?.name || contact.Last_Name || deal.Deal_Name;
                 const contactPerson = `${contact.First_Name || ""} ${contact.Last_Name || ""}`.trim();
                 const zohoTags = (deal.Tag || []).map((t: any) => t.name);
+                const externalId = String(deal.id);
 
                 // Conflict Detection: Check for same email in database from OTHER sources
                 const existing = await prisma.client.findFirst({
@@ -142,7 +142,7 @@ export async function POST(req: Request) {
                     where: {
                         source_externalId: {
                             source: "ZOHO_BIGIN",
-                            externalId: String(deal.id)
+                            externalId: externalId
                         }
                     },
                     update: {
@@ -159,18 +159,42 @@ export async function POST(req: Request) {
                         industry: "Imported",
                         relationshipLevel: "Warm Lead",
                         source: "ZOHO_BIGIN",
-                        externalId: String(deal.id),
+                        externalId: externalId,
                         zohoTags,
                         isRoleBased: isRoleBasedEmail(email),
                     }
                 });
+
+                syncedExternalIds.push(externalId);
                 importCount++;
             } catch (err: any) {
                 logMsg(`Error processing Deal ${deal.id}: ${err.message}`);
             }
         }
 
-        return NextResponse.json({ success: true, count: importCount, conflicts: conflictCount });
+        // 3. CLEANUP PHASE: Remove orphaned Zoho clients (Strict Sync)
+        // If a deal was moved out of "Closed Won" (or the target stage), it won't be in filteredDeals
+        // and thus won't be in syncedExternalIds. We should delete those local records.
+        logMsg(`[STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...`);
+        const deleteResult = await prisma.client.deleteMany({
+            where: {
+                source: "ZOHO_BIGIN",
+                externalId: {
+                    notIn: syncedExternalIds
+                }
+            }
+        });
+
+        if (deleteResult.count > 0) {
+            logMsg(`[STRICT_SYNC] Purged ${deleteResult.count} orphaned records from ZOHO_BIGIN.`);
+        }
+
+        return NextResponse.json({
+            success: true,
+            count: importCount,
+            conflicts: conflictCount,
+            purged: deleteResult.count
+        });
     } catch (error: any) {
         console.error("Zoho Sync Error:", error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
