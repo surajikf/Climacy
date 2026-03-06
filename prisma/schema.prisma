@@ -14,6 +14,7 @@ model Client {
   clientName         String
   contactPerson      String?
   email              String
+  primaryEmail       String?
   industry           String
   relationshipLevel  String
   createdAt          DateTime          @default(now())

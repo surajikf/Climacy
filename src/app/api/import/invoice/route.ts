@@ -76,12 +76,14 @@ export async function POST(req: Request) {
                         clientName: String(rawClient.ClientName || "Unknown Client"),
                         contactPerson: rawClient.ContactPerson ? String(rawClient.ContactPerson) : null,
                         email: email,
+                        primaryEmail: email.split(',')[0].trim(), // Default to first email
                         isRoleBased: isRoleBased,
                     },
                     create: {
                         clientName: String(rawClient.ClientName || "Unknown Client"),
                         contactPerson: rawClient.ContactPerson ? String(rawClient.ContactPerson) : null,
                         email: email,
+                        primaryEmail: email.split(',')[0].trim(), // Default to first email
                         industry: "Corporate", // Default for invoice clients
                         relationshipLevel: "Active",
                         source: "INVOICE_SYSTEM",

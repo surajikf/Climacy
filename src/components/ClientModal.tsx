@@ -28,6 +28,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
         clientName: "",
         contactPerson: "",
         email: "",
+        primaryEmail: "",
         industry: "",
         relationshipLevel: "Active",
         serviceIds: [] as string[]
@@ -43,6 +44,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                     clientName: client.clientName || "",
                     contactPerson: client.contactPerson || "",
                     email: client.email || "",
+                    primaryEmail: client.primaryEmail || client.email?.split(',')[0].trim() || "",
                     industry: client.industry || "",
                     relationshipLevel: client.relationshipLevel || "Active",
                     serviceIds: client.services?.map((s: any) => s.id) || []
@@ -52,6 +54,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                     clientName: "",
                     contactPerson: "",
                     email: "",
+                    primaryEmail: "",
                     industry: "",
                     relationshipLevel: "Active",
                     serviceIds: []
@@ -148,16 +151,54 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Email Address</label>
-                                <input
-                                    required
-                                    type="email"
-                                    placeholder="client@company.com"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
-                                />
+                            <div className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium text-slate-700">Email Addresses</label>
+                                    <textarea
+                                        required
+                                        placeholder="email1@company.com, email2@company.com"
+                                        value={formData.email}
+                                        onChange={(e) => {
+                                            const newVal = e.target.value;
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                email: newVal,
+                                                // If primary email is no longer in the list, or none is set, set first one
+                                                primaryEmail: prev.primaryEmail && newVal.includes(prev.primaryEmail) ? prev.primaryEmail : newVal.split(',')[0].trim()
+                                            }));
+                                        }}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium h-20 resize-none"
+                                    />
+                                    <p className="text-[10px] text-slate-400 font-medium italic">Separate multiple emails with commas.</p>
+                                </div>
+
+                                {(() => {
+                                    const emails = formData.email?.split(',').map(e => e.trim()).filter(Boolean) || [];
+                                    if (emails.length <= 1) return null;
+                                    return (
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Designate Primary Email</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {emails.map((email, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, primaryEmail: email })}
+                                                        className={cn(
+                                                            "px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all flex items-center gap-2",
+                                                            formData.primaryEmail === email
+                                                                ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100"
+                                                                : "bg-white border-slate-200 text-slate-500 hover:border-blue-500"
+                                                        )}
+                                                    >
+                                                        {formData.primaryEmail === email && <Check className="w-3 h-3" />}
+                                                        {email}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
