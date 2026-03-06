@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getToken } from "next-auth/jwt";
 import { isRoleBasedEmail } from "@/lib/email-utils";
+import { XMLParser } from "fast-xml-parser";
 
 export async function POST(req: Request) {
     try {
@@ -11,51 +12,99 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Unauthorized access. Level-5 Clearance Required." }, { status: 403 });
         }
 
-        // TODO: In the future, fetch from actual Invoice System API
-        // For now, we simulate pulling active clients from an endpoint
+        console.log("[INVOICE_SYNC] Starting sync from internal API...");
 
-        // Mock Response from an external "Clients List API"
-        const externalData = [
-            { id: "INV-C-001", name: "Global Tech Solutions", contact: "Alice Smith", email: "alice@globaltech.com", industry: "Technology" },
-            { id: "INV-C-002", name: "Apex Manufacturing", contact: "Bob Johnson", email: "bob@apex.com", industry: "Manufacturing" },
-            { id: "INV-C-003", name: "Stellar Logistics", contact: "Carol White", email: "carol@stellar.com", industry: "Logistics" }
-        ];
+        // 1. Fetch data from the internal ASMX Service
+        // Using a timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        let importCount = 0;
+        const response = await fetch("http://192.168.2.79/invoice/api/ApiService.asmx/GetActiveClients", {
+            headers: {
+                "Accept": "application/xml"
+            },
+            signal: controller.signal,
+            next: { revalidate: 0 }
+        });
 
-        // Upsert logic: Update if they exist, create if they don't based on externalId
-        for (const client of externalData) {
-            await prisma.client.upsert({
-                where: {
-                    source_externalId: {
-                        source: "INVOICE_SYSTEM",
-                        externalId: client.id
-                    }
-                },
-                update: {
-                    clientName: client.name,
-                    contactPerson: client.contact,
-                    email: client.email,
-                    industry: client.industry,
-                    isRoleBased: isRoleBasedEmail(client.email),
-                },
-                create: {
-                    clientName: client.name,
-                    contactPerson: client.contact,
-                    email: client.email,
-                    industry: client.industry,
-                    relationshipLevel: "Active", // Defaulting Invoice clients to Active
-                    source: "INVOICE_SYSTEM",
-                    externalId: client.id,
-                    isRoleBased: isRoleBasedEmail(client.email),
-                }
-            });
-            importCount++;
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch from Invoice System: ${response.statusText}`);
         }
 
-        return NextResponse.json({ success: true, count: importCount });
-    } catch (error) {
+        const xmlData = await response.text();
+
+        // 2. Parse XML to JSON
+        const parser = new XMLParser();
+        const jsonObj = parser.parse(xmlData);
+
+        // Based on the observed structure: ApiResponse -> data -> ActiveClientDto[]
+        const clientsList = jsonObj?.ApiResponse?.data?.ActiveClientDto;
+
+        if (!clientsList || (Array.isArray(clientsList) && clientsList.length === 0)) {
+            console.log("[INVOICE_SYNC] No clients found in source.");
+            return NextResponse.json({ success: true, count: 0, message: "No clients found in source (Empty Data)." });
+        }
+
+        // Handle single client wrap if fast-xml-parser doesn't force array
+        const clientsArray = Array.isArray(clientsList) ? clientsList : [clientsList];
+
+        let importCount = 0;
+        let conflictCount = 0;
+
+        console.log(`[INVOICE_SYNC] Processing ${clientsArray.length} clients...`);
+
+        // 3. Upsert logic: Handle with care
+        for (const rawClient of clientsArray) {
+            try {
+                const externalId = String(rawClient.customerid);
+                const email = rawClient.Client_Email?.trim();
+
+                if (!email || !externalId) continue;
+
+                const isRoleBased = isRoleBasedEmail(email);
+
+                await prisma.client.upsert({
+                    where: {
+                        source_externalId: {
+                            source: "INVOICE_SYSTEM",
+                            externalId: externalId
+                        }
+                    },
+                    update: {
+                        clientName: String(rawClient.ClientName || "Unknown Client"),
+                        contactPerson: rawClient.ContactPerson ? String(rawClient.ContactPerson) : null,
+                        email: email,
+                        isRoleBased: isRoleBased,
+                    },
+                    create: {
+                        clientName: String(rawClient.ClientName || "Unknown Client"),
+                        contactPerson: rawClient.ContactPerson ? String(rawClient.ContactPerson) : null,
+                        email: email,
+                        industry: "Corporate", // Default for invoice clients
+                        relationshipLevel: "Active",
+                        source: "INVOICE_SYSTEM",
+                        externalId: externalId,
+                        isRoleBased: isRoleBased,
+                    }
+                });
+                importCount++;
+            } catch (err) {
+                console.error(`[INVOICE_SYNC] Error processing client ${rawClient.customerid}:`, err);
+                conflictCount++;
+            }
+        }
+
+        console.log(`[INVOICE_SYNC] Completed. Imported/Updated: ${importCount}, Errors: ${conflictCount}`);
+
+        return NextResponse.json({
+            success: true,
+            count: importCount,
+            conflicts: conflictCount
+        });
+    } catch (error: any) {
         console.error("Invoice Sync Error:", error);
-        return NextResponse.json({ error: "Internal Server Error during synchronization." }, { status: 500 });
+        return NextResponse.json({ error: error.message || "Internal Server Error during synchronization." }, { status: 500 });
     }
 }
