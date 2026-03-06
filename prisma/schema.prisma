@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Client {
+  id                 String            @id @default(cuid())
+  clientName         String
+  contactPerson      String?
+  email              String
+  industry           String
+  relationshipLevel  String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  externalId         String?
+  source             ClientSource      @default(MANUAL)
+  zohoTags           String[]          @default([])
+  gmailSourceAccount String?
+  lastContacted      DateTime?
+  isRoleBased        Boolean           @default(false)
+  campaigns          CampaignHistory[]
+  services           Service[]         @relation("ClientServices")
+
+  @@unique([source, externalId])
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  serviceName String   @unique
+  category    String?
+  description String?
+  clients     Client[] @relation("ClientServices")
+}
+
+model CampaignHistory {
+  id              String   @id @default(cuid())
+  campaignType    String
+  campaignTopic   String
+  generatedOutput String
+  clientId        String?
+  dateCreated     DateTime @default(now())
+  client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model GlobalSettings {
+  id                          String   @id @default("singleton")
+  aiProvider                  String   @default("Groq")
+  aiModel                     String   @default("llama-3.3-70b-versatile")
+  brandResonance              String   @default("Strategic, insightful, and helpful.")
+  signature                   String   @default("Best regards,\nStrategic Partnership Team")
+  groqApiKeyEncrypted         String?
+  openaiApiKeyEncrypted       String?
+  googleClientIdEncrypted     String?
+  googleClientSecretEncrypted String?
+  googleRefreshTokenEncrypted String?
+  googleEmailEncrypted        String?
+  updatedAt                   DateTime @updatedAt
+  invoiceApiKeyEncrypted      String?
+  invoiceApiUrlEncrypted      String?
+  zohoClientIdEncrypted       String?
+  zohoClientSecretEncrypted   String?
+  zohoPipelineName            String?
+  zohoRefreshTokenEncrypted   String?
+  zohoStageName               String?
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String?
+  email        String     @unique
+  passwordHash String
+  role         UserRole   @default(USER)
+  status       UserStatus @default(PENDING)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model GmailAccount {
+  id                    String    @id @default(cuid())
+  accountName           String
+  email                 String    @unique
+  refreshTokenEncrypted String
+  accessTokenEncrypted  String?
+  expiresAt             DateTime?
+  updatedAt             DateTime  @updatedAt
+}
+
+enum ClientSource {
+  MANUAL
+  INVOICE_SYSTEM
+  ZOHO_BIGIN
+  GMAIL
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  BANNED
+}

@@ -1,0 +1,566 @@
+Zoho Sync - Search Criteria Query: (Pipeline:equals:Sales Pipeline)and(Stage:equals:Closed Won)\nZoho Sync - Fetching from URL: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=(Pipeline%3Aequals%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won)\nZoho Sync - Deals fetch status: 204\nZoho Sync - Received 204 No Content (No deals match criteria)\nZoho Sync - Search Criteria Query: (Pipeline:equals:Sales Pipeline)and(Stage:equals:Closed Won)\nZoho Sync - Fetching from URL: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=(Pipeline%3Aequals%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won)\nZoho Sync - Deals fetch status: 204\nZoho Sync - Received 204 No Content (No deals match criteria)\nZoho Sync - Search Criteria Query: ((Pipeline:equals:Sales Pipeline)and(Stage:equals:Closed Won))\nZoho Sync - Fetching from URL: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Aequals%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Deals fetch status: 204\nZoho Sync - Received 204 No Content. Fetching ALL deals to debug API names...\nZoho Sync - ALL DEALS DUMP: {"data":[{"Owner":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Description":"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.","$currency_symbol":"$","$field_states":null,"$followers":null,"$layout_id":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"$sharing_permission":"full_access","Record_Creation_Source_ID__s":"0","Closing_Date":"2026-03-06","Last_Activity_Time":"2026-03-05T14:40:39+05:30","Modified_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Deal_Name":"Website","Stage":"Closed Won","$locked_for_me":false,"Account_Name":{"name":"ABC Company","id":"1198824000000449427"},"id":"1198824000000449439","Modified_Time":"2026-03-05T14:40:39+05:30","Created_Time":"2026-03-05T14:23:02+05:30","Amount":10000,"$followed":false,"$editable":true,"Contact_Name":{"name":"Rajesh Jadhav","id":"1198824000000449432"},"Pipeline":"Sales Pipeline Standard","Layout":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"Created_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Tag":[],"$zia_owner_assignment":"owner_recommendation_unavailable","$approval_state":"approved"},{"Owner":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Description":"This is a sample Deal.\n ✷ You can move each Deal through a series of stages so that they progress towards completion.\n ✷ You can customize the stages in your pipeline from the Pipeline Settings.","$currency_symbol":"$","$field_states":null,"$followers":null,"$layout_id":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"$sharing_permission":"full_access","Record_Creation_Source_ID__s":"0","Closing_Date":"2026-03-10","Last_Activity_Time":"2026-03-05T11:40:12+05:30","Modified_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Deal_Name":"Zylker Yearly Subscription","Stage":"Qualification","$locked_for_me":false,"Account_Name":{"name":"Zylker Corp","id":"1198824000000446039"},"id":"1198824000000446045","Modified_Time":"2026-03-05T11:40:12+05:30","Created_Time":"2026-03-05T11:40:12+05:30","Amount":5671,"$followed":false,"$editable":true,"Contact_Name":{"name":"Ted Watson","id":"1198824000000446042"},"Pipeline":"Sales Pipeline Standard","Layout":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"Created_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Tag":[{"name":"Hot","id":"1198824000000446055"}],"$zia_owner_assignment":"owner_recommendation_unavailable","$approval_state":"approved"}],"info":{"per_page":200,"count":2,"page":1,"sort_by":"id","sort_order":"desc","more_records":false}}\nZoho Sync - Search Criteria Query: ((Pipeline:equals:Sales Pipeline)and(Stage:equals:Closed Won))\nZoho Sync - Fetching from URL: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Aequals%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Deals fetch status: 204\nZoho Sync - Received 204 No Content. Fetching ALL deals to debug API names...\nZoho Sync - ALL DEALS DUMP: {"data":[{"Owner":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Description":"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.","$currency_symbol":"$","$field_states":null,"$followers":null,"$layout_id":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"$sharing_permission":"full_access","Record_Creation_Source_ID__s":"0","Closing_Date":"2026-03-06","Last_Activity_Time":"2026-03-05T14:40:39+05:30","Modified_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Deal_Name":"Website","Stage":"Closed Won","$locked_for_me":false,"Account_Name":{"name":"ABC Company","id":"1198824000000449427"},"id":"1198824000000449439","Modified_Time":"2026-03-05T14:40:39+05:30","Created_Time":"2026-03-05T14:23:02+05:30","Amount":10000,"$followed":false,"$editable":true,"Contact_Name":{"name":"Rajesh Jadhav","id":"1198824000000449432"},"Pipeline":"Sales Pipeline Standard","Layout":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"Created_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Tag":[],"$zia_owner_assignment":"owner_recommendation_unavailable","$approval_state":"approved"},{"Owner":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Description":"This is a sample Deal.\n ✷ You can move each Deal through a series of stages so that they progress towards completion.\n ✷ You can customize the stages in your pipeline from the Pipeline Settings.","$currency_symbol":"$","$field_states":null,"$followers":null,"$layout_id":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"$sharing_permission":"full_access","Record_Creation_Source_ID__s":"0","Closing_Date":"2026-03-10","Last_Activity_Time":"2026-03-05T11:40:12+05:30","Modified_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Deal_Name":"Zylker Yearly Subscription","Stage":"Qualification","$locked_for_me":false,"Account_Name":{"name":"Zylker Corp","id":"1198824000000446039"},"id":"1198824000000446045","Modified_Time":"2026-03-05T11:40:12+05:30","Created_Time":"2026-03-05T11:40:12+05:30","Amount":5671,"$followed":false,"$editable":true,"Contact_Name":{"name":"Ted Watson","id":"1198824000000446042"},"Pipeline":"Sales Pipeline Standard","Layout":{"display_label":"Sales Pipeline","name":"Sales Pipeline","id":"1198824000000000173"},"Created_By":{"name":"Suraj Suraj","id":"1198824000000440001","email":"sss.qatester@gmail.com"},"Tag":[{"name":"Hot","id":"1198824000000446055"}],"$zia_owner_assignment":"owner_recommendation_unavailable","$approval_state":"approved"}],"info":{"per_page":200,"count":2,"page":1,"sort_by":"id","sort_order":"desc","more_records":false}}\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has 1 tags: [{"name":"Hot","id":"1198824000000446055"}]\n[Zoho Sync] Successfully synced client: Zylker Corp\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has 0 tags: []\n[Zoho Sync] Successfully synced client: ABC Company\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\nZoho Sync - Executing search: https://www.zohoapis.in/bigin/v1/Deals/search?criteria=((Pipeline%3Astarts_with%3ASales%20Pipeline)and(Stage%3Aequals%3AClosed%20Won))\nZoho Sync - Found 2 deals to process.\n[Zoho Sync] Processing deal: Zylker Yearly Subscription (ID: 1198824000000446045)\n[Zoho Sync] Deal Zylker Yearly Subscription has tags: ["Hot"]\n[Zoho Sync] Error processing deal 1198824000000446045: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000446045"
+          }
+        },
+        update: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          zohoTags: [
+            "Hot"
+          ]
+        },
+        create: {
+          clientName: "Zylker Corp",
+          contactPerson: "Ted Watson",
+          email: "support@bigin.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000446045",
+          zohoTags: [
+          ~~~~~~~~
+            "Hot"
+          ],
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[Zoho Sync] Processing deal: Website (ID: 1198824000000449439)\n[Zoho Sync] Deal Website has tags: []\n[Zoho Sync] Error processing deal 1198824000000449439: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert()` invocation in
+E:\Cursor\AI-powered Client Communication Web App\.next\dev\server\chunks\[root-of-the-server]__f4601bdf._.js:256:160
+
+  253 // Map Zoho Tags separately to NOT mess with the Matrix Services
+  254 const zohoTags = (deal.Tag || []).map((t)=>t.name);
+  255 logMsg(`[Zoho Sync] Deal ${dealName} has tags: ${JSON.stringify(zohoTags)}`);
+→ 256 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"].client.upsert({
+        where: {
+          source_externalId: {
+            source: "ZOHO_BIGIN",
+            externalId: "1198824000000449439"
+          }
+        },
+        update: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          zohoTags: []
+        },
+        create: {
+          clientName: "ABC Company",
+          contactPerson: "Rajesh Jadhav",
+          email: "rajeshjadhav@mailinator.com",
+          industry: "Unknown",
+          relationshipLevel: "Warm Lead",
+          source: "ZOHO_BIGIN",
+          externalId: "1198824000000449439",
+          zohoTags: [],
+          ~~~~~~~~
+      ?   id?: String,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime,
+      ?   services?: ServiceCreateNestedManyWithoutClientsInput,
+      ?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput
+        }
+      })
+
+Unknown argument `zohoTags`. Available options are marked with ?.\n[2026-03-05T11:00:22.649Z] Total Deals fetched from Zoho: 2
+[2026-03-05T11:00:22.700Z] Deals after filtering: 2
+[2026-03-05T12:52:01.325Z] Total Deals fetched from Zoho: 2
+[2026-03-05T12:52:01.375Z] Deals after filtering: 2
+[2026-03-06T03:22:20.893Z] Total Deals fetched from Zoho: 2
+[2026-03-06T03:22:20.980Z] Deals after filtering: 2
