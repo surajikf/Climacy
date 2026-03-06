@@ -75,11 +75,6 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (formData.serviceIds.length === 0) {
-            toast.error("An entity must be assigned at least one service node to be integrated.");
-            return;
-        }
-
         setLoading(true);
         try {
             const url = client ? `/api/clients/${client.id}` : "/api/clients";

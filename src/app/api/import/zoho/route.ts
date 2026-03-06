@@ -151,6 +151,7 @@ export async function POST(req: Request) {
                         clientName,
                         contactPerson,
                         email,
+                        primaryEmail: email.split(',')[0].trim(),
                         zohoTags,
                         isRoleBased: isRoleBasedEmail(email),
                     },
@@ -158,6 +159,7 @@ export async function POST(req: Request) {
                         clientName,
                         contactPerson,
                         email,
+                        primaryEmail: email.split(',')[0].trim(),
                         industry: "Imported",
                         relationshipLevel: "Warm Lead",
                         source: "ZOHO_BIGIN",
@@ -167,6 +169,7 @@ export async function POST(req: Request) {
                     }
                 });
 
+                logMsg(`[Zoho Sync] Successfully synced client: ${clientName} (Role-Based: ${isRoleBasedEmail(email)})`);
                 syncedExternalIds.push(externalId);
                 importCount++;
             } catch (err: any) {
