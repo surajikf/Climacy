@@ -6,9 +6,10 @@ export async function middleware(request: NextRequest) {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret" });
     const { pathname } = request.nextUrl;
 
-    // Allow public access to auth APIs, Next.js internal routes, and static files
+    // Allow public access to auth APIs, debug APIs, Next.js internal routes, and static files
     if (
         pathname.startsWith('/api/auth') ||
+        pathname.startsWith('/api/debug') ||
         pathname.startsWith('/_next') ||
         pathname === '/favicon.ico' ||
         pathname.includes('.') // like logo.png
