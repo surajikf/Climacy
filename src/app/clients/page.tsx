@@ -451,161 +451,160 @@ export default function ClientManager() {
                     <div className="bg-white overflow-hidden rounded-xl border border-slate-200 shadow-sm">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px]">
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-12">Sr.</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Company</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Contact Person</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Services</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Email Contacts</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Last Contact</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Status</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Source</th>
-                                        <th className="px-6 py-4 text-right"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50 text-sm">
-                                    {loading ? (
-                                        [...Array(6)].map((_, i) => (
-                                            <tr key={i} className="animate-pulse">
-                                                <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-4" /></td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-md bg-slate-100" />
-                                                        <div className="h-2.5 bg-slate-100 rounded-full w-32" />
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-24" /></td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex gap-1.5">
-                                                        <div className="h-4 bg-slate-100 rounded w-12" />
-                                                        <div className="h-4 bg-slate-100 rounded w-10" />
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-24" /></td>
-                                                <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-16" /></td>
-                                                <td className="px-6 py-4"><div className="h-5 bg-slate-100 rounded w-20" /></td>
-                                                <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-16" /></td>
-                                                <td className="px-6 py-4 text-right"></td>
-                                            </tr>
-                                        ))
-                                    ) : filteredClients.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={11} className="px-8 py-20 text-center text-slate-300 italic">No records found.</td>
+                                <tr className="bg-slate-50 border-b border-slate-200 text-[11px]">
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-12">Sr.</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Company</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Contact Person</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Services</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Email Contacts</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Last Contact</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Status</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Source</th>
+                                    <th className="px-6 py-4 text-right"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 text-sm">
+                                {loading ? (
+                                    [...Array(6)].map((_, i) => (
+                                        <tr key={i} className="animate-pulse">
+                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-4" /></td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-md bg-slate-100" />
+                                                    <div className="h-2.5 bg-slate-100 rounded-full w-32" />
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-24" /></td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex gap-1.5">
+                                                    <div className="h-4 bg-slate-100 rounded w-12" />
+                                                    <div className="h-4 bg-slate-100 rounded w-10" />
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-24" /></td>
+                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-16" /></td>
+                                            <td className="px-6 py-4"><div className="h-5 bg-slate-100 rounded w-20" /></td>
+                                            <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-16" /></td>
+                                            <td className="px-6 py-4 text-right"></td>
                                         </tr>
-                                    ) : (
-                                        filteredClients.map((client, index) => (
-                                            <motion.tr
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: index * 0.03, duration: 0.3 }}
-                                                key={client.id}
-                                                className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 group relative"
-                                            >
-                                                <td className="px-6 py-4">
-                                                    <div className="text-xs font-bold text-slate-400">#{index + 1}</div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center font-semibold text-slate-500 text-xs border border-slate-200">
-                                                            {client.clientName[0]}
-                                                        </div>
-                                                        <div className="font-medium text-slate-900">{client.clientName}</div>
+                                    ))
+                                ) : filteredClients.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={11} className="px-8 py-20 text-center text-slate-300 italic">No records found.</td>
+                                    </tr>
+                                ) : (
+                                    filteredClients.map((client, index) => (
+                                        <motion.tr
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: index * 0.03, duration: 0.3 }}
+                                            key={client.id}
+                                            className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 group relative"
+                                        >
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs font-bold text-slate-400">#{index + 1}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center font-semibold text-slate-500 text-xs border border-slate-200">
+                                                        {client.clientName[0]}
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm font-medium text-slate-600">{client.contactPerson || "---"}</div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {client.services?.map((s: any) => (
-                                                            <span key={s.id} className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-tight">{s.serviceName}</span>
-                                                        ))}
-                                                        {!client.services?.length && <span className="text-[10px] text-slate-300 italic">--</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col gap-2 py-1">
-                                                        {(client.email?.split(',') || []).map((email: string) => email.trim()).filter(Boolean).map((email: string, idx: number) => {
-                                                            const isPrimary = email === client.primaryEmail || (idx === 0 && !client.primaryEmail);
-                                                            return (
-                                                                <div key={idx} className="flex items-center gap-2 group/email">
-                                                                    <div className={cn(
-                                                                        "w-1 h-1 rounded-full shrink-0",
-                                                                        isPrimary ? "bg-blue-600" : "bg-slate-300"
-                                                                    )} />
-                                                                    <a
-                                                                        href={`mailto:${email}`}
-                                                                        className={cn(
-                                                                            "text-sm lowercase transition-colors w-fit font-medium",
-                                                                            isPrimary ? "text-slate-900 font-semibold" : "text-slate-500 hover:text-slate-900"
-                                                                        )}
-                                                                    >
-                                                                        {email}
-                                                                    </a>
-                                                                    {isPrimary && (
-                                                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-widest scale-90 origin-left">Primary</span>
+                                                    <div className="font-medium text-slate-900">{client.clientName}</div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-sm font-medium text-slate-600">{client.contactPerson || "---"}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {client.services?.map((s: any) => (
+                                                        <span key={s.id} className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-tight">{s.serviceName}</span>
+                                                    ))}
+                                                    {!client.services?.length && <span className="text-[10px] text-slate-300 italic">--</span>}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col gap-2 py-1">
+                                                    {(client.email?.split(',') || []).map((email: string) => email.trim()).filter(Boolean).map((email: string, idx: number) => {
+                                                        const isPrimary = email === client.primaryEmail || (idx === 0 && !client.primaryEmail);
+                                                        return (
+                                                            <div key={idx} className="flex items-center gap-2 group/email">
+                                                                <div className={cn(
+                                                                    "w-1 h-1 rounded-full shrink-0",
+                                                                    isPrimary ? "bg-blue-600" : "bg-slate-300"
+                                                                )} />
+                                                                <a
+                                                                    href={`mailto:${email}`}
+                                                                    className={cn(
+                                                                        "text-sm lowercase transition-colors w-fit font-medium",
+                                                                        isPrimary ? "text-slate-900 font-semibold" : "text-slate-500 hover:text-slate-900"
                                                                     )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                                                        {client.lastContacted ? formatDistanceToNow(new Date(client.lastContacted), { addSuffix: true }) : "Never"}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={cn(
-                                                            "w-1.5 h-1.5 rounded-full",
-                                                            client.relationshipLevel === "Active" ? "bg-emerald-500" :
-                                                                client.relationshipLevel === "Warm Lead" ? "bg-amber-500" :
-                                                                    "bg-slate-300"
-                                                        )} />
-                                                        <span className="text-xs font-semibold text-slate-700 uppercase tracking-tight">{client.relationshipLevel}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {client?.source === "INVOICE_SYSTEM" && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest">
-                                                            Invoice Sys
+                                                                >
+                                                                    {email}
+                                                                </a>
+                                                                {isPrimary && (
+                                                                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-widest scale-90 origin-left">Primary</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-tighter">
+                                                    {client.lastContacted ? formatDistanceToNow(new Date(client.lastContacted), { addSuffix: true }) : "Never"}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={cn(
+                                                        "w-1.5 h-1.5 rounded-full",
+                                                        client.relationshipLevel === "Active" ? "bg-emerald-500" :
+                                                            client.relationshipLevel === "Warm Lead" ? "bg-amber-500" :
+                                                                "bg-slate-300"
+                                                    )} />
+                                                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-tight">{client.relationshipLevel}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {client?.source === "INVOICE_SYSTEM" && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest">
+                                                        Invoice Sys
+                                                    </span>
+                                                )}
+                                                {client?.source === "ZOHO_BIGIN" && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-widest">
+                                                        Zoho Bigin
+                                                    </span>
+                                                )}
+                                                {client?.source === "GMAIL" && (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-widest w-fit">
+                                                            Gmail
                                                         </span>
-                                                    )}
-                                                    {client?.source === "ZOHO_BIGIN" && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-widest">
-                                                            Zoho Bigin
-                                                        </span>
-                                                    )}
-                                                    {client?.source === "GMAIL" && (
-                                                        <div className="flex flex-col gap-0.5">
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-widest w-fit">
-                                                                Gmail
-                                                            </span>
-                                                            <span className="text-[9px] text-slate-400 font-bold ml-1 truncate max-w-[80px]">{client.gmailSourceAccount || 'Contact'}</span>
-                                                        </div>
-                                                    )}
-                                                    {(client?.source === "MANUAL" || !client?.source) && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 uppercase tracking-widest">
-                                                            Manual
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={() => handleEdit(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
-                                                            <Edit3 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button onClick={() => setClientToDelete(client.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        <span className="text-[9px] text-slate-400 font-bold ml-1 truncate max-w-[80px]">{client.gmailSourceAccount || 'Contact'}</span>
                                                     </div>
-                                                </td>
-                                            </motion.tr>
-                                        ))
-                                    )}
-                                </tbody>
+                                                )}
+                                                {(client?.source === "MANUAL" || !client?.source) && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 uppercase tracking-widest">
+                                                        Manual
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleEdit(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                                                        <Edit3 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => setClientToDelete(client.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    ))
+                                )}
+                            </tbody>
                         </table>
 
                         <AnimatePresence>
