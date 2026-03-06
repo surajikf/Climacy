@@ -519,9 +519,42 @@ export default function ClientManager() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <a href={`mailto:${client.email}`} className="text-sm text-slate-500 hover:text-slate-900 transition-colors lowercase cursor-pointer">
-                                                    {client.email}
-                                                </a>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {(() => {
+                                                        const emails = client.email?.split(',').map((e: string) => e.trim()).filter(Boolean) || [];
+                                                        const primary = emails.slice(0, 2);
+                                                        const overflow = emails.slice(2);
+
+                                                        return (
+                                                            <>
+                                                                {primary.map((email: string, idx: number) => (
+                                                                    <a
+                                                                        key={idx}
+                                                                        href={`mailto:${email}`}
+                                                                        className="text-sm text-slate-600 hover:text-blue-600 transition-colors lowercase font-medium w-fit block"
+                                                                    >
+                                                                        {email}
+                                                                    </a>
+                                                                ))}
+                                                                {overflow.length > 0 && (
+                                                                    <div className="mt-1 space-y-1">
+                                                                        {overflow.map((email: string, idx: number) => (
+                                                                            <div key={idx} className="flex items-center gap-2 group/email">
+                                                                                <div className="w-1 h-1 rounded-full bg-slate-300 group-hover/email:bg-blue-400 transition-colors" />
+                                                                                <a
+                                                                                    href={`mailto:${email}`}
+                                                                                    className="text-[11px] text-slate-400 hover:text-blue-500 transition-colors lowercase font-medium"
+                                                                                >
+                                                                                    {email}
+                                                                                </a>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="text-xs font-bold text-slate-500 uppercase tracking-tighter">
