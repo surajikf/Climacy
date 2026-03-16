@@ -1,24 +1,50 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { isRoleBasedEmail } from "@/lib/email-utils";
+import { ok, error } from "@/lib/api-response";
+import { z } from "zod";
+
+const gmailImportSchema = z.object({
+    accountId: z.string().min(1, "Account ID required"),
+});
 
 export async function POST(request: Request) {
     try {
-        const { accountId } = await request.json();
-        if (!accountId) return NextResponse.json({ error: "Account ID required" }, { status: 400 });
+        const json = await request.json();
+        const parsed = gmailImportSchema.safeParse(json);
 
-        const account = await prisma.gmailAccount.findUnique({ where: { id: accountId } });
-        if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+        if (!parsed.success) {
+            return error("VALIDATION_ERROR", "Account ID required", {
+                status: 400,
+                details: parsed.error.flatten(),
+            });
+        }
+
+        const { accountId } = parsed.data;
+
+        const account = await prisma.gmailAccount.findUnique({
+            where: { id: accountId },
+        });
+        if (!account) {
+            return error("NOT_FOUND", "Account not found", { status: 404 });
+        }
 
         // 1. Refresh Token / Get Access Token
         let accessToken = decrypt(account.accessTokenEncrypted || "");
 
         // Simple expiry check (if expired or missing)
         if (!accessToken || !account.expiresAt || account.expiresAt < new Date()) {
-            const settings = await prisma.globalSettings.findUnique({ where: { id: "singleton" } });
-            if (!settings?.googleClientIdEncrypted || !settings?.googleClientSecretEncrypted) {
-                return NextResponse.json({ error: "Google OAuth credentials missing in Global Settings" }, { status: 500 });
+            const settings = await prisma.globalSettings.findUnique({
+                where: { id: "singleton" },
+            });
+            if (
+                !settings?.googleClientIdEncrypted ||
+                !settings?.googleClientSecretEncrypted
+            ) {
+                return error(
+                    "INTERNAL_ERROR",
+                    "Google OAuth credentials missing in Global Settings",
+                );
             }
 
             const clientId = decrypt(settings.googleClientIdEncrypted);
@@ -39,7 +65,10 @@ export async function POST(request: Request) {
             const tokens = await tokenResponse.json();
             if (!tokenResponse.ok) {
                 console.error("Gmail Token Refresh Error:", tokens);
-                return NextResponse.json({ error: "Failed to refresh Gmail access" }, { status: 500 });
+                return error("INTEGRATION_ERROR", "Failed to refresh Gmail access", {
+                    status: 502,
+                    details: tokens,
+                });
             }
 
             accessToken = tokens.access_token;
@@ -56,18 +85,24 @@ export async function POST(request: Request) {
 
         // 2. Fetch Recent Messages (Inbox and Sent)
         // We'll fetch the last 20 messages for each to keep it fast
-        const messagesRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=after:2024/01/01`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
+        const messagesRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=after:2024/01/01`,
+            {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            },
+        );
         const { messages = [] } = await messagesRes.json();
 
         const contacts = new Map<string, { email: string; name: string }>();
 
         // 3. Extract Headers
         for (const msg of messages) {
-            const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            });
+            const detailRes = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To`,
+                {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                },
+            );
             const detail = await detailRes.json();
 
             const headers = detail.payload?.headers || [];
@@ -128,11 +163,15 @@ export async function POST(request: Request) {
             }
         }
 
-        return NextResponse.json({ success: true, count: importedCount, conflicts: conflictCount });
-
-    } catch (error) {
-        console.error("Gmail Sync Route Error:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return ok({
+            count: importedCount,
+            conflicts: conflictCount,
+        });
+    } catch (err: any) {
+        console.error("Gmail Sync Route Error:", err);
+        return error("INTERNAL_ERROR", "Internal Server Error", {
+            details: { message: err.message },
+        });
     }
 }
 

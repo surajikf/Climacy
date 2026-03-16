@@ -1,15 +1,26 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { sendStrategicEmail } from "@/lib/mail";
 import { wrapInPremiumTemplate } from "@/lib/email-template";
+import { ok, error } from "@/lib/api-response";
+import { z } from "zod";
+
+const dispatchSchema = z.object({
+    campaignId: z.string().min(1, "Campaign ID is required"),
+});
 
 export async function POST(request: Request) {
     try {
-        const { campaignId } = await request.json();
+        const json = await request.json();
+        const parsed = dispatchSchema.safeParse(json);
 
-        if (!campaignId) {
-            return NextResponse.json({ error: "Campaign ID vector required." }, { status: 400 });
+        if (!parsed.success) {
+            return error("VALIDATION_ERROR", "Campaign ID vector required.", {
+                status: 400,
+                details: parsed.error.flatten(),
+            });
         }
+
+        const { campaignId } = parsed.data;
 
         // 1. Fetch Campaign Details
         const campaign = await prisma.campaignHistory.findUnique({
@@ -18,14 +29,18 @@ export async function POST(request: Request) {
         });
 
         if (!campaign || !campaign.client) {
-            return NextResponse.json({ error: "No campaign company found in the matrix." }, { status: 404 });
+            return error("NOT_FOUND", "No campaign company found in the matrix.", {
+                status: 404,
+            });
         }
 
         const content = JSON.parse(campaign.generatedOutput);
         const { subject, body } = content;
 
         if (!campaign.client.email) {
-            return NextResponse.json({ error: "Target company lacks a valid email ID." }, { status: 400 });
+            return error("BAD_REQUEST", "Target company lacks a valid email ID.", {
+                status: 400,
+            });
         }
 
         // 2. Dispatch Strategic Communication
@@ -39,17 +54,20 @@ export async function POST(request: Request) {
         });
 
         if (!result.success) {
-            return NextResponse.json({ error: result.error || "Neural Link Failure." }, { status: 400 });
+            return error("INTEGRATION_ERROR", result.error || "Neural Link Failure.", {
+                status: 400,
+            });
         }
 
-        return NextResponse.json({
-            success: true,
+        return ok({
             messageId: result.messageId,
-            recipient: campaign.client.clientName
+            recipient: campaign.client.clientName,
         });
-
-    } catch (error: any) {
-        console.error("Neural Dispatch Error:", error);
-        return NextResponse.json({ error: error.message || "Major system failure during dispatch." }, { status: 500 });
+    } catch (err: any) {
+        console.error("Neural Dispatch Error:", err);
+        return error(
+            "INTERNAL_ERROR",
+            err.message || "Major system failure during dispatch.",
+        );
     }
 }

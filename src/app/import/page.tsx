@@ -32,8 +32,9 @@ export default function ImportIntegrationsPage() {
     const fetchSettings = async () => {
         try {
             const res = await fetch("/api/settings/zoho");
-            if (res.ok) {
-                const data = await res.json();
+            const result = await res.json();
+            if (result.success) {
+                const data = result.data;
                 setZohoConfig(data);
                 setZohoFormData(prev => ({
                     ...prev,
@@ -49,8 +50,14 @@ export default function ImportIntegrationsPage() {
     const fetchGmailAccounts = async () => {
         try {
             const res = await fetch("/api/settings/gmail");
-            if (res.ok) {
-                setGmailAccounts(await res.json());
+            const result = await res.json();
+            if (result.success) {
+                const accounts = Array.isArray(result.data)
+                    ? result.data
+                    : Array.isArray(result.data?.accounts)
+                        ? result.data.accounts
+                        : [];
+                setGmailAccounts(accounts);
             }
         } catch (err) {
             console.error(err);
@@ -70,13 +77,14 @@ export default function ImportIntegrationsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ accountId })
             });
-            const data = await res.json();
+            const result = await res.json();
 
-            if (res.ok) {
+            if (result.success) {
+                const data = result.data;
                 const message = `Successfully imported ${data.count || 0} clients from ${accountName} Gmail.${data.conflicts > 0 ? ` Detected ${data.conflicts} existing record conflicts.` : ""}`;
                 toast.success(message);
             } else {
-                toast.error(data.error || `Failed to sync from ${accountName}`);
+                toast.error(result.error?.message || `Failed to sync from ${accountName}`);
             }
         } catch (error) {
             toast.error(`Network error during ${accountName} sync.`);
@@ -94,13 +102,14 @@ export default function ImportIntegrationsPage() {
         setIsInvoiceSyncing(true);
         try {
             const res = await fetch("/api/import/invoice", { method: "POST" });
-            const data = await res.json();
+            const result = await res.json();
 
-            if (res.ok) {
+            if (result.success) {
+                const data = result.data;
                 toast.success(`Successfully imported ${data.count || 0} clients from internal invoice system.`);
                 setInvoiceLastSync(new Date().toLocaleString());
             } else {
-                toast.error(data.error || "Failed to sync from Invoice System");
+                toast.error(result.error?.message || "Failed to sync from Invoice System");
             }
         } catch (error) {
             toast.error("Network error during Invoice Sync.");
@@ -117,14 +126,15 @@ export default function ImportIntegrationsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ pipelineStage: zohoConfig.stageName })
             });
-            const data = await res.json();
+            const result = await res.json();
 
-            if (res.ok) {
+            if (result.success) {
+                const data = result.data;
                 const message = `Successfully imported ${data.count || 0} clients from Zoho Bigin.${data.conflicts > 0 ? ` Detected ${data.conflicts} existing record conflicts.` : ""}`;
                 toast.success(message);
                 setZohoLastSync(new Date().toLocaleString());
             } else {
-                toast.error(data.error || "Failed to sync from Zoho Bigin");
+                toast.error(result.error?.message || "Failed to sync from Zoho Bigin");
             }
         } catch (error) {
             toast.error("Network error during Zoho Bigin Sync.");

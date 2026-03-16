@@ -2,11 +2,30 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import Groq from "groq-sdk";
 import { getGlobalSettings } from "@/lib/settings";
+import { ok, error } from "@/lib/api-response";
+import { z } from "zod";
+
+const generateCampaignSchema = z.object({
+    type: z.string().min(1, "Campaign type is required"),
+    topic: z.string().min(1, "Topic is required"),
+    coreMessage: z.string().min(1, "Core message is required"),
+    tone: z.string().optional(),
+    cta: z.string().min(1, "Call to action is required"),
+});
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const { type, topic, coreMessage, tone, cta } = body;
+        const json = await request.json();
+        const parsed = generateCampaignSchema.safeParse(json);
+
+        if (!parsed.success) {
+            return error("VALIDATION_ERROR", "Invalid campaign generation payload", {
+                status: 400,
+                details: parsed.error.flatten(),
+            });
+        }
+
+        const { type, topic, coreMessage, tone, cta } = parsed.data;
 
         // 1. Initial Matrix Calibration (Dynamic Settings)
         const settings = await getGlobalSettings();
@@ -17,7 +36,7 @@ export async function POST(request: Request) {
 
         // 2. Fetch Target Clients
         let targetClients: any[] = [];
-        const normalizedType = type?.toLowerCase();
+        const normalizedType = type.toLowerCase();
 
         if (normalizedType === "broadcast" || normalizedType === "cross-sell") {
             targetClients = await prisma.client.findMany({
@@ -204,9 +223,11 @@ export async function POST(request: Request) {
             }
         }
 
-        return NextResponse.json({ success: true, count: generatedCampaigns.length });
-    } catch (error) {
-        console.error("AI Generation failed:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return ok({
+            count: generatedCampaigns.length,
+        });
+    } catch (err) {
+        console.error("AI Generation failed:", err);
+        return error("INTERNAL_ERROR", "Internal Server Error");
     }
 }

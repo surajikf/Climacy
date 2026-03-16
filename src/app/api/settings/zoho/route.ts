@@ -1,54 +1,83 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getToken } from "next-auth/jwt";
 import crypto from "crypto";
+import { ok, error } from "@/lib/api-response";
+import { z } from "zod";
 
-const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
-const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, '0').substring(0, 32);
+const RAW_ENCRYPTION_KEY =
+    process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
+const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, "0").substring(0, 32);
 
 const RAW_ENCRYPTION_IV = process.env.ENCRYPTION_IV || "default_iv_12345";
-const ENCRYPTION_IV = RAW_ENCRYPTION_IV.padEnd(16, '0').substring(0, 16);
+const ENCRYPTION_IV = RAW_ENCRYPTION_IV.padEnd(16, "0").substring(0, 16);
 
 function encrypt(text: string): string {
     if (!text) return text;
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), Buffer.from(ENCRYPTION_IV));
+    const cipher = crypto.createCipheriv(
+        "aes-256-cbc",
+        Buffer.from(ENCRYPTION_KEY),
+        Buffer.from(ENCRYPTION_IV),
+    );
     let encrypted = cipher.update(text);
     encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return encrypted.toString('hex');
+    return encrypted.toString("hex");
 }
+
+const zohoSettingsSchema = z.object({
+    clientId: z.string().optional(),
+    clientSecret: z.string().optional(),
+    pipelineName: z.string().optional(),
+    stageName: z.string().optional(),
+});
 
 export async function GET(req: Request) {
     try {
-        const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret" });
+        const token = await getToken({
+            req: req as any,
+            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
+        });
 
         if (!token || token.role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized access." }, { status: 403 });
+            return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 
         const settings = await prisma.globalSettings.findFirst();
 
-        return NextResponse.json({
+        return ok({
             hasClientId: !!settings?.zohoClientIdEncrypted,
             hasClientSecret: !!settings?.zohoClientSecretEncrypted,
             hasRefreshToken: !!settings?.zohoRefreshTokenEncrypted,
             pipelineName: settings?.zohoPipelineName || "Sales Pipeline",
-            stageName: settings?.zohoStageName || "Closed Won"
+            stageName: settings?.zohoStageName || "Closed Won",
         });
-    } catch (error) {
-        console.error("Zoho Settings GET Error:", error);
-        return NextResponse.json({ error: "Failed to fetch settings." }, { status: 500 });
+    } catch (err) {
+        console.error("Zoho Settings GET Error:", err);
+        return error("INTERNAL_ERROR", "Failed to fetch settings.");
     }
 }
 
 export async function PUT(req: Request) {
     try {
-        const token = await getToken({ req: req as any, secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret" });
+        const token = await getToken({
+            req: req as any,
+            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
+        });
 
         if (!token || token.role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized access." }, { status: 403 });
+            return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 
-        const { clientId, clientSecret, pipelineName, stageName } = await req.json();
+        const json = await req.json();
+        const parsed = zohoSettingsSchema.safeParse(json);
+
+        if (!parsed.success) {
+            return error("VALIDATION_ERROR", "Invalid Zoho settings payload", {
+                status: 400,
+                details: parsed.error.flatten(),
+            });
+        }
+
+        const { clientId, clientSecret, pipelineName, stageName } = parsed.data;
 
         let settings = await prisma.globalSettings.findFirst();
 
@@ -62,17 +91,17 @@ export async function PUT(req: Request) {
         if (settings) {
             await prisma.globalSettings.update({
                 where: { id: settings.id },
-                data: updateData
+                data: updateData,
             });
         } else {
             await prisma.globalSettings.create({
-                data: updateData
+                data: updateData,
             });
         }
 
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Zoho Settings PUT Error:", error);
-        return NextResponse.json({ error: "Failed to update settings." }, { status: 500 });
+        return ok({ updated: true });
+    } catch (err) {
+        console.error("Zoho Settings PUT Error:", err);
+        return error("INTERNAL_ERROR", "Failed to update settings.");
     }
 }

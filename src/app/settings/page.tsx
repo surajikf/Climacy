@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SmartLoader } from "@/components/SmartLoader";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function Settings() {
     const [saved, setSaved] = useState(false);
@@ -51,11 +52,11 @@ export default function Settings() {
     const fetchSettings = async () => {
         try {
             const res = await fetch("/api/settings");
-            if (res.ok) {
-                const data = await res.json();
+            const result = await res.json();
+            if (result.success) {
                 setFormData({
                     ...defaultSettings,
-                    ...data
+                    ...result.data
                 });
             }
         } catch (err) {
@@ -74,13 +75,13 @@ export default function Settings() {
         setTestStatus({ status: 'testing' });
         try {
             const res = await fetch(`/api/test-ai?provider=${formData.aiProvider}`);
-            const data = await res.json();
-            if (res.ok) {
+            const result = await res.json();
+            if (result.success) {
                 setTestStatus({ status: 'success', message: `Connected to ${formData.aiProvider}` });
                 toast.success(`Neural link established with ${formData.aiProvider} nodes.`);
             } else {
-                setTestStatus({ status: 'error', message: data.error || "Connection failed" });
-                toast.error(data.error || "Neural link failure - Check credentials.");
+                setTestStatus({ status: 'error', message: result.error?.message || "Connection failed" });
+                toast.error(result.error?.message || "Neural link failure - Check credentials.");
             }
         } catch (err) {
             setTestStatus({ status: 'error', message: "Network error" });
@@ -98,16 +99,15 @@ export default function Settings() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(formData),
             });
-            const data = await res.json();
+            const result = await res.json();
 
-            if (res.ok) {
-                setFormData(prev => ({ ...prev, ...data }));
+            if (result.success) {
+                setFormData(prev => ({ ...prev, ...result.data }));
                 setSaved(true);
                 toast.success("Synchronized: Database configuration persisted.");
                 setTimeout(() => setSaved(false), 3000);
             } else {
-                console.error("Settings Persistence Failure:", data);
-                toast.error(`Error: ${data.message || data.error || "Database failure."}`);
+                toast.error(result.error?.message || "Database failure.");
             }
         } catch (err) {
             console.error(err);
@@ -154,20 +154,12 @@ export default function Settings() {
 
     return (
         <form onSubmit={handleFormSubmit} className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-500">
-            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-2 mb-8">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Configuration</h2>
-                        {saved && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 animate-in fade-in slide-in-from-left-2 transition-all">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Synchronized
-                            </span>
-                        )}
-                    </div>
-                    <p className="text-sm font-medium text-slate-500">Manage your system nodes and operational vectors.</p>
-                </div>
-                <div className="flex gap-3">
+            <PageHeader
+                title="Configuration"
+                subtitle="Manage your system nodes and operational vectors."
+                eyebrow="System Settings"
+                actions={
+                    <>
                     <button
                         type="button"
                         onClick={() => setResetModalOpen(true)}
@@ -176,16 +168,23 @@ export default function Settings() {
                         <RotateCcw className="w-4 h-4" />
                         Reset
                     </button>
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm active:scale-[0.98] flex items-center gap-2"
-                    >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        {saving ? "Saving..." : "Save Changes"}
-                    </button>
-                </div>
-            </header>
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm active:scale-[0.98] flex items-center gap-2"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            {saving ? "Saving..." : "Save Changes"}
+                        </button>
+                        {saved && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 animate-in fade-in slide-in-from-left-2 transition-all">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Synchronized
+                            </span>
+                        )}
+                    </>
+                }
+            />
 
             <div className="grid gap-6">
                 {/* 1. Intelligence Hub */}

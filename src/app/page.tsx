@@ -33,9 +33,9 @@ export default function Dashboard() {
   const fetchStats = async () => {
     try {
       const res = await fetch("/api/stats");
-      if (res.ok) {
-        const d = await res.json();
-        setData(d);
+      const result = await res.json();
+      if (result.success) {
+        setData(result.data);
       }
     } catch (err) {
       console.error(err);
@@ -45,6 +45,35 @@ export default function Dashboard() {
   };
 
   if (loading) return <SmartLoader label="Analyzing Dashboard" description="Fetching real-time business metrics..." />;
+
+  const totalClients = data?.stats?.totalClients || 0;
+  const activeClients = data?.stats?.activeClients || 0;
+  const pastClients = data?.stats?.pastClients || 0;
+  const integrityScore = data?.integrityScore || 0;
+
+  const healthSuggestions: string[] = [];
+  const opportunitySuggestions: string[] = [];
+  const riskSuggestions: string[] = [];
+
+  if (totalClients > 0 && activeClients / totalClients < 0.5) {
+    opportunitySuggestions.push("Large portion of your database is cold. Consider a Reactivation or Broadcast campaign.");
+  }
+
+  if (data?.recentCampaigns?.length === 0 && totalClients > 0) {
+    opportunitySuggestions.push("No recent outreach detected. Launch a quick Broadcast to re-introduce your services.");
+  }
+
+  if (integrityScore < 80) {
+    healthSuggestions.push("Profile Health is below 80%. Improve data quality from Integrations Studio or by enriching client records.");
+  }
+
+  if (pastClients > 0) {
+    riskSuggestions.push("You have past clients in the database. A focused Reactivation campaign could win back business.");
+  }
+
+  if (healthSuggestions.length === 0 && opportunitySuggestions.length === 0 && riskSuggestions.length === 0) {
+    opportunitySuggestions.push("Your system looks healthy. Create a Targeted campaign for your best-fit clients.");
+  }
 
   const stats = [
     {
@@ -94,7 +123,9 @@ export default function Dashboard() {
             <h4 className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Business Overview</h4>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          <p className="text-xs font-medium text-slate-500 max-w-md">Your database is ready. You have {data?.stats?.totalClients} clients synced.</p>
+          <p className="text-xs font-medium text-slate-500 max-w-md">
+            One place for client health, communication activity, and quick actions. You have {totalClients} clients synced.
+          </p>
         </div>
 
         <div className="relative flex items-center gap-6">
@@ -115,8 +146,15 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Stats - More Compact */}
-      <div className="flex-shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats - More Compact (Health Overview) */}
+      <div className="flex-shrink-0 space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-bold uppercase tracking-[.2em] text-slate-500">Health Overview</h2>
+          <span className="text-[10px] text-slate-400 font-medium">
+            Quick view of database size, engagement and growth.
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
           <motion.div
             key={i}
@@ -161,6 +199,7 @@ export default function Dashboard() {
             </div>
           </motion.div>
         ))}
+        </div>
       </div>
 
       {/* Main Grid - Flexible height */}
@@ -264,7 +303,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right Column: Industry Hub */}
+        {/* Right Column: Industry Hub + Suggestions */}
         <div className="lg:col-span-4 flex flex-col gap-6 min-h-0">
           <div className="flex-1 min-h-0 bg-white p-7 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
             <div className="mb-6 flex-shrink-0">
@@ -303,6 +342,57 @@ export default function Dashboard() {
                   </span>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Smart Suggestions */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-[.2em]">Smart Suggestions</h3>
+                <p className="text-[10px] text-slate-500 font-medium mt-1">
+                  Suggested next steps based on current data.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {healthSuggestions.length > 0 && (
+                <div className="border border-emerald-100 bg-emerald-50/40 rounded-2xl p-3">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1.5">Health</p>
+                  <ul className="space-y-1.5">
+                    {healthSuggestions.map((s, idx) => (
+                      <li key={`health-${idx}`} className="text-xs text-emerald-900 leading-relaxed">
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {opportunitySuggestions.length > 0 && (
+                <div className="border border-blue-100 bg-blue-50/40 rounded-2xl p-3">
+                  <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-1.5">Opportunities</p>
+                  <ul className="space-y-1.5">
+                    {opportunitySuggestions.map((s, idx) => (
+                      <li key={`opp-${idx}`} className="text-xs text-slate-900 leading-relaxed">
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {riskSuggestions.length > 0 && (
+                <div className="border border-amber-100 bg-amber-50/40 rounded-2xl p-3">
+                  <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-1.5">Risks</p>
+                  <ul className="space-y-1.5">
+                    {riskSuggestions.map((s, idx) => (
+                      <li key={`risk-${idx}`} className="text-xs text-slate-900 leading-relaxed">
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 

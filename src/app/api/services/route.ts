@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { ok, error } from "@/lib/api-response";
 
 export async function GET() {
     try {
@@ -10,10 +11,10 @@ export async function GET() {
             },
         });
         console.timeEnd("fetchServicesAPI");
-        return NextResponse.json(services);
-    } catch (error) {
-        console.error("Failed to fetch services:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return ok(services);
+    } catch (err) {
+        console.error("Failed to fetch services:", err);
+        return error("INTERNAL_ERROR", "Failed to fetch services");
     }
 }
 
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
         const { serviceName, category, description } = body;
 
         if (!serviceName) {
-            return NextResponse.json({ error: "Service name is required." }, { status: 400 });
+            return error("BAD_REQUEST", "Service name is required.");
         }
 
         const newService = await prisma.service.create({
@@ -34,12 +35,12 @@ export async function POST(request: Request) {
             },
         });
 
-        return NextResponse.json(newService);
-    } catch (error: any) {
-        if (error.code === 'P2002') {
-            return NextResponse.json({ error: "A service with this name already exists in the matrix." }, { status: 400 });
+        return ok(newService);
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            return error("CONFLICT", "A service with this name already exists in the matrix.");
         }
-        console.error("Failed to create service:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        console.error("Failed to create service:", err);
+        return error("INTERNAL_ERROR", "Failed to create service");
     }
 }

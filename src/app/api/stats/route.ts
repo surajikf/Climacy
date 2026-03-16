@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { startOfDay, subDays } from "date-fns";
+import { ok, error } from "@/lib/api-response";
 
 export async function GET() {
     try {
@@ -123,7 +123,7 @@ export async function GET() {
             if (day) day.clients++;
         });
 
-        return NextResponse.json({
+        return ok({
             stats: {
                 totalClients,
                 activeClients: statsMap["Active"],
@@ -152,8 +152,8 @@ export async function GET() {
                 status: "Sent"
             }))
         });
-    } catch (error) {
-        console.error("Failed to fetch stats:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    } catch (err) {
+        console.error("Failed to fetch stats:", err);
+        return error("INTERNAL_ERROR", "Failed to fetch stats");
     }
 }

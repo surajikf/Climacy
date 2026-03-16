@@ -61,9 +61,9 @@ export default function CampaignGenerator() {
             })
             .then(data => {
                 if (data.success) {
-                    setAudienceData({ count: data.count, industries: data.industries });
+                    setAudienceData({ count: data.data.count, industries: data.data.industries });
                 } else {
-                    toast.error(data.error || "Neural analytics failed.");
+                    toast.error(data.error?.message || "Neural analytics failed.");
                     setAudienceData({ count: 0, industries: [] });
                 }
             })

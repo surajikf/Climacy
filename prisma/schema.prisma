@@ -10,23 +10,32 @@ datasource db {
 }
 
 model Client {
-  id                 String            @id @default(cuid())
-  clientName         String
-  contactPerson      String?
-  email              String
-  primaryEmail       String?
-  industry           String
-  relationshipLevel  String
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  externalId         String?
-  source             ClientSource      @default(MANUAL)
-  zohoTags           String[]          @default([])
-  gmailSourceAccount String?
-  lastContacted      DateTime?
-  isRoleBased        Boolean           @default(false)
-  campaigns          CampaignHistory[]
-  services           Service[]         @relation("ClientServices")
+  id                  String            @id @default(cuid())
+  clientName          String
+  contactPerson       String?
+  email               String
+  industry            String
+  relationshipLevel   String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  externalId          String?
+  source              ClientSource      @default(MANUAL)
+  zohoTags            String[]          @default([])
+  gmailSourceAccount  String?
+  lastContacted       DateTime?
+  isRoleBased         Boolean           @default(false)
+  address             String?
+  clientSize          String?
+  gstin               String?
+  lastInvoiceDate     DateTime?
+  mobile              String?
+  phone               String?
+  poc                 String?
+  primaryEmail        String?
+  clientAddedOn       DateTime?
+  invoiceServiceNames String?
+  campaigns           CampaignHistory[]
+  services            Service[]         @relation("ClientServices")
 
   @@unique([source, externalId])
 }

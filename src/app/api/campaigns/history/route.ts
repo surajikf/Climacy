@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { ok, error } from "@/lib/api-response";
+import { listCampaignHistory } from "@/domain/campaigns";
 
 export async function GET(request: Request) {
     try {
@@ -8,39 +8,11 @@ export async function GET(request: Request) {
         const search = searchParams.get("search") || "";
         const type = searchParams.get("type") || "";
 
-        const where: any = {
-            client: {
-                isRoleBased: false
-            }
-        };
+        const history = await listCampaignHistory({ limit, search, type });
 
-        if (search) {
-            where.OR = [
-                { campaignTopic: { contains: search, mode: 'insensitive' } },
-                { generatedOutput: { contains: search, mode: 'insensitive' } },
-                { client: { clientName: { contains: search, mode: 'insensitive' } } },
-                { client: { email: { contains: search, mode: 'insensitive' } } }
-            ];
-        }
-
-        if (type && type !== "All") {
-            where.campaignType = type;
-        }
-
-        const history = await prisma.campaignHistory.findMany({
-            where,
-            take: limit,
-            orderBy: {
-                dateCreated: "desc",
-            },
-            include: {
-                client: true,
-            },
-        });
-
-        return NextResponse.json(history);
-    } catch (error: any) {
-        console.error("Failed to fetch history:", error);
-        return NextResponse.json({ error: error.message || String(error) }, { status: 500 });
+        return ok(history);
+    } catch (err: any) {
+        console.error("Failed to fetch history:", err);
+        return error("INTERNAL_ERROR", "Failed to fetch history");
     }
 }

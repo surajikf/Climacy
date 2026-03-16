@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, User, Mail, Building2, Save, Loader2, Check } from "lucide-react";
+import { X, User, Mail, Building2, Save, Loader2, Check, Shield, Hash, Phone, MapPin, Calendar, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -66,7 +66,8 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
     const fetchServices = async () => {
         try {
             const res = await fetch("/api/services");
-            if (res.ok) setServices(await res.json());
+            const result = await res.json();
+            if (result.success) setServices(result.data);
         } catch (err) {
             console.error(err);
         }
@@ -84,12 +85,12 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(formData),
             });
-            if (res.ok) {
+            const result = await res.json();
+            if (result.success) {
                 onSuccess();
                 onClose();
             } else {
-                const data = await res.json();
-                toast.error(data.error || "A disruption occurred in the matrix. Please verify your inputs.");
+                toast.error(result.error?.message || "A disruption occurred in the matrix. Please verify your inputs.");
             }
         } catch (err) {
             console.error(err);
@@ -271,6 +272,70 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                                 )}
                             </div>
                         </div>
+
+                        {client && (client.source === "INVOICE_SYSTEM" || client.gstin || client.poc || client.address) && (
+                            <div className="space-y-3 pt-4 border-t border-slate-100">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synced Details (from Invoice System)</label>
+                                <div className="grid grid-cols-2 gap-4 bg-slate-50/80 rounded-xl p-4 border border-slate-100">
+                                    {client.poc && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Point of Contact</span>
+                                            <p className="text-xs font-semibold text-slate-700">{client.poc}</p>
+                                        </div>
+                                    )}
+                                    {client.clientSize && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Client Size</span>
+                                            <p className="text-xs font-semibold text-slate-700">{client.clientSize}</p>
+                                        </div>
+                                    )}
+                                    {client.gstin && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">GSTIN</span>
+                                            <p className="text-xs font-semibold text-emerald-700">{client.gstin}</p>
+                                        </div>
+                                    )}
+                                    {client.externalId && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Customer ID</span>
+                                            <p className="text-xs font-mono font-bold text-slate-600">#{client.externalId}</p>
+                                        </div>
+                                    )}
+                                    {(client.phone || client.mobile) && (
+                                        <div className="space-y-1 col-span-2">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Phone Numbers</span>
+                                            <p className="text-xs font-semibold text-slate-700">
+                                                {[client.phone, client.mobile].filter(Boolean).join(" / ")}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {client.address && (
+                                        <div className="space-y-1 col-span-2">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Registered Address</span>
+                                            <p className="text-xs font-medium text-slate-600 leading-relaxed italic">
+                                                {client.address}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {client.clientAddedOn && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Account Created</span>
+                                            <p className="text-xs font-semibold text-slate-700">
+                                                {new Date(client.clientAddedOn).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {client.lastInvoiceDate && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Last Invoice</span>
+                                            <p className="text-xs font-semibold text-blue-700">
+                                                {new Date(client.lastInvoiceDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-3 pt-6 border-t border-slate-100 mt-8">

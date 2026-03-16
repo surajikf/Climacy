@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
     Search,
@@ -17,7 +17,16 @@ import {
     Tag,
     ChevronDown,
     Check,
-    RotateCcw
+    RotateCcw,
+    Building2,
+    Phone,
+    User,
+    MapPin,
+    Calendar,
+    Shield,
+    UserPlus,
+    AlertTriangle,
+    AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClientModal } from "@/components/ClientModal";
@@ -31,11 +40,16 @@ export default function ClientManager() {
     const [clients, setClients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
+    const [total, setTotal] = useState(0);
     const [filterIndustry, setFilterIndustry] = useState<string[]>([]);
     const [filterLevel, setFilterLevel] = useState<string[]>([]);
     const [filterService, setFilterService] = useState<string[]>([]);
     const [filterSource, setFilterSource] = useState<string[]>([]);
     const [services, setServices] = useState<any[]>([]);
+    const [sortField] = useState<"lastInvoiceDate" | "createdAt">("lastInvoiceDate");
+    const [sortDir] = useState<"asc" | "desc">("desc");
     const [clientToDelete, setClientToDelete] = useState<string | null>(null);
     const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -63,13 +77,14 @@ export default function ClientManager() {
             console.log("🔄 Filter update trigger");
             fetchClients();
         }
-    }, [filterIndustry, filterLevel, filterService, filterSource, view]);
+    }, [filterIndustry, filterLevel, filterService, filterSource, view, page, pageSize, search]);
 
     const fetchServices = async () => {
         try {
             const res = await fetch("/api/services");
-            if (res.ok) {
-                setServices(await res.json());
+            const result = await res.json();
+            if (result.success) {
+                setServices(result.data);
             }
         } catch (err) {
             console.error(err);
@@ -88,10 +103,24 @@ export default function ClientManager() {
             filterService.forEach(v => query.append("service", v));
             filterSource.forEach(v => query.append("source", v));
             if (view === "rolebased") query.append("roleBased", "true");
+            if (search) query.append("search", search);
+            query.append("page", String(page));
+            query.append("pageSize", String(pageSize));
+            query.append("sortField", sortField);
+            query.append("sortDir", sortDir);
 
             const res = await fetch(`/api/clients?${query.toString()}`, { signal: abortControllerRef.current.signal });
-            const data = await res.json();
-            setClients(Array.isArray(data) ? data : []);
+            const result = await res.json();
+            
+            if (result.success) {
+                const { clients: fetchedClients, total: fetchedTotal } = result.data;
+                setClients(fetchedClients || []);
+                setTotal(fetchedTotal || 0);
+            } else {
+                console.error("API Error:", result.error);
+                setClients([]);
+                setTotal(0);
+            }
         } catch (err: any) {
             if (err.name !== 'AbortError') console.error(err);
         } finally {
@@ -103,9 +132,12 @@ export default function ClientManager() {
         if (!clientToDelete) return;
         try {
             const res = await fetch(`/api/clients/${clientToDelete}`, { method: "DELETE" });
-            if (res.ok) {
+            const result = await res.json();
+            if (result.success) {
                 toast.success("Entity removed from the database.");
                 fetchClients();
+            } else {
+                toast.error(result.error?.message || "Failed to remove entity.");
             }
         } catch (err) {
             console.error(err);
@@ -161,28 +193,9 @@ export default function ClientManager() {
         setIsModalOpen(true);
     };
 
-    const filteredClients = useMemo(() => {
-        return clients.filter(c => {
-            const matchesSearch = !search ||
-                c.clientName.toLowerCase().includes(search.toLowerCase()) ||
-                c.email.toLowerCase().includes(search.toLowerCase()) ||
-                c.industry.toLowerCase().includes(search.toLowerCase()) ||
-                (c.contactPerson && c.contactPerson.toLowerCase().includes(search.toLowerCase()));
+    const filteredClients = useMemo(() => clients, [clients]);
 
-            if (!matchesSearch) return false;
 
-            if (filterIndustry.length > 0 && !filterIndustry.includes(c.industry)) return false;
-            if (filterLevel.length > 0 && !filterLevel.includes(c.relationshipLevel)) return false;
-            if (filterSource.length > 0 && !filterSource.includes(c.source)) return false;
-
-            if (filterService.length > 0) {
-                const clientServiceIds = c.services?.map((s: any) => s.id) || [];
-                if (!filterService.some(id => clientServiceIds.includes(id))) return false;
-            }
-
-            return true;
-        });
-    }, [clients, search, filterIndustry, filterLevel, filterService, filterSource]);
 
     const industries = useMemo(() => {
         const set = new Set(clients.map(c => c.industry).filter(Boolean));
@@ -206,6 +219,7 @@ export default function ClientManager() {
         setFilterLevel([]);
         setFilterService([]);
         setFilterSource([]);
+        setPage(1);
     };
 
     const activeFilterCount = filterIndustry.length + filterLevel.length + filterService.length + filterSource.length;
@@ -298,7 +312,7 @@ export default function ClientManager() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <div className="bg-slate-100 p-1 rounded-lg flex items-center gap-1">
+                    <div className="bg-slate-100 p-1 rounded-lg flex items-center gap-1" aria-label="Change client view">
                         <button
                             onClick={() => setView("clients")}
                             className={cn(
@@ -452,151 +466,251 @@ export default function ClientManager() {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px]">
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-12">Sr.</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Company</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Contact Person</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Services</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Email Contacts</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Last Contact</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Status</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500">Source</th>
-                                    <th className="px-6 py-4 text-right"></th>
+                                    <th className="px-4 py-4 font-bold uppercase tracking-widest text-slate-500 w-12 text-center">Sr.</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[30%]">Client Profile</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[15%]">Services</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[25%]">Contact Info</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[10%]">Last Contact / Invoice</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[10%]">Status</th>
+                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[10%]">Source</th>
+                                    <th className="px-6 py-4 text-right w-20"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50 text-sm">
+                            <tbody className="divide-y divide-slate-100 bg-white">
                                 {loading ? (
                                     [...Array(6)].map((_, i) => (
-                                        <tr key={i} className="animate-pulse">
-                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-4" /></td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-md bg-slate-100" />
-                                                    <div className="h-2.5 bg-slate-100 rounded-full w-32" />
+                                        <tr key={i} className="animate-pulse border-b border-slate-50">
+                                            <td className="px-6 py-8" colSpan={8}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-xl bg-slate-50" />
+                                                    <div className="space-y-2">
+                                                        <div className="h-4 bg-slate-50 rounded w-48" />
+                                                        <div className="h-3 bg-slate-50 rounded w-24" />
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-24" /></td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex gap-1.5">
-                                                    <div className="h-4 bg-slate-100 rounded w-12" />
-                                                    <div className="h-4 bg-slate-100 rounded w-10" />
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-24" /></td>
-                                            <td className="px-6 py-4"><div className="h-2 bg-slate-100 rounded-full w-16" /></td>
-                                            <td className="px-6 py-4"><div className="h-5 bg-slate-100 rounded w-20" /></td>
-                                            <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-16" /></td>
-                                            <td className="px-6 py-4 text-right"></td>
                                         </tr>
                                     ))
                                 ) : filteredClients.length === 0 ? (
                                     <tr>
-                                        <td colSpan={11} className="px-8 py-20 text-center text-slate-300 italic">No records found.</td>
+                                        <td colSpan={8} className="px-8 py-24 text-center">
+                                            <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+                                                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                                                    <Search className="w-6 h-6" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-slate-700 font-semibold tracking-tight">No clients match your current view.</p>
+                                                    <p className="text-slate-400 text-sm">
+                                                        Adjust filters, import from your systems, or add a client manually to get started.
+                                                    </p>
+                                                </div>
+                                                <div className="flex flex-wrap items-center justify-center gap-3">
+                                                    <button
+                                                        onClick={clearAllFilters}
+                                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 uppercase tracking-widest"
+                                                    >
+                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                        Clear Filters
+                                                    </button>
+                                                    <button
+                                                        onClick={() => window.location.href = "/import"}
+                                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 uppercase tracking-widest"
+                                                    >
+                                                        <Upload className="w-3.5 h-3.5" />
+                                                        Go to Integrations
+                                                    </button>
+                                                    <button
+                                                        onClick={() => { setSelectedClient(null); setIsModalOpen(true); }}
+                                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 border border-slate-900 uppercase tracking-widest"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                        Add First Client
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ) : (
-                                    filteredClients.map((client, index) => (
+                                    filteredClients.map((contact, index) => (
                                         <motion.tr
-                                            initial={{ opacity: 0, y: 10 }}
+                                            initial={{ opacity: 0, y: 5 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: index * 0.03, duration: 0.3 }}
-                                            key={client.id}
-                                            className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 group relative"
+                                            transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.2 }}
+                                            key={contact.id}
+                                            className="hover:bg-slate-50/50 transition-all border-l-[3px] border-l-transparent hover:border-l-blue-600 group/row"
                                         >
-                                            <td className="px-6 py-4">
-                                                <div className="text-xs font-bold text-slate-400">#{index + 1}</div>
+                                            <td className="px-4 py-5 w-12 text-center text-slate-400 text-xs font-bold align-top">
+                                                <span className="text-slate-500">{index + 1}</span>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center font-semibold text-slate-500 text-xs border border-slate-200">
-                                                        {client.clientName[0]}
+                                            <td className="px-6 py-5 align-top">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700 flex items-center justify-center font-bold text-base shrink-0 border border-blue-100/50 shadow-sm" title="Client Profile Picture">
+                                                        {(contact.contactPerson || contact.email || "?")[0].toUpperCase()}
                                                     </div>
-                                                    <div className="font-medium text-slate-900">{client.clientName}</div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <span className="text-sm font-black text-slate-800 tracking-tight leading-tight" title="Primary Contact Person">
+                                                                {contact.contactPerson || "Anonymous Contact"}
+                                                            </span>
+                                                            {contact.poc && (
+                                                                <span 
+                                                                    className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-black uppercase tracking-tighter cursor-help flex items-center gap-1 shadow-sm" 
+                                                                    title={`Point of Contact: ${contact.poc}. This is your primary internal contact for this account.`}
+                                                                >
+                                                                    <User className="w-2.5 h-2.5" />
+                                                                    {contact.poc}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <div className="flex items-center gap-1.5" title="Company Entity Name">
+                                                                <Building2 className="w-3 h-3 text-slate-400" />
+                                                                <span className="text-[11px] font-bold text-slate-600 truncate max-w-[200px]">
+                                                                    {contact.clientName || (contact.email ? contact.email.split('@')[0].toUpperCase() : "UNKNOWN ENTITY")}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                                <div className="flex items-center gap-1 text-slate-400" title={`Industry: ${contact.industry || "General Business"}`}>
+                                                                    <Tag className="w-2.5 h-2.5" />
+                                                                    <span className="text-[10px] font-bold uppercase tracking-tight truncate max-w-[100px]">{contact.industry || "General"}</span>
+                                                                </div>
+                                                                {contact.clientSize && (
+                                                                    <div className="flex items-center gap-1" title={`Operational Scale: ${contact.clientSize}`}>
+                                                                        <span className="text-[8px] opacity-30 mx-0.5">•</span>
+                                                                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter">{contact.clientSize}</span>
+                                                                    </div>
+                                                                )}
+                                                                {contact.clientAddedOn && (
+                                                                    <div className="flex items-center gap-1 text-slate-400" title={`Added to Portfolio: ${new Date(contact.clientAddedOn).toLocaleDateString()}`}>
+                                                                        <span className="text-[8px] opacity-30 mx-0.5">•</span>
+                                                                        <Calendar className="w-2.5 h-2.5" />
+                                                                        <span className="text-[10px] font-medium">{new Date(contact.clientAddedOn).getUTCFullYear()}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="text-sm font-medium text-slate-600">{client.contactPerson || "---"}</div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {client.services?.map((s: any) => (
-                                                        <span key={s.id} className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-tight">{s.serviceName}</span>
+                                            <td className="px-6 py-5 align-top">
+                                                <div className="flex flex-wrap gap-1.5 items-start justify-start pt-1">
+                                                    {contact.services?.map((s: any) => (
+                                                        <span key={s.id} className="text-[9px] font-black text-indigo-700 bg-indigo-50/50 px-2 py-0.5 rounded border border-indigo-100 uppercase tracking-widest shadow-sm">
+                                                            {s.serviceName}
+                                                        </span>
                                                     ))}
-                                                    {!client.services?.length && <span className="text-[10px] text-slate-300 italic">--</span>}
+                                                    {contact.invoiceServiceNames && !contact.services?.length && (
+                                                        <span className="text-[9px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-tight italic" title="Services from Invoice System">
+                                                            {contact.invoiceServiceNames}
+                                                        </span>
+                                                    )}
+                                                    {!contact.services?.length && !contact.invoiceServiceNames && <span className="text-[10px] text-slate-300 italic font-bold">--</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col gap-2 py-1">
-                                                    {(client.email?.split(',') || []).map((email: string) => email.trim()).filter(Boolean).map((email: string, idx: number) => {
-                                                        const isPrimary = email === client.primaryEmail || (idx === 0 && !client.primaryEmail);
-                                                        return (
-                                                            <div key={idx} className="flex items-center gap-2 group/email">
-                                                                <div className={cn(
-                                                                    "w-1 h-1 rounded-full shrink-0",
-                                                                    isPrimary ? "bg-blue-600" : "bg-slate-300"
-                                                                )} />
+                                            <td className="px-6 py-5 align-top">
+                                                <div className="flex flex-col gap-2 pt-0.5">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {(contact.email?.split(',') || []).map((email: string) => email.trim()).filter(Boolean).map((email: string, idx: number) => (
+                                                            <div key={idx} className="flex items-center gap-2 group/email" title={`Professional Email: ${email}`}>
+                                                                <Mail className="w-3 h-3 text-slate-400 shrink-0" />
                                                                 <a
                                                                     href={`mailto:${email}`}
-                                                                    className={cn(
-                                                                        "text-sm lowercase transition-colors w-fit font-medium",
-                                                                        isPrimary ? "text-slate-900 font-semibold" : "text-slate-500 hover:text-slate-900"
-                                                                    )}
+                                                                    className="text-[11px] font-bold text-slate-600 hover:text-blue-600 transition-colors truncate max-w-[220px]"
                                                                 >
                                                                     {email}
                                                                 </a>
-                                                                {isPrimary && (
-                                                                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-widest scale-90 origin-left">Primary</span>
-                                                                )}
                                                             </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                                                    {client.lastContacted ? formatDistanceToNow(new Date(client.lastContacted), { addSuffix: true }) : "Never"}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={cn(
-                                                        "w-1.5 h-1.5 rounded-full",
-                                                        client.relationshipLevel === "Active" ? "bg-emerald-500" :
-                                                            client.relationshipLevel === "Warm Lead" ? "bg-amber-500" :
-                                                                "bg-slate-300"
-                                                    )} />
-                                                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-tight">{client.relationshipLevel}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {client?.source === "INVOICE_SYSTEM" && (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest">
-                                                        Invoice Sys
-                                                    </span>
-                                                )}
-                                                {client?.source === "ZOHO_BIGIN" && (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-widest">
-                                                        Zoho Bigin
-                                                    </span>
-                                                )}
-                                                {client?.source === "GMAIL" && (
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-widest w-fit">
-                                                            Gmail
-                                                        </span>
-                                                        <span className="text-[9px] text-slate-400 font-bold ml-1 truncate max-w-[80px]">{client.gmailSourceAccount || 'Contact'}</span>
+                                                        ))}
+                                                        {(contact.phone || contact.mobile) && (
+                                                            <div className="flex items-center gap-2" title={`Primary Contact: ${[contact.phone, contact.mobile].filter(Boolean).join(" / ")}`}>
+                                                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                                                <span className="text-[11px] font-semibold text-slate-500 truncate max-w-[200px]">
+                                                                    {[contact.phone, contact.mobile].filter(Boolean).join(" / ")}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                                {(client?.source === "MANUAL" || !client?.source) && (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 uppercase tracking-widest">
-                                                        Manual
-                                                    </span>
-                                                )}
+
+                                                    <div className="flex flex-col gap-1.5 mt-1 border-t border-slate-50 pt-1.5">
+                                                        {contact.address && (
+                                                            <div className="flex items-start gap-2 cursor-help" title={`Registered Address: ${contact.address}`}>
+                                                                <MapPin className="w-3 h-3 text-slate-300 shrink-0 mt-0.5" />
+                                                                <span className="text-[10px] font-medium text-slate-400 leading-tight line-clamp-1 italic">
+                                                                    {contact.address}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {contact.gstin && (
+                                                            <div className="flex items-center gap-2" title="GST Identification Number (Verified Entity)">
+                                                                <Shield className="w-3 h-3 text-emerald-500 shrink-0" />
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                                    {contact.gstin}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEdit(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                                            <td className="px-6 py-5 align-top">
+                                                <div className="flex flex-col gap-3 pt-1">
+                                                    {contact.lastInvoiceDate ? (
+                                                        <div className="flex flex-col gap-0.5 group/invoice cursor-help" title={`Latest Transaction detected on ${new Date(contact.lastInvoiceDate).toLocaleString()}. Data synced from Invoice System.`}>
+                                                            <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest opacity-80 group-hover/invoice:opacity-100 transition-opacity">Last Invoice</span>
+                                                            <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
+                                                                <Calendar className="w-3 h-3 text-rose-500" />
+                                                                {new Date(contact.lastInvoiceDate).toLocaleDateString(undefined, {
+                                                                    day: "2-digit",
+                                                                    month: "short",
+                                                                    year: "numeric"
+                                                                })}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-0.5" title="No invoice history detected in the connected system.">
+                                                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Invoice</span>
+                                                            <span className="text-[10px] font-bold text-slate-300 italic">None Found</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 align-top">
+                                                <div 
+                                                    className="flex items-center gap-2 pt-1.5 cursor-help group/status" 
+                                                    title={
+                                                        contact.relationshipLevel === "Active" ? "Active Customer: Verified entity with ongoing services or recent invoices. High priority for maintenance." :
+                                                        contact.relationshipLevel === "Warm Lead" ? "High Potential: Lead or past client showing interest. Target for conversion campaigns." :
+                                                        "Inactive/Past: No recent transactions. Candidate for re-engagement or recovery outreach."
+                                                    }
+                                                >
+                                                    <div className={cn(
+                                                        "w-2 h-2 rounded-full transition-transform group-hover/status:scale-125",
+                                                        contact.relationshipLevel === "Active" ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" :
+                                                            contact.relationshipLevel === "Warm Lead" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" :
+                                                                "bg-slate-300 shadow-[0_0_8px_rgba(148,163,184,0.3)]"
+                                                    )} />
+                                                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{contact.relationshipLevel}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 align-top">
+                                                <div className="pt-1">
+                                                    {contact?.source && (
+                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
+                                                            {contact.source.slice(0, 3)}
+                                                        </span>
+                                                    )}
+                                                    {!contact?.source && (
+                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
+                                                            MAN
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 align-top text-right">
+                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity pt-0.5">
+                                                    <button onClick={() => handleEdit(contact)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
                                                         <Edit3 className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <button onClick={() => setClientToDelete(client.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                                                    <button onClick={() => setClientToDelete(contact.id)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
@@ -606,6 +720,64 @@ export default function ClientManager() {
                                 )}
                             </tbody>
                         </table>
+
+                        {/* Pagination footer */}
+                        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 bg-slate-50">
+                            <div className="text-[11px] text-slate-500">
+                                {total > 0 && (
+                                    <span>
+                                        Showing{" "}
+                                        <span className="font-semibold">
+                                            {(page - 1) * pageSize + 1}-
+                                            {Math.min(page * pageSize, total)}
+                                        </span>{" "}
+                                        of <span className="font-semibold">{total}</span> clients
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                    <span>Rows:</span>
+                                    <select
+                                        value={pageSize}
+                                        onChange={(e) => {
+                                            setPageSize(Number(e.target.value));
+                                            setPage(1);
+                                        }}
+                                        className="bg-white border border-slate-200 rounded-md px-2 py-1 text-[11px]"
+                                    >
+                                        {[10, 25, 50].map(size => (
+                                            <option key={size} value={size}>{size}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setPage(p => Math.max(p - 1, 1))}
+                                        disabled={page === 1 || loading}
+                                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100"
+                                    >
+                                        Prev
+                                    </button>
+                                    <span className="text-[11px] text-slate-500">
+                                        Page <span className="font-semibold">{page}</span>
+                                        {total > 0 && (
+                                            <> of {Math.max(1, Math.ceil(total / pageSize))}</>
+                                        )}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            const maxPage = total > 0 ? Math.ceil(total / pageSize) : page;
+                                            setPage(p => Math.min(p + 1, maxPage));
+                                        }}
+                                        disabled={loading || (total > 0 && page >= Math.ceil(total / pageSize))}
+                                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
 
                         <AnimatePresence>
                             {loading && (

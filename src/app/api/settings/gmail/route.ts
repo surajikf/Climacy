@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { encrypt } from "@/lib/encryption";
+import { ok, error } from "@/lib/api-response";
 
 export async function GET() {
     try {
@@ -9,14 +9,14 @@ export async function GET() {
                 id: true,
                 accountName: true,
                 email: true,
-                updatedAt: true
+                updatedAt: true,
             },
-            orderBy: { updatedAt: 'desc' }
+            orderBy: { updatedAt: "desc" },
         });
-        return NextResponse.json(accounts);
-    } catch (error) {
-        console.error("Failed to fetch Gmail accounts:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return ok({ accounts });
+    } catch (err) {
+        console.error("Failed to fetch Gmail accounts:", err);
+        return error("INTERNAL_ERROR", "Internal Server Error");
     }
 }
 
@@ -24,12 +24,14 @@ export async function DELETE(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get("id");
-        if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
+        if (!id) {
+            return error("VALIDATION_ERROR", "ID required", { status: 400 });
+        }
 
         await prisma.gmailAccount.delete({ where: { id } });
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Failed to delete Gmail account:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return ok({ deletedId: id });
+    } catch (err) {
+        console.error("Failed to delete Gmail account:", err);
+        return error("INTERNAL_ERROR", "Internal Server Error");
     }
 }

@@ -53,8 +53,12 @@ export default function HistoryPage() {
             const res = await fetch(`/api/campaigns/history?${query.toString()}`, {
                 signal: abortControllerRef.current.signal
             });
-            const data = await res.json();
-            setHistory(Array.isArray(data) ? data : []);
+            const result = await res.json();
+            if (result.success) {
+                setHistory(Array.isArray(result.data) ? result.data : []);
+            } else {
+                setHistory([]);
+            }
         } catch (err: any) {
             if (err.name !== 'AbortError') console.error(err);
         } finally {

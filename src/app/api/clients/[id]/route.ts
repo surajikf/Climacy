@@ -1,15 +1,33 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { ok, error } from "@/lib/api-response";
+import { z } from "zod";
+
+const clientUpdateSchema = z.object({
+    clientName: z.string().min(1, "Client name is required"),
+    contactPerson: z.string().optional(),
+    email: z.string().email("Valid email is required"),
+    industry: z.string().optional(),
+    relationshipLevel: z.string().optional(),
+    serviceIds: z.array(z.string()).default([]),
+});
 
 export async function PUT(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const { id } = await params;
     try {
-        const body = await request.json();
+        const json = await request.json();
+        const parsed = clientUpdateSchema.safeParse(json);
 
-        console.log(`[DEBUG] Updating client ${id} with body:`, JSON.stringify(body, null, 2));
+        if (!parsed.success) {
+            return error("VALIDATION_ERROR", "Invalid client payload", {
+                status: 400,
+                details: parsed.error.flatten(),
+            });
+        }
+
+        const body = parsed.data;
 
         const updatedClient = await prisma.client.update({
             where: { id },
@@ -25,37 +43,36 @@ export async function PUT(
             },
         });
 
-        return NextResponse.json(updatedClient);
-    } catch (error: any) {
-        console.error(`[ERROR] Failed to update client ${id}:`, error);
+        return ok(updatedClient);
+    } catch (err: any) {
+        console.error(`[ERROR] Failed to update client ${id}:`, err);
 
-        if (error.code === 'P2002') {
-            return NextResponse.json({ error: "Another company is already using this email ID." }, { status: 400 });
+        if (err.code === "P2002") {
+            return error("CONFLICT", "Another company is already using this email ID.", {
+                status: 400,
+            });
         }
 
-        return NextResponse.json({
-            error: "Internal Server Error",
-            message: error.message,
-            code: error.code
-        }, { status: 500 });
+        return error("INTERNAL_ERROR", "Internal Server Error", {
+            details: { message: err.message, code: err.code },
+        });
     }
 }
 
 export async function DELETE(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const { id } = await params;
     try {
         await prisma.client.delete({
             where: { id },
         });
-        return NextResponse.json({ success: true });
-    } catch (error: any) {
-        console.error(`[ERROR] Failed to delete client ${id}:`, error);
-        return NextResponse.json({
-            error: "Internal Server Error",
-            message: error.message
-        }, { status: 500 });
+        return ok({ deletedId: id });
+    } catch (err: any) {
+        console.error(`[ERROR] Failed to delete client ${id}:`, err);
+        return error("INTERNAL_ERROR", "Internal Server Error", {
+            details: { message: err.message },
+        });
     }
 }
