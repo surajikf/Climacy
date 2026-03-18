@@ -17,6 +17,17 @@ export default function LoginPage() {
 
     useEffect(() => {
         setMounted(true);
+        
+        // Check for error parameters in the URL (e.g. from expired recovery links)
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const errorMsg = params.get("error");
+            if (errorMsg) {
+                toast.error(errorMsg);
+                // Clean the URL to prevent recurring toasts on refresh
+                window.history.replaceState(null, '', window.location.pathname);
+            }
+        }
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -98,6 +109,12 @@ export default function LoginPage() {
                     </form>
 
                     <div className="mt-8 text-center border-t border-slate-100 pt-6">
+                        <p className="text-xs font-medium text-slate-500 mb-2">
+                            Forgot your passkey?{" "}
+                            <Link href="/forgot-password" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">
+                                Reset Password
+                            </Link>
+                        </p>
                         <p className="text-xs font-medium text-slate-500">
                             No active profile?{" "}
                             <Link href="/register" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">

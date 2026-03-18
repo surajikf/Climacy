@@ -43,7 +43,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Auth Routes logic
-    const isAuthRoute = pathname === '/login' || pathname === '/register';
+    const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
     const metadata = user?.user_metadata || {};
     const status = metadata.status;
     const role = metadata.role;
@@ -64,11 +64,13 @@ export async function middleware(request: NextRequest) {
     }
 
     // Check Approval Status
-    if (status === 'PENDING' && pathname !== '/pending') {
+    const isUpdatePasswordRoute = pathname === '/update-password';
+
+    if (status === 'PENDING' && pathname !== '/pending' && !isUpdatePasswordRoute) {
         return NextResponse.redirect(new URL('/pending', request.url));
     }
 
-    if (status === 'BANNED' && pathname !== '/banned') {
+    if (status === 'BANNED' && pathname !== '/banned' && !isUpdatePasswordRoute) {
         return NextResponse.redirect(new URL('/banned', request.url));
     }
 
