@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
     try {
@@ -10,33 +10,73 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const existingUser = await prisma.user.findUnique({
-            where: { email },
-        });
+        const supabase = await createClient();
 
-        if (existingUser) {
-            return NextResponse.json({ error: "User already exists with this email endpoint." }, { status: 400 });
-        }
-
-        const passwordHash = await bcrypt.hash(password, 10);
-
-        // Enforce the super-admin status immediately based on the email
+        // 1. Sign up user in Supabase Auth
         const isSuperAdmin = email.toLowerCase() === "suraj.sonnar@ikf.co.in";
         const role = isSuperAdmin ? "ADMIN" : "USER";
         const status = isSuperAdmin ? "APPROVED" : "PENDING";
 
-        const user = await prisma.user.create({
-            data: {
+        let supabaseUserId;
+
+        const { data, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: name,
+                    role: role,
+                    status: status,
+                },
+            },
+        });
+
+        if (signUpError) {
+            // If the user already exists in Supabase, we might just want to sync Prisma and log them in. 
+            // signUpError.message might say "User already registered"
+            if (signUpError.message.includes("already registered")) {
+                // Try logging them in to get their UUID if they already exist
+                const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                
+                if (signInError) {
+                    return NextResponse.json({ error: "Email is already registered. Please login with correct credentials." }, { status: 400 });
+                }
+                
+                supabaseUserId = signInData.user.id;
+            } else {
+                return NextResponse.json({ error: signUpError.message }, { status: 400 });
+            }
+        } else {
+            if (!data.user) {
+                return NextResponse.json({ error: "Failed to create neural identity." }, { status: 500 });
+            }
+            supabaseUserId = data.user.id;
+        }
+
+        // 3. Sync with public.User table via Prisma (Upsert to prevent P2002 crashes)
+        const user = await prisma.user.upsert({
+            where: { email },
+            update: {
+                id: supabaseUserId,
+                name,
+            },
+            create: {
+                id: supabaseUserId,
                 name,
                 email,
-                passwordHash,
                 role,
                 status,
             },
         });
 
         return NextResponse.json(
-            { message: "Neural profile created successfully.", user: { id: user.id, email: user.email, role: user.role, status: user.status } },
+            { 
+                message: "Neural profile synced successfully.", 
+                user: { id: user.id, email: user.email, role: user.role, status: user.status },
+            },
             { status: 201 }
         );
     } catch (error: any) {

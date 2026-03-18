@@ -1,15 +1,13 @@
 import prisma from "@/lib/prisma";
-import { getToken } from "next-auth/jwt";
 import { ok, error } from "@/lib/api-response";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(req: Request) {
     try {
-        const token = await getToken({
-            req: req as any,
-            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
-        });
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!token || token.role !== "ADMIN") {
+        if (!user || user.user_metadata?.role !== "ADMIN") {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 
@@ -34,12 +32,10 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
     try {
-        const token = await getToken({
-            req: req as any,
-            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
-        });
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!token || token.role !== "ADMIN") {
+        if (!user || user.user_metadata?.role !== "ADMIN") {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 

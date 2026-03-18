@@ -1,9 +1,34 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+import { type NextRequest, NextResponse } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
+import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(request: NextRequest) {
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret" });
+    // 1. Refresh session via Supabase Middleware logic
+    let response = await updateSession(request);
+    
+    // 2. Initialize Supabase for status/role checks
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return request.cookies.getAll()
+            },
+            setAll(cookiesToSet) {
+              cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+              response = NextResponse.next({
+                request,
+              })
+              cookiesToSet.forEach(({ name, value, options }) =>
+                response.cookies.set(name, value, options)
+              )
+            },
+          },
+        }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
     const { pathname } = request.nextUrl;
 
     // Allow public access to auth APIs, debug APIs, Next.js internal routes, and static files
@@ -12,50 +37,52 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/debug') ||
         pathname.startsWith('/_next') ||
         pathname === '/favicon.ico' ||
-        pathname.includes('.') // like logo.png
+        pathname.includes('.')
     ) {
-        return NextResponse.next();
+        return response;
     }
 
     // Auth Routes logic
     const isAuthRoute = pathname === '/login' || pathname === '/register';
+    const metadata = user?.user_metadata || {};
+    const status = metadata.status;
+    const role = metadata.role;
 
     if (isAuthRoute) {
-        if (token) {
-            // Already logged in, redirect to dashboard or pending
-            if (token.status === 'PENDING') {
+        if (user) {
+            if (status === 'PENDING') {
                 return NextResponse.redirect(new URL('/pending', request.url));
             }
             return NextResponse.redirect(new URL('/', request.url));
         }
-        return NextResponse.next();
+        return response;
     }
 
     // Protected Routes logic
-    if (!token) {
+    if (!user) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
     // Check Approval Status
-    if (token.status === 'PENDING' && pathname !== '/pending') {
+    if (status === 'PENDING' && pathname !== '/pending') {
         return NextResponse.redirect(new URL('/pending', request.url));
     }
 
-    if (token.status === 'BANNED' && pathname !== '/banned') {
+    if (status === 'BANNED' && pathname !== '/banned') {
         return NextResponse.redirect(new URL('/banned', request.url));
     }
 
     // If approved, prevent access to pending/banned
-    if (token.status === 'APPROVED' && (pathname === '/pending' || pathname === '/banned')) {
+    if (status === 'APPROVED' && (pathname === '/pending' || pathname === '/banned')) {
         return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Admin Routes logic
-    if (pathname.startsWith('/admin') && token.role !== 'ADMIN') {
+    if (pathname.startsWith('/admin') && role !== 'ADMIN') {
         return NextResponse.redirect(new URL('/', request.url));
     }
 
-    return NextResponse.next();
+    return response;
 }
 
 export const config = {

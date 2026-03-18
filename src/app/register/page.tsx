@@ -1,11 +1,9 @@
-"use client";
-
+import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, User, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 
 export default function RegisterPage() {
     const [name, setName] = useState("");
@@ -13,6 +11,7 @@ export default function RegisterPage() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const supabase = createClient();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,17 +28,18 @@ export default function RegisterPage() {
 
             if (res.ok) {
                 toast.success("Profile created! Auto-authenticating...");
+                
                 // Automatically log them in after registration
-                const signInRes = await signIn("credentials", {
+                const { error: signInError } = await supabase.auth.signInWithPassword({
                     email,
                     password,
-                    redirect: false,
                 });
 
-                if (signInRes?.error) {
+                if (signInError) {
+                    toast.error(`Login Failed: ${signInError.message}`);
                     router.push("/login");
                 } else {
-                    router.push("/pending"); // the middleware will force them to pending later anyway
+                    router.push("/"); 
                     router.refresh();
                 }
             } else {

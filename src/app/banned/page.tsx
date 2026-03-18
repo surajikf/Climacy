@@ -1,9 +1,15 @@
-"use client";
-
-import { signOut } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { Ban, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function BannedPage() {
+    const router = useRouter();
+    const supabase = createClient();
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.push("/login");
+    };
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-900">
             <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -24,7 +30,7 @@ export default function BannedPage() {
                     </p>
 
                     <button
-                        onClick={() => signOut({ callbackUrl: '/login' })}
+                        onClick={handleLogout}
                         className="w-full bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl py-3 text-sm font-bold shadow-sm hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
                     >
                         <LogOut className="w-4 h-4" />

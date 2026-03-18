@@ -1,33 +1,34 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, Trash2, ShieldCheck, Mail, User as UserIcon } from "lucide-react";
+import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, ShieldCheck, Mail, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
-type User = {
-    id: string;
-    name: string;
-    email: string;
-    role: "ADMIN" | "USER";
-    status: "PENDING" | "APPROVED" | "BANNED";
-    createdAt: string;
-};
-
 export default function AdminDashboard() {
-    const { data: session, status: sessionStatus } = useSession();
+    const [user, setUser] = useState<any>(null);
+    const [authLoading, setAuthLoading] = useState(true);
     const router = useRouter();
-    const [users, setUsers] = useState<User[]>([]);
+    const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const supabase = createClient();
 
     useEffect(() => {
-        if (sessionStatus === "unauthenticated" || (sessionStatus === "authenticated" && session.user.role !== "ADMIN")) {
-            router.push("/");
-        } else if (sessionStatus === "authenticated" && session.user.role === "ADMIN") {
-            fetchUsers();
-        }
-    }, [sessionStatus, session, router]);
+        const checkAuth = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                if (user.user_metadata?.role !== "ADMIN") {
+                    router.push("/");
+                } else {
+                    setUser(user);
+                    fetchUsers();
+                }
+            } else {
+                router.push("/login");
+            }
+            setAuthLoading(false);
+        };
+        checkAuth();
+    }, [router, supabase]);
 
     const fetchUsers = async () => {
         try {
@@ -63,7 +64,7 @@ export default function AdminDashboard() {
         }
     };
 
-    if (loading || sessionStatus === "loading") {
+    if (loading || authLoading) {
         return <div className="min-h-screen flex items-center justify-center"><div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;
     }
 
@@ -89,8 +90,8 @@ export default function AdminDashboard() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
-                        {users.map((user) => (
-                            <tr key={user.id} className="hover:bg-slate-50/30 transition-colors group">
+                        {users.map((userItem) => (
+                            <tr key={userItem.id} className="hover:bg-slate-50/30 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
@@ -98,8 +99,8 @@ export default function AdminDashboard() {
                                         </div>
                                         <div>
                                             <div className="font-bold text-slate-900 flex items-center gap-2">
-                                                {user.name || "Unknown Entity"}
-                                                {user.id === session?.user.id && (
+                                                {userItem.name || "Unknown Entity"}
+                                                {userItem.id === user?.id && (
                                                     <span className="text-[9px] uppercase tracking-wider bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-bold">You</span>
                                                 )}
                                             </div>
@@ -142,25 +143,25 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                                        {user.id !== session?.user.id && (
+                                        {userItem.id !== user?.id && (
                                             <>
-                                                {user.status !== "APPROVED" && (
-                                                    <button onClick={() => handleAction(user.id, "APPROVE")} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors tooltip-trigger" title="Approve Access">
+                                                {userItem.status !== "APPROVED" && (
+                                                    <button onClick={() => handleAction(userItem.id, "APPROVE")} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors tooltip-trigger" title="Approve Access">
                                                         <ShieldCheck className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                                {user.status !== "BANNED" && (
-                                                    <button onClick={() => handleAction(user.id, "BAN")} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Access">
+                                                {userItem.status !== "BANNED" && (
+                                                    <button onClick={() => handleAction(userItem.id, "BAN")} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Access">
                                                         <Ban className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                                {user.status === "APPROVED" && user.role !== "ADMIN" && (
-                                                    <button onClick={() => handleAction(user.id, "MAKE_ADMIN")} className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors tooltip-trigger" title="Elevate to Admin">
+                                                {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && (
+                                                    <button onClick={() => handleAction(userItem.id, "MAKE_ADMIN")} className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors tooltip-trigger" title="Elevate to Admin">
                                                         <ShieldAlert className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                                {user.status === "APPROVED" && user.role === "ADMIN" && (
-                                                    <button onClick={() => handleAction(user.id, "REVOKE_ADMIN")} className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Admin Rights">
+                                                {userItem.status === "APPROVED" && userItem.role === "ADMIN" && (
+                                                    <button onClick={() => handleAction(userItem.id, "REVOKE_ADMIN")} className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Admin Rights">
                                                         <ShieldHalf className="w-4 h-4" />
                                                     </button>
                                                 )}

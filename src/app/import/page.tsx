@@ -4,11 +4,20 @@ import { useState, useEffect } from "react";
 import { DownloadCloud, FileText, Database, Loader2, RefreshCw, CheckCircle2, Cloud, X, Key, Shield, Mail, User, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { SmartLoader } from "@/components/SmartLoader";
 
 export default function ImportIntegrationsPage() {
-    const { data: session } = useSession();
+    const [user, setUser] = useState<any>(null);
+    const supabase = createClient();
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+        };
+        getUser();
+    }, [supabase]);
 
     const [isInvoiceSyncing, setIsInvoiceSyncing] = useState(false);
     const [invoiceLastSync, setInvoiceLastSync] = useState<string | null>("Never");
@@ -206,7 +215,7 @@ export default function ImportIntegrationsPage() {
                         </div>
                         <button
                             onClick={handleInvoiceSync}
-                            disabled={isInvoiceSyncing || (session?.user?.role !== "ADMIN")}
+                            disabled={isInvoiceSyncing || (user?.user_metadata?.role !== "ADMIN")}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {isInvoiceSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
@@ -254,7 +263,7 @@ export default function ImportIntegrationsPage() {
                         {zohoConfig.hasRefreshToken ? (
                             <button
                                 onClick={handleZohoSync}
-                                disabled={isZohoSyncing || (session?.user?.role !== "ADMIN")}
+                                disabled={isZohoSyncing || (user?.user_metadata?.role !== "ADMIN")}
                                 className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 {isZohoSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}

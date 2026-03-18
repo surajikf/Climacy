@@ -1,8 +1,8 @@
 import prisma from "@/lib/prisma";
-import { getToken } from "next-auth/jwt";
 import crypto from "crypto";
 import { ok, error } from "@/lib/api-response";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 
 const RAW_ENCRYPTION_KEY =
     process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
@@ -33,12 +33,10 @@ const zohoSettingsSchema = z.object({
 
 export async function GET(req: Request) {
     try {
-        const token = await getToken({
-            req: req as any,
-            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
-        });
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!token || token.role !== "ADMIN") {
+        if (!user || user.user_metadata?.role !== "ADMIN") {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 
@@ -60,12 +58,10 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
     try {
-        const token = await getToken({
-            req: req as any,
-            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
-        });
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!token || token.role !== "ADMIN") {
+        if (!user || user.user_metadata?.role !== "ADMIN") {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 

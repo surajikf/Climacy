@@ -1,20 +1,32 @@
-"use client";
-
-import { useSession, signOut } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { Clock, LogOut, ShieldAlert } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function PendingPage() {
-    const { data: session } = useSession();
+    const [user, setUser] = useState<any>(null);
     const router = useRouter();
+    const supabase = createClient();
 
     useEffect(() => {
-        // If they somehow got here and are approved, send them in
-        if (session?.user?.status === "APPROVED") {
-            router.push("/");
-        }
-    }, [session, router]);
+        const checkStatus = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUser(user);
+                if (user.user_metadata?.status === "APPROVED") {
+                    router.push("/");
+                }
+            } else {
+                router.push("/login");
+            }
+        };
+        checkStatus();
+    }, [router, supabase]);
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.push("/login");
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-50">
@@ -38,7 +50,7 @@ export default function PendingPage() {
                     </p>
 
                     <button
-                        onClick={() => signOut({ callbackUrl: '/login' })}
+                        onClick={handleLogout}
                         className="w-full bg-white border border-slate-200 text-slate-700 rounded-xl py-3 text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
                     >
                         <LogOut className="w-4 h-4" />

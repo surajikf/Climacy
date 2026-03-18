@@ -19,7 +19,7 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
     }, [pathname]);
 
     return (
-        <SessionProvider>
+        <>
             {/* Global Top Loading Bar */}
             <AnimatePresence>
                 {isNavigating && (
@@ -50,7 +50,7 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
                     </AnimatePresence>
                 </main>
             </div>
-        </SessionProvider>
+        </>
     );
 }
 

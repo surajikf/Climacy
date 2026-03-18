@@ -1,6 +1,4 @@
-"use client";
-
-import { signIn } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, Server } from "lucide-react";
@@ -13,6 +11,7 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const supabase = createClient();
 
     useEffect(() => {
         setMounted(true);
@@ -22,14 +21,13 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
 
-        const res = await signIn("credentials", {
+        const { error } = await supabase.auth.signInWithPassword({
             email,
             password,
-            redirect: false,
         });
 
-        if (res?.error) {
-            toast.error("Authentication Failed: Invalid neural credentials.");
+        if (error) {
+            toast.error(`Authentication Failed: ${error.message}`);
             setLoading(false);
         } else {
             toast.success("Authentication Verified. Establishing neural link...");
