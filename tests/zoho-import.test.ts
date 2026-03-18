@@ -36,7 +36,7 @@ describe("/api/import/zoho POST", () => {
 
     const res = await importZoho(new Request("http://localhost", { method: "POST" }));
 
-    expect(res.init?.status).toBe(400);
+    expect(res.status).toBe(400);
     expect(res.body).toMatchObject({
       error: "Zoho is not connected. Please configure and authorize Zoho first.",
     });

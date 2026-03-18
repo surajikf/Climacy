@@ -29,7 +29,7 @@ describe("/api/campaigns/estimate GET", () => {
   });
 
   it("computes audience estimate for broadcast campaigns", async () => {
-    const { GET: estimate } = await import(
+    const { POST: estimate } = await import(
       "@/app/api/campaigns/estimate/route"
     );
 

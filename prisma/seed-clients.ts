@@ -52,20 +52,24 @@ async function main() {
             where: { serviceName: { in: client.serviceNames } }
         });
 
-        await prisma.client.upsert({
-            where: { email: client.email },
-            update: {},
-            create: {
-                clientName: client.clientName,
-                contactPerson: client.contactPerson,
-                email: client.email,
-                industry: client.industry,
-                relationshipLevel: client.relationshipLevel,
-                services: {
-                    connect: dbServices.map((s: any) => ({ id: s.id }))
-                }
-            }
+        const existing = await prisma.client.findUnique({
+            where: { email: client.email }
         });
+
+        if (!existing) {
+            await prisma.client.create({
+                data: {
+                    clientName: client.clientName,
+                    contactPerson: client.contactPerson,
+                    email: client.email,
+                    industry: client.industry,
+                    relationshipLevel: client.relationshipLevel,
+                    services: {
+                        connect: dbServices.map((s: any) => ({ id: s.id }))
+                    }
+                }
+            });
+        }
     }
 
     console.log("Client seeding complete.");

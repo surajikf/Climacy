@@ -35,6 +35,7 @@
     "debug-db.ts",
     "reset-admin.ts",
     "verify-runtime.ts",
-    "verify-schema.ts"
+    "verify-schema.ts",
+    "tests"
   ]
 }

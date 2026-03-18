@@ -135,7 +135,7 @@ export async function createClient(input: CreateClientInput) {
       clientName,
       contactPerson,
       email,
-      industry,
+      industry: industry || "Other",
       relationshipLevel,
       isRoleBased: isRoleBasedEmail(email),
       services: {

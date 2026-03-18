@@ -13,7 +13,7 @@ model Client {
   id                  String            @id @default(cuid())
   clientName          String
   contactPerson       String?
-  email               String
+  email               String            @unique
   industry            String
   relationshipLevel   String
   createdAt           DateTime          @default(now())
