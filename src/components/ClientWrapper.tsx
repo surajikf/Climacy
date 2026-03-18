@@ -2,13 +2,12 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
-import { SessionProvider } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 
 export function ClientWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const isAuthPage = pathname === "/login" || pathname === "/register";
+    const isAuthPage = ["/login", "/register", "/forgot-password", "/update-password", "/pending", "/banned"].includes(pathname);
     const isDashboard = pathname === "/";
     const [isNavigating, setIsNavigating] = useState(false);
 
