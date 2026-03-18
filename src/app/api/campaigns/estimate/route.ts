@@ -4,37 +4,27 @@ import { z } from "zod";
 
 const estimateQuerySchema = z.object({
     type: z.string().min(1, "Campaign type is required"),
+    serviceFilters: z.array(z.string()).optional().default([]),
+    serviceLogic: z.enum(["AND", "OR"]).optional().default("OR"),
+    excludedClientIds: z.array(z.string()).optional().default([]),
 });
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
     try {
-        const { searchParams } = new URL(request.url);
-
-        const parsed = estimateQuerySchema.safeParse({
-            type: searchParams.get("type"),
-        });
+        const json = await request.json();
+        const parsed = estimateQuerySchema.safeParse(json);
 
         if (!parsed.success) {
-            return error("VALIDATION_ERROR", "Campaign type is required", {
+            return error("VALIDATION_ERROR", "Invalid estimation parameters", {
                 status: 400,
                 details: parsed.error.flatten(),
             });
         }
 
-        const { type } = parsed.data;
+        const { type, serviceFilters, serviceLogic, excludedClientIds } = parsed.data;
+        const { count, industries } = await estimateCampaignAudience(type, serviceFilters, serviceLogic, excludedClientIds);
 
-        console.log(`[Estimate API] Fetching audience for type: ${type}`);
-
-        const { count, industries } = await estimateCampaignAudience(type);
-
-        console.log(
-            `[Estimate API] Found ${count} clients in ${industries.length} industries.`,
-        );
-
-        return ok({
-            count,
-            industries,
-        });
+        return ok({ count, industries });
     } catch (err) {
         console.error("[Estimate API] Internal Failure:", err);
         return error("INTERNAL_ERROR", "Internal Server Error");

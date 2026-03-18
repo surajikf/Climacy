@@ -18,7 +18,7 @@ export interface ListClientsParams {
 
 const DEFAULT_PAGE_SIZE = 25;
 const MIN_PAGE_SIZE = 5;
-const MAX_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 500;
 
 export async function listClients(params: ListClientsParams) {
   const {

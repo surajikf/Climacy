@@ -36,6 +36,7 @@ model Client {
   invoiceServiceNames String?
   campaigns           CampaignHistory[]
   services            Service[]         @relation("ClientServices")
+  metadata            Json?             @default("{}")
 
   @@unique([source, externalId])
 }
@@ -78,6 +79,7 @@ model GlobalSettings {
   zohoPipelineName            String?
   zohoRefreshTokenEncrypted   String?
   zohoStageName               String?
+  zohoFieldMapping            Json?    @default("[]")
 }
 
 model User {

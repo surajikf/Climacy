@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { sendStrategicEmail } from "@/lib/mail";
 import { wrapInPremiumTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
+import { replaceVariables } from "@/lib/utils";
 import { z } from "zod";
 
 const dispatchSchema = z.object({
@@ -43,8 +44,9 @@ export async function POST(request: Request) {
             });
         }
 
-        // 2. Dispatch Strategic Communication
-        const htmlBody = wrapInPremiumTemplate(body, campaign.client.clientName);
+        // 2. Dispatch Strategic Communication: Final Variable Synchronization
+        const synchronizedBody = replaceVariables(body, campaign.client);
+        const htmlBody = wrapInPremiumTemplate(synchronizedBody, campaign.client.clientName);
 
         const result = await sendStrategicEmail({
             to: campaign.client.email,

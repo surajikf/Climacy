@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 
 export type CampaignType = "Broadcast" | "Targeted" | "Cross-Sell" | "Reactivation" | "Reactivate" | string;
 
-export async function estimateCampaignAudience(type: CampaignType) {
+export async function estimateCampaignAudience(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = []) {
   const normalizedType = type.toLowerCase();
 
   let where: any = {};
@@ -15,14 +15,31 @@ export async function estimateCampaignAudience(type: CampaignType) {
     where = { relationshipLevel: "Active" };
   }
 
-  const [count, industriesData] = await Promise.all([
-    prisma.client.count({ where }),
-    prisma.client.groupBy({
-      by: ["industry"],
-      where,
-      _count: true,
-    }),
-  ]);
+  // Inject Exclusions
+  if (excludedIds.length > 0) {
+    where.id = { notIn: excludedIds };
+  }
+
+  // Ultra-Smart Multi-Service Segmentation
+  if (serviceFilters.length > 0 && !serviceFilters.includes("All")) {
+    const serviceQueries = serviceFilters.map(service => ({
+      invoiceServiceNames: { contains: service, mode: "insensitive" as const }
+    }));
+    
+    if (serviceLogic === "AND") {
+      where.AND = serviceQueries;
+    } else {
+      where.OR = serviceQueries;
+    }
+  }
+
+  // Sequentialize to avoid PgBouncer/Transaction mode concurrency hangs
+  const count = await prisma.client.count({ where });
+  const industriesData = await prisma.client.groupBy({
+    by: ["industry"],
+    where,
+    _count: { _all: true },
+  });
 
   return {
     count,
@@ -70,5 +87,51 @@ export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
   });
 
   return history;
+}
+
+export async function getTargetClients(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = [], includeExclusions: boolean = false) {
+  const normalizedType = type.toLowerCase();
+  let where: any = {};
+
+  if (normalizedType === "broadcast" || normalizedType === "cross-sell") {
+    where = { relationshipLevel: { in: ["Active", "Warm Lead"] } };
+  } else if (normalizedType === "reactivation" || normalizedType === "reactivate") {
+    where = { relationshipLevel: "Past Client" };
+  } else if (normalizedType === "targeted") {
+    where = { relationshipLevel: "Active" };
+  }
+
+  // Inject Exclusions (Skip if includeExclusions is true for UI persistence)
+  if (excludedIds.length > 0 && !includeExclusions) {
+    where.id = { notIn: excludedIds };
+  }
+
+  // Ultra-Smart Multi-Service Segmentation
+  if (serviceFilters.length > 0 && !serviceFilters.includes("All")) {
+    const serviceQueries = serviceFilters.map(service => ({
+      invoiceServiceNames: { contains: service, mode: "insensitive" as const }
+    }));
+    
+    if (serviceLogic === "AND") {
+      where.AND = serviceQueries;
+    } else {
+      where.OR = serviceQueries;
+    }
+  }
+
+  return await prisma.client.findMany({
+    where,
+    select: {
+      id: true,
+      clientName: true,
+      industry: true,
+      contactPerson: true,
+      relationshipLevel: true,
+      clientAddedOn: true,
+      lastInvoiceDate: true,
+      invoiceServiceNames: true,
+    },
+    orderBy: { clientName: "asc" },
+  });
 }
 

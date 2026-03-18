@@ -136,20 +136,22 @@ export default function CampaignResults() {
     const fetchLatestResults = async () => {
         try {
             const res = await fetch("/api/campaigns/history?limit=20");
-            const data = await res.json();
-            const processed = data.map((c: any) => ({
-                ...c,
-                content: JSON.parse(c.generatedOutput)
-            }));
-            setCampaigns(processed);
-            if (processed.length > 0) {
-                setEditedBody(processed[0].content.body);
-                setEditedSubject(processed[0].content.subject);
+            const result = await res.json();
+            if (result.success) {
+                const processed = result.data.map((c: any) => ({
+                    ...c,
+                    content: JSON.parse(c.generatedOutput)
+                }));
+                setCampaigns(processed);
+                if (processed.length > 0) {
+                    setEditedBody(processed[0].content.body);
+                    setEditedSubject(processed[0].content.subject);
+                }
             }
         } catch (err) {
             console.error(err);
         } finally {
-            setTimeout(() => setLoading(false), 800); // Artificial delay for skeleton feel
+            setTimeout(() => setLoading(false), 800);
         }
     };
 

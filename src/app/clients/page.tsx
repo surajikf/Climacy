@@ -1,32 +1,36 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, Fragment } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment, memo } from "react";
 import { formatDistanceToNow } from "date-fns";
-import {
-    Search,
-    Filter,
-    Plus,
-    MoreVertical,
-    Mail,
-    ChevronRight,
-    Upload,
-    Trash2,
+import { 
+    Search, 
+    Filter, 
+    Plus, 
+    MoreVertical, 
+    Mail, 
+    Building2, 
+    Calendar, 
+    Shield, 
+    User, 
+    MapPin, 
+    ArrowUpDown, 
+    Trash2, 
+    Edit2,
     Edit3,
-    Loader2,
+    Database,
+    MessageSquare,
+    AlertCircle,
     X,
-    Tag,
     ChevronDown,
-    Check,
+    ChevronRight,
     RotateCcw,
-    Building2,
-    Phone,
-    User,
-    MapPin,
-    Calendar,
-    Shield,
-    UserPlus,
+    Check,
     AlertTriangle,
-    AlertCircle
+    Tag,
+    Upload,
+    ShieldCheck,
+    Phone,
+    Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClientModal } from "@/components/ClientModal";
@@ -34,6 +38,242 @@ import { toast } from "sonner";
 import { categorizeEmail, CATEGORIES, CATEGORY_COLORS, EmailCategory } from "@/lib/emailCategorization";
 import { motion, AnimatePresence } from "framer-motion";
 import { SmartLoader } from "@/components/SmartLoader";
+
+const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete }: any) => {
+    return (
+        <motion.tr
+            initial={pageSize > 50 ? false : { opacity: 0, y: 5 }}
+            animate={pageSize > 50 ? false : { opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.2 }}
+            className="hover:bg-slate-50/50 transition-all border-l-[3px] border-l-transparent hover:border-l-blue-600 group/row"
+        >
+            <td className="px-4 py-5 w-12 text-center text-slate-400 text-xs font-bold align-top">
+                <span className="text-slate-500">{(page - 1) * pageSize + index + 1}</span>
+            </td>
+            <td className="px-6 py-5 align-top">
+                <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700 flex items-center justify-center font-bold text-base shrink-0 border border-blue-100/50 shadow-sm" title="Client Profile Picture">
+                        {(contact.contactPerson || contact.email || "?")[0].toUpperCase()}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm font-black text-slate-800 tracking-tight leading-tight" title="Primary Contact Person">
+                                {contact.contactPerson || "Anonymous Contact"}
+                            </span>
+                            {contact.poc && (
+                                <span 
+                                    className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-black uppercase tracking-tighter cursor-help flex items-center gap-1 shadow-sm" 
+                                    title={`Point of Contact: ${contact.poc}. This is your primary internal contact for this account.`}
+                                >
+                                    <User className="w-2.5 h-2.5" />
+                                    {contact.poc}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5" title="Company Entity Name">
+                                <Building2 className="w-3 h-3 text-slate-400" />
+                                <span className="text-[11px] font-bold text-slate-600 truncate max-w-[200px]">
+                                    {contact.clientName || (contact.email ? contact.email.split('@')[0].toUpperCase() : "UNKNOWN ENTITY")}
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <div className="flex items-center gap-1 text-slate-400" title={`Industry: ${contact.industry || "General Business"}`}>
+                                    <Tag className="w-2.5 h-2.5" />
+                                    <span className="text-[10px] font-bold uppercase tracking-tight truncate max-w-[100px]">{contact.industry || "General"}</span>
+                                </div>
+                                {contact.clientSize && (
+                                    <div className="flex items-center gap-1" title={`Operational Scale: ${contact.clientSize}`}>
+                                        <span className="text-[8px] opacity-30 mx-0.5">•</span>
+                                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter">{contact.clientSize}</span>
+                                    </div>
+                                )}
+                                {contact.clientAddedOn && (
+                                    <div className="flex items-center gap-1 text-slate-400" title={`Added to Portfolio: ${new Date(contact.clientAddedOn).toLocaleDateString()}`}>
+                                        <span className="text-[8px] opacity-30 mx-0.5">•</span>
+                                        <Calendar className="w-2.5 h-2.5" />
+                                        <span className="text-[10px] font-medium">{new Date(contact.clientAddedOn).getUTCFullYear()}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            <td className="px-6 py-5 align-top">
+                <div className="flex flex-wrap gap-1.5 items-start justify-start pt-1">
+                    {contact.source === "INVOICE_SYSTEM" ? (
+                        contact.invoiceServiceNames ? (
+                            <span className="text-[9px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase tracking-widest shadow-sm cursor-help" title="These services are directly detected from your external Invoice System.">
+                                {contact.invoiceServiceNames}
+                            </span>
+                        ) : (
+                            <span className="text-[10px] text-slate-300 italic font-bold">No Services Identified</span>
+                        )
+                    ) : (
+                        <>
+                            {contact.services?.map((s: any) => (
+                                <span key={s.id} className="text-[9px] font-black text-blue-700 bg-blue-50/50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest shadow-sm" title={`Service Category: ${s.serviceName}`}>
+                                    {s.serviceName}
+                                </span>
+                            ))}
+                            {!contact.services?.length && <span className="text-[10px] text-slate-300 italic font-bold">No Services Identified</span>}
+                        </>
+                    )}
+                </div>
+            </td>
+            <td className="px-6 py-5 align-top">
+                <div className="flex flex-col gap-2 pt-0.5">
+                    <div className="flex flex-col gap-1.5">
+                        {(contact.email?.split(',') || []).map((email: string) => email.trim()).filter(Boolean).map((email: string, idx: number) => (
+                            <div key={idx} className="flex items-center gap-2 group/email" title={`Professional Email: ${email}`}>
+                                <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                                <a
+                                    href={`mailto:${email}`}
+                                    className="text-[11px] font-bold text-slate-600 hover:text-blue-600 transition-colors truncate max-w-[220px]"
+                                >
+                                    {email}
+                                </a>
+                            </div>
+                        ))}
+                        {(contact.phone || contact.mobile) && (
+                            <div className="flex items-center gap-2" title={`Primary Contact: ${[contact.phone, contact.mobile].filter(Boolean).join(" / ")}`}>
+                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="text-[11px] font-semibold text-slate-500 truncate max-w-[200px]">
+                                    {[contact.phone, contact.mobile].filter(Boolean).join(" / ")}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 mt-1 border-t border-slate-50 pt-1.5">
+                        {contact.address && (
+                            <div className="flex items-start gap-2 cursor-help" title={`Registered Address: ${contact.address}`}>
+                                <MapPin className="w-3 h-3 text-slate-300 shrink-0 mt-0.5" />
+                                <span className="text-[10px] font-medium text-slate-400 leading-tight line-clamp-1 italic">
+                                    {contact.address}
+                                </span>
+                            </div>
+                        )}
+                        {contact.gstin && (
+                            <div className="flex items-center gap-2" title="GST Identification Number (Verified Entity)">
+                                <Shield className="w-3 h-3 text-emerald-500 shrink-0" />
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    {contact.gstin}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </td>
+            <td className="px-6 py-5 align-top">
+                <div className="flex flex-col gap-3 pt-1">
+                    {/* Smart Engagement Logic */}
+                    <div className="flex flex-col gap-2">
+                        {contact.lastInvoiceDate ? (
+                            <div className="flex flex-col gap-0.5 group/invoice cursor-help" title={`Latest Transaction detected on ${new Date(contact.lastInvoiceDate).toLocaleString()}. Data synced from Invoice System.`}>
+                                <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest opacity-80 group-hover/invoice:opacity-100 transition-opacity">Last Invoice</span>
+                                <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
+                                    <Calendar className="w-3 h-3 text-rose-500" />
+                                    {new Date(contact.lastInvoiceDate).toLocaleDateString(undefined, {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "numeric"
+                                    })}
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-0.5" title="No invoice history detected in the connected system.">
+                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Invoice</span>
+                                <span className="text-[10px] font-bold text-slate-300 italic">None Found</span>
+                            </div>
+                        )}
+
+                        {contact.lastContacted && (
+                            <div className="flex flex-col gap-0.5 group/contact cursor-help pt-1 border-t border-slate-50" title={`Last Outreach: ${formatDistanceToNow(new Date(contact.lastContacted), { addSuffix: true })}. This includes AI campaigns or manual messages.`}>
+                                <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest opacity-80 group-hover/contact:opacity-100 transition-opacity">Last Contact</span>
+                                <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
+                                    <MessageSquare className="w-3 h-3 text-blue-500" />
+                                    {new Date(contact.lastContacted).toLocaleDateString(undefined, {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "numeric"
+                                    })}
+                                </span>
+                            </div>
+                        )}
+
+                        {!contact.lastContacted && (
+                            <div className="flex flex-col gap-0.5 border-t border-slate-50 pt-1">
+                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Contact</span>
+                                <span className="text-[10px] font-bold text-slate-300 italic">Never Engaged</span>
+                            </div>
+                        )}
+
+                        {/* Smart Status Badge */}
+                        {contact.lastInvoiceDate && (!contact.lastContacted || new Date(contact.lastInvoiceDate) > new Date(contact.lastContacted)) ? (
+                            <div className="mt-1">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-50 text-[8px] font-black text-amber-600 border border-amber-100 uppercase tracking-tighter animate-pulse" title="Invoice detected after last contact. Client might need outreach.">
+                                    Due for Outreach
+                                </span>
+                            </div>
+                        ) : contact.lastContacted ? (
+                            <div className="mt-1">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 text-[8px] font-black text-blue-600 border border-blue-100 uppercase tracking-tighter" title="Engagement is up to date relative to transaction history.">
+                                    Recently Engaged
+                                </span>
+                            </div>
+                        ) : null}
+                    </div>
+                </div>
+            </td>
+            <td className="px-6 py-5 align-top">
+                <div 
+                    className="flex items-center gap-2 pt-1.5 cursor-help group/status" 
+                    title={
+                        contact.relationshipLevel === "Active" ? "Active Customer: Verified entity with ongoing services or recent invoices. High priority for maintenance." :
+                        contact.relationshipLevel === "Warm Lead" ? "High Potential: Lead or past client showing interest. Target for conversion campaigns." :
+                        "Inactive/Past: No recent transactions. Candidate for re-engagement or recovery outreach."
+                    }
+                >
+                    <div className={cn(
+                        "w-2 h-2 rounded-full transition-transform group-hover/status:scale-125",
+                        contact.relationshipLevel === "Active" ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" :
+                            contact.relationshipLevel === "Warm Lead" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" :
+                                "bg-slate-300 shadow-[0_0_8px_rgba(148,163,184,0.3)]"
+                    )} />
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{contact.relationshipLevel}</span>
+                </div>
+            </td>
+            <td className="px-6 py-5 align-top">
+                <div className="pt-1">
+                    {contact?.source && (
+                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
+                            {contact.source.slice(0, 3)}
+                        </span>
+                    )}
+                    {!contact?.source && (
+                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
+                            MAN
+                        </span>
+                    )}
+                </div>
+            </td>
+            <td className="px-6 py-5 align-top text-right">
+                <div className="flex items-center justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity pt-0.5">
+                    <button onClick={() => onEdit(contact)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                        <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => onDelete(contact.id)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            </td>
+        </motion.tr>
+    );
+});
+
+ClientRow.displayName = "ClientRow";
 
 export default function ClientManager() {
     const [view, setView] = useState<"clients" | "services" | "rolebased">("clients");
@@ -224,6 +464,22 @@ export default function ClientManager() {
 
     const activeFilterCount = filterIndustry.length + filterLevel.length + filterService.length + filterSource.length;
 
+    const stats = useMemo(() => {
+        const total = clients.length;
+        const active = clients.filter(c => c.relationshipLevel === "Active").length;
+        const warm = clients.filter(c => c.relationshipLevel === "Warm Lead").length;
+        const due = clients.filter(c => 
+            c.lastInvoiceDate && (!c.lastContacted || new Date(c.lastInvoiceDate) > new Date(c.lastContacted))
+        ).length;
+
+        return [
+            { label: "Total Portfolio", value: total, icon: Database, color: "text-slate-600", bg: "bg-slate-50" },
+            { label: "Active Clients", value: active, icon: Shield, color: "text-emerald-600", bg: "bg-emerald-50" },
+            { label: "Warm Leads", value: warm, icon: Tag, color: "text-amber-600", bg: "bg-amber-50" },
+            { label: "Outreach Due", value: due, icon: AlertCircle, color: "text-rose-600", bg: "bg-rose-50" },
+        ];
+    }, [clients]);
+
     const FilterPopover = ({ label, options, selected, onToggle, icon: Icon }: any) => {
         const [isOpen, setIsOpen] = useState(false);
         const popoverRef = useRef<HTMLDivElement>(null);
@@ -361,19 +617,19 @@ export default function ClientManager() {
 
             {view === "clients" || view === "rolebased" ? (
                 <>
-                    <div className="flex flex-col gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
+                    <div className="sticky top-4 z-40 flex flex-col gap-4 bg-white/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all">
                         <div className="flex flex-wrap items-center gap-4">
-                            <div className="flex flex-1 min-w-[300px] items-center gap-3 px-4 py-2.5 bg-slate-50 rounded-xl group focus-within:bg-white border border-slate-200 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-50 transition-all duration-300">
+                            <div className="flex flex-1 min-w-[300px] items-center gap-3 px-5 py-3 bg-slate-100/50 rounded-2xl group focus-within:bg-white border border-transparent focus-within:border-blue-500/30 focus-within:ring-4 focus-within:ring-blue-50/50 transition-all duration-500">
                                 <Search className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                                 <input
                                     type="text"
                                     placeholder="Search by company, industry, or email..."
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    className="bg-transparent border-none outline-none text-sm w-full placeholder:text-slate-400 font-medium text-slate-900"
+                                    className="bg-transparent border-none outline-none text-[13px] w-full placeholder:text-slate-400 font-bold text-slate-900"
                                 />
                                 {search && (
-                                    <button onClick={() => setSearch("")} className="p-1 hover:bg-slate-200 rounded-full transition-colors">
+                                    <button onClick={() => setSearch("")} className="p-1 hover:bg-slate-200 rounded-lg transition-colors">
                                         <X className="w-4 h-4 text-slate-400" />
                                     </button>
                                 )}
@@ -385,37 +641,37 @@ export default function ClientManager() {
                                     options={industries}
                                     selected={filterIndustry}
                                     onToggle={(val: string) => toggleFilter(setFilterIndustry, filterIndustry, val)}
-                                    icon={Filter}
+                                    icon={Building2}
                                 />
                                 <FilterPopover
-                                    label="Services"
+                                    label="Capabilities"
                                     options={services.map(s => ({ label: s.serviceName, value: s.id }))}
                                     selected={filterService}
                                     onToggle={(val: string) => toggleFilter(setFilterService, filterService, val)}
                                     icon={Plus}
                                 />
                                 <FilterPopover
-                                    label="Level"
+                                    label="Priority"
                                     options={levels}
                                     selected={filterLevel}
                                     onToggle={(val: string) => toggleFilter(setFilterLevel, filterLevel, val)}
-                                    icon={ChevronRight}
+                                    icon={Shield}
                                 />
                                 <FilterPopover
-                                    label="Source"
+                                    label="System"
                                     options={sources}
                                     selected={filterSource}
                                     onToggle={(val: string) => toggleFilter(setFilterSource, filterSource, val)}
-                                    icon={Upload}
+                                    icon={Database}
                                 />
 
                                 {activeFilterCount > 0 && (
                                     <button
                                         onClick={clearAllFilters}
-                                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 transition-all group border border-transparent hover:border-red-100"
+                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-50 transition-all group border border-transparent hover:border-rose-100"
                                     >
-                                        <RotateCcw className="w-3.5 h-3.5 group-hover:rotate-[-45deg] transition-transform" />
-                                        Clear All
+                                        <RotateCcw className="w-3.5 h-3.5 group-hover:rotate-[-180deg] transition-transform duration-500" />
+                                        Reset
                                     </button>
                                 )}
                             </div>
@@ -462,21 +718,21 @@ export default function ClientManager() {
                         </AnimatePresence>
                     </div>
 
-                    <div className="bg-white overflow-hidden rounded-xl border border-slate-200 shadow-sm">
-                        <table className="w-full text-left border-collapse">
+                    <div className="bg-white overflow-hidden rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-sm">
+                        <table className="w-full text-left border-collapse overflow-hidden">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200 text-[11px]">
-                                    <th className="px-4 py-4 font-bold uppercase tracking-widest text-slate-500 w-12 text-center">Sr.</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[30%]">Client Profile</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[15%]">Services</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[25%]">Contact Info</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[10%]">Last Contact / Invoice</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[10%]">Status</th>
-                                    <th className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 w-[10%]">Source</th>
-                                    <th className="px-6 py-4 text-right w-20"></th>
+                                <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] sm:text-[11px]">
+                                    <th className="px-4 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-12 text-center">Sr.</th>
+                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[30%]">Client Profile</th>
+                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Services</th>
+                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[20%]">Contact Info</th>
+                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Engagement</th>
+                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Status</th>
+                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Source</th>
+                                    <th className="px-6 py-6 text-right w-20"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 bg-white">
+                            <tbody className="divide-y divide-slate-50 bg-white">
                                 {loading ? (
                                     [...Array(6)].map((_, i) => (
                                         <tr key={i} className="animate-pulse border-b border-slate-50">
@@ -532,194 +788,21 @@ export default function ClientManager() {
                                     </tr>
                                 ) : (
                                     filteredClients.map((contact, index) => (
-                                        <motion.tr
-                                            initial={{ opacity: 0, y: 5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.2 }}
+                                        <ClientRow 
                                             key={contact.id}
-                                            className="hover:bg-slate-50/50 transition-all border-l-[3px] border-l-transparent hover:border-l-blue-600 group/row"
-                                        >
-                                            <td className="px-4 py-5 w-12 text-center text-slate-400 text-xs font-bold align-top">
-                                                <span className="text-slate-500">{index + 1}</span>
-                                            </td>
-                                            <td className="px-6 py-5 align-top">
-                                                <div className="flex items-start gap-4">
-                                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700 flex items-center justify-center font-bold text-base shrink-0 border border-blue-100/50 shadow-sm" title="Client Profile Picture">
-                                                        {(contact.contactPerson || contact.email || "?")[0].toUpperCase()}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex items-center gap-2 mb-0.5">
-                                                            <span className="text-sm font-black text-slate-800 tracking-tight leading-tight" title="Primary Contact Person">
-                                                                {contact.contactPerson || "Anonymous Contact"}
-                                                            </span>
-                                                            {contact.poc && (
-                                                                <span 
-                                                                    className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-black uppercase tracking-tighter cursor-help flex items-center gap-1 shadow-sm" 
-                                                                    title={`Point of Contact: ${contact.poc}. This is your primary internal contact for this account.`}
-                                                                >
-                                                                    <User className="w-2.5 h-2.5" />
-                                                                    {contact.poc}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-col gap-1.5">
-                                                            <div className="flex items-center gap-1.5" title="Company Entity Name">
-                                                                <Building2 className="w-3 h-3 text-slate-400" />
-                                                                <span className="text-[11px] font-bold text-slate-600 truncate max-w-[200px]">
-                                                                    {contact.clientName || (contact.email ? contact.email.split('@')[0].toUpperCase() : "UNKNOWN ENTITY")}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                                <div className="flex items-center gap-1 text-slate-400" title={`Industry: ${contact.industry || "General Business"}`}>
-                                                                    <Tag className="w-2.5 h-2.5" />
-                                                                    <span className="text-[10px] font-bold uppercase tracking-tight truncate max-w-[100px]">{contact.industry || "General"}</span>
-                                                                </div>
-                                                                {contact.clientSize && (
-                                                                    <div className="flex items-center gap-1" title={`Operational Scale: ${contact.clientSize}`}>
-                                                                        <span className="text-[8px] opacity-30 mx-0.5">•</span>
-                                                                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter">{contact.clientSize}</span>
-                                                                    </div>
-                                                                )}
-                                                                {contact.clientAddedOn && (
-                                                                    <div className="flex items-center gap-1 text-slate-400" title={`Added to Portfolio: ${new Date(contact.clientAddedOn).toLocaleDateString()}`}>
-                                                                        <span className="text-[8px] opacity-30 mx-0.5">•</span>
-                                                                        <Calendar className="w-2.5 h-2.5" />
-                                                                        <span className="text-[10px] font-medium">{new Date(contact.clientAddedOn).getUTCFullYear()}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 align-top">
-                                                <div className="flex flex-wrap gap-1.5 items-start justify-start pt-1">
-                                                    {contact.services?.map((s: any) => (
-                                                        <span key={s.id} className="text-[9px] font-black text-indigo-700 bg-indigo-50/50 px-2 py-0.5 rounded border border-indigo-100 uppercase tracking-widest shadow-sm">
-                                                            {s.serviceName}
-                                                        </span>
-                                                    ))}
-                                                    {contact.invoiceServiceNames && !contact.services?.length && (
-                                                        <span className="text-[9px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-tight italic" title="Services from Invoice System">
-                                                            {contact.invoiceServiceNames}
-                                                        </span>
-                                                    )}
-                                                    {!contact.services?.length && !contact.invoiceServiceNames && <span className="text-[10px] text-slate-300 italic font-bold">--</span>}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 align-top">
-                                                <div className="flex flex-col gap-2 pt-0.5">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        {(contact.email?.split(',') || []).map((email: string) => email.trim()).filter(Boolean).map((email: string, idx: number) => (
-                                                            <div key={idx} className="flex items-center gap-2 group/email" title={`Professional Email: ${email}`}>
-                                                                <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                                                                <a
-                                                                    href={`mailto:${email}`}
-                                                                    className="text-[11px] font-bold text-slate-600 hover:text-blue-600 transition-colors truncate max-w-[220px]"
-                                                                >
-                                                                    {email}
-                                                                </a>
-                                                            </div>
-                                                        ))}
-                                                        {(contact.phone || contact.mobile) && (
-                                                            <div className="flex items-center gap-2" title={`Primary Contact: ${[contact.phone, contact.mobile].filter(Boolean).join(" / ")}`}>
-                                                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                                                                <span className="text-[11px] font-semibold text-slate-500 truncate max-w-[200px]">
-                                                                    {[contact.phone, contact.mobile].filter(Boolean).join(" / ")}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex flex-col gap-1.5 mt-1 border-t border-slate-50 pt-1.5">
-                                                        {contact.address && (
-                                                            <div className="flex items-start gap-2 cursor-help" title={`Registered Address: ${contact.address}`}>
-                                                                <MapPin className="w-3 h-3 text-slate-300 shrink-0 mt-0.5" />
-                                                                <span className="text-[10px] font-medium text-slate-400 leading-tight line-clamp-1 italic">
-                                                                    {contact.address}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                        {contact.gstin && (
-                                                            <div className="flex items-center gap-2" title="GST Identification Number (Verified Entity)">
-                                                                <Shield className="w-3 h-3 text-emerald-500 shrink-0" />
-                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                                    {contact.gstin}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 align-top">
-                                                <div className="flex flex-col gap-3 pt-1">
-                                                    {contact.lastInvoiceDate ? (
-                                                        <div className="flex flex-col gap-0.5 group/invoice cursor-help" title={`Latest Transaction detected on ${new Date(contact.lastInvoiceDate).toLocaleString()}. Data synced from Invoice System.`}>
-                                                            <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest opacity-80 group-hover/invoice:opacity-100 transition-opacity">Last Invoice</span>
-                                                            <span className="flex items-center gap-1.5 text-[11px] font-black text-slate-700">
-                                                                <Calendar className="w-3 h-3 text-rose-500" />
-                                                                {new Date(contact.lastInvoiceDate).toLocaleDateString(undefined, {
-                                                                    day: "2-digit",
-                                                                    month: "short",
-                                                                    year: "numeric"
-                                                                })}
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-0.5" title="No invoice history detected in the connected system.">
-                                                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Invoice</span>
-                                                            <span className="text-[10px] font-bold text-slate-300 italic">None Found</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 align-top">
-                                                <div 
-                                                    className="flex items-center gap-2 pt-1.5 cursor-help group/status" 
-                                                    title={
-                                                        contact.relationshipLevel === "Active" ? "Active Customer: Verified entity with ongoing services or recent invoices. High priority for maintenance." :
-                                                        contact.relationshipLevel === "Warm Lead" ? "High Potential: Lead or past client showing interest. Target for conversion campaigns." :
-                                                        "Inactive/Past: No recent transactions. Candidate for re-engagement or recovery outreach."
-                                                    }
-                                                >
-                                                    <div className={cn(
-                                                        "w-2 h-2 rounded-full transition-transform group-hover/status:scale-125",
-                                                        contact.relationshipLevel === "Active" ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" :
-                                                            contact.relationshipLevel === "Warm Lead" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" :
-                                                                "bg-slate-300 shadow-[0_0_8px_rgba(148,163,184,0.3)]"
-                                                    )} />
-                                                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{contact.relationshipLevel}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 align-top">
-                                                <div className="pt-1">
-                                                    {contact?.source && (
-                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
-                                                            {contact.source.slice(0, 3)}
-                                                        </span>
-                                                    )}
-                                                    {!contact?.source && (
-                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
-                                                            MAN
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 align-top text-right">
-                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity pt-0.5">
-                                                    <button onClick={() => handleEdit(contact)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                                                        <Edit3 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => setClientToDelete(contact.id)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </motion.tr>
+                                            contact={contact}
+                                            index={index}
+                                            page={page}
+                                            pageSize={pageSize}
+                                            onEdit={handleEdit}
+                                            onDelete={(id: string) => setClientToDelete(id)}
+                                        />
                                     ))
                                 )}
                             </tbody>
                         </table>
+
+
 
                         {/* Pagination footer */}
                         <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 bg-slate-50">
@@ -746,7 +829,7 @@ export default function ClientManager() {
                                         }}
                                         className="bg-white border border-slate-200 rounded-md px-2 py-1 text-[11px]"
                                     >
-                                        {[10, 25, 50].map(size => (
+                                        {[10, 25, 50, 100, 200, 500].map(size => (
                                             <option key={size} value={size}>{size}</option>
                                         ))}
                                     </select>
@@ -817,17 +900,6 @@ export default function ClientManager() {
                             </div>
                         </div>
                     ))}
-                    {services.length === 0 && (
-                        <div className="col-span-full py-20 text-center space-y-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                            <p className="text-sm font-medium text-slate-400 italic">No service records configured in the database.</p>
-                            <button
-                                onClick={() => setIsServiceModalOpen(true)}
-                                className="text-xs font-bold text-blue-600 hover:underline uppercase tracking-widest"
-                            >
-                                Integrate First Service
-                            </button>
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -937,3 +1009,4 @@ export default function ClientManager() {
         </div>
     );
 }
+

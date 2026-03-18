@@ -15,7 +15,8 @@ export async function GET() {
             serviceUtilizationRaw,
             dataIntegrityRaw,
             dailyActivityRaw,
-            recentCampaigns
+            recentCampaigns,
+            sourceCountsRaw
         ] = await Promise.all([
             // Level distribution
             prisma.client.groupBy({
@@ -86,6 +87,11 @@ export async function GET() {
                         }
                     }
                 }
+            }),
+            // Source Breakdown
+            prisma.client.groupBy({
+                by: ['source', 'gmailSourceAccount'],
+                _count: true
             })
         ]);
 
@@ -93,6 +99,21 @@ export async function GET() {
         const completeProfiles = dataIntegrityRaw[1];
         const [newClientsLastMonth, campaignsLastMonth] = trendCounts;
         const [dailyCampaignsRaw, dailyClientsRaw] = dailyActivityRaw;
+
+        // Process Source Counts
+        const sourceStats = {
+            zoho: 0,
+            invoice: 0,
+            gmail: [] as { email: string, count: number }[]
+        };
+
+        sourceCountsRaw.forEach((sc: any) => {
+            if (sc.source === 'ZOHO_BIGIN') sourceStats.zoho += sc._count;
+            if (sc.source === 'INVOICE_SYSTEM') sourceStats.invoice += sc._count;
+            if (sc.source === 'GMAIL' && sc.gmailSourceAccount) {
+                sourceStats.gmail.push({ email: sc.gmailSourceAccount, count: sc._count });
+            }
+        });
 
         // Process Level Counts
         const statsMap: Record<string, number> = { "Active": 0, "Warm Lead": 0, "Past Client": 0 };
@@ -150,7 +171,8 @@ export async function GET() {
                 type: c.campaignType,
                 date: c.dateCreated,
                 status: "Sent"
-            }))
+            })),
+            sourceStats
         });
     } catch (err) {
         console.error("Failed to fetch stats:", err);

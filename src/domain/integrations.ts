@@ -107,6 +107,8 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
   let conflictCount = 0;
   const syncedExternalIds: string[] = [];
 
+  const fieldMapping = (settings.zohoFieldMapping as any[]) || [];
+
   for (const deal of filteredDeals) {
     try {
       if (!deal.Contact_Name || !deal.Contact_Name.id) continue;
@@ -131,6 +133,40 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
         where: { email: email.toLowerCase() },
       });
 
+      // Dynamic Field Mapping
+      const mappedData: any = {
+        clientName,
+        contactPerson,
+        email,
+        primaryEmail: email.split(",")[0].trim(),
+        zohoTags,
+        isRoleBased: isRoleBasedEmail(email),
+        metadata: (existing?.metadata as any) || {},
+      };
+
+      const metadata: any = { ...(mappedData.metadata || {}) };
+
+      for (const mapping of fieldMapping) {
+        const [module, fieldName] = mapping.zohoField.split(".");
+        let value = null;
+
+        if (module === "deal") {
+          value = deal[fieldName];
+        } else if (module === "contact") {
+          value = contact[fieldName];
+        }
+
+        if (value !== null && value !== undefined) {
+          if (mapping.appField === "metadata") {
+            metadata[fieldName] = value;
+          } else {
+            mappedData[mapping.appField] = String(value);
+          }
+        }
+      }
+      
+      mappedData.metadata = metadata;
+
       if (existing && existing.source !== "ZOHO_BIGIN") {
         logMsg(
           `[CONFLICT] Client with email ${email} already exists from source ${existing.source}. Record updated.`
@@ -138,34 +174,44 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
         conflictCount++;
       }
 
-      await prisma.client.upsert({
-        where: {
-          source_externalId: {
-            source: "ZOHO_BIGIN",
-            externalId: externalId,
-          },
-        },
-        update: {
-          clientName,
-          contactPerson,
-          email,
-          primaryEmail: email.split(",")[0].trim(),
-          zohoTags,
-          isRoleBased: isRoleBasedEmail(email),
-        },
-        create: {
-          clientName,
-          contactPerson,
-          email,
-          primaryEmail: email.split(",")[0].trim(),
-          industry: "Imported",
-          relationshipLevel: "Warm Lead",
-          source: "ZOHO_BIGIN",
-          externalId: externalId,
-          zohoTags,
-          isRoleBased: isRoleBasedEmail(email),
-        },
-      });
+      // We use raw SQL for the upsert to bypass Prisma client generation issues (EPERM)
+      // and ensure new fields like 'metadata' are saved even if the client is out of date.
+      const cuid = () => Math.random().toString(36).substring(2, 11); // Simple fallback for id if needed
+      
+      const upsertSql = `
+        INSERT INTO "Client" (
+          "id", "clientName", "contactPerson", "email", "industry", "relationshipLevel", 
+          "source", "externalId", "zohoTags", "isRoleBased", "primaryEmail", "metadata", 
+          "updatedAt", "createdAt"
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7::"ClientSource", $8, $9::text[], $10, $11, $12::jsonb, NOW(), NOW()
+        )
+        ON CONFLICT ("source", "externalId") DO UPDATE SET
+          "clientName" = EXCLUDED."clientName",
+          "contactPerson" = EXCLUDED."contactPerson",
+          "email" = EXCLUDED."email",
+          "primaryEmail" = EXCLUDED."primaryEmail",
+          "zohoTags" = EXCLUDED."zohoTags",
+          "isRoleBased" = EXCLUDED."isRoleBased",
+          "metadata" = EXCLUDED."metadata",
+          "updatedAt" = NOW()
+      `;
+
+      await prisma.$executeRawUnsafe(
+        upsertSql,
+        existing?.id || `c${cuid()}`,
+        mappedData.clientName,
+        mappedData.contactPerson,
+        mappedData.email,
+        mappedData.industry || "Imported",
+        mappedData.relationshipLevel || "Warm Lead",
+        "ZOHO_BIGIN",
+        externalId,
+        mappedData.zohoTags,
+        mappedData.isRoleBased,
+        mappedData.primaryEmail,
+        JSON.stringify(mappedData.metadata)
+      );
 
       logMsg(`[Zoho Sync] Successfully synced client: ${clientName} (Role-Based: ${isRoleBasedEmail(email)})`);
       syncedExternalIds.push(externalId);

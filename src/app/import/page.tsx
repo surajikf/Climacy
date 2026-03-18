@@ -25,9 +25,12 @@ export default function ImportIntegrationsPage() {
 
     // Zoho Config State
     const [isZohoModalOpen, setIsZohoModalOpen] = useState(false);
-    const [zohoConfig, setZohoConfig] = useState<any>({ hasClientId: false, hasClientSecret: false, hasRefreshToken: false, pipelineName: "Sales Pipeline", stageName: "Closed Won" });
+    const [zohoConfig, setZohoConfig] = useState<any>({ hasClientId: false, hasClientSecret: false, hasRefreshToken: false, pipelineName: "Sales Pipeline", stageName: "Closed Won", zohoFieldMapping: [] });
     const [zohoFormData, setZohoFormData] = useState({ clientId: "", clientSecret: "", pipelineName: "", stageName: "" });
     const [isSavingZoho, setIsSavingZoho] = useState(false);
+    const [zohoFields, setZohoFields] = useState<{ deals: any[], contacts: any[] }>({ deals: [], contacts: [] });
+    const [isLoadingFields, setIsLoadingFields] = useState(false);
+    const [fieldMapping, setFieldMapping] = useState<any[]>([]);
 
     const fetchSettings = async () => {
         try {
@@ -41,11 +44,35 @@ export default function ImportIntegrationsPage() {
                     pipelineName: data.pipelineName,
                     stageName: data.stageName
                 }));
+                setFieldMapping(data.zohoFieldMapping || []);
             }
         } catch (err) {
             console.error(err);
         }
     };
+
+    const fetchZohoFields = async () => {
+        if (!zohoConfig.hasRefreshToken) return;
+        setIsLoadingFields(true);
+        try {
+            const res = await fetch("/api/settings/zoho/fields");
+            const result = await res.json();
+            if (result.success) {
+                setZohoFields(result.data);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load Zoho fields.");
+        } finally {
+            setIsLoadingFields(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isZohoModalOpen && zohoConfig.hasRefreshToken) {
+            fetchZohoFields();
+        }
+    }, [isZohoModalOpen, zohoConfig.hasRefreshToken]);
 
     const fetchGmailAccounts = async () => {
         try {
@@ -439,6 +466,98 @@ export default function ImportIntegrationsPage() {
                                 {isSavingZoho ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
                                 Save Configuration To Database
                             </button>
+
+                            {zohoConfig.hasRefreshToken && (
+                                <div className="space-y-4 pt-4 border-t border-slate-100">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Field Mapping (Columns)</label>
+                                        <button 
+                                            onClick={() => setFieldMapping([...fieldMapping, { zohoField: "", appField: "metadata" }])}
+                                            className="text-[10px] font-bold text-orange-600 hover:text-orange-700 uppercase tracking-widest flex items-center gap-1"
+                                        >
+                                            <Plus className="w-3 h-3" /> Add Mapping
+                                        </button>
+                                    </div>
+
+                                    {fieldMapping.length === 0 && (
+                                        <p className="text-[10px] text-slate-400 italic">No custom columns mapped. Core fields (Name, Email) are synced by default.</p>
+                                    )}
+
+                                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                                        {fieldMapping.map((mapping, idx) => (
+                                            <div key={idx} className="flex gap-2 items-center">
+                                                <select
+                                                    value={mapping.zohoField}
+                                                    onChange={(e) => {
+                                                        const newMapping = [...fieldMapping];
+                                                        newMapping[idx].zohoField = e.target.value;
+                                                        setFieldMapping(newMapping);
+                                                    }}
+                                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-orange-500 transition-all"
+                                                >
+                                                    <option value="">Select Zoho Field</option>
+                                                    <optgroup label="Deal Fields">
+                                                        {zohoFields.deals.map(f => <option key={f.api_name} value={`deal.${f.api_name}`}>{f.field_label}</option>)}
+                                                    </optgroup>
+                                                    <optgroup label="Contact Fields">
+                                                        {zohoFields.contacts.map(f => <option key={f.api_name} value={`contact.${f.api_name}`}>{f.field_label}</option>)}
+                                                    </optgroup>
+                                                </select>
+                                                <span className="text-slate-400">→</span>
+                                                <select
+                                                    value={mapping.appField}
+                                                    onChange={(e) => {
+                                                        const newMapping = [...fieldMapping];
+                                                        newMapping[idx].appField = e.target.value;
+                                                        setFieldMapping(newMapping);
+                                                    }}
+                                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-900 outline-none focus:bg-white focus:border-orange-500 transition-all"
+                                                >
+                                                    <option value="metadata">Extra Metadata</option>
+                                                    <option value="industry">Industry</option>
+                                                    <option value="address">Address</option>
+                                                    <option value="phone">Phone</option>
+                                                    <option value="mobile">Mobile</option>
+                                                    <option value="gstin">GSTIN</option>
+                                                </select>
+                                                <button 
+                                                    onClick={() => setFieldMapping(fieldMapping.filter((_, i) => i !== idx))}
+                                                    className="text-slate-400 hover:text-red-500"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={async () => {
+                                            setIsSavingZoho(true);
+                                            try {
+                                                const res = await fetch("/api/settings/zoho", {
+                                                    method: "PUT",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ ...zohoFormData, zohoFieldMapping: fieldMapping })
+                                                });
+                                                if (res.ok) {
+                                                    toast.success("Field mapping saved.");
+                                                    fetchSettings();
+                                                } else {
+                                                    toast.error("Failed to save mapping.");
+                                                }
+                                            } catch (e) {
+                                                toast.error("Network error saving mapping.");
+                                            } finally {
+                                                setIsSavingZoho(false);
+                                            }
+                                        }}
+                                        disabled={isSavingZoho}
+                                        className="w-full py-2 border border-orange-200 text-orange-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-orange-50 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        Update Field Mapping
+                                    </button>
+                                </div>
+                            )}
 
                             {(zohoConfig.hasClientId || zohoFormData.clientId) && (
                                 <button

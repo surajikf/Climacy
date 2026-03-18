@@ -28,6 +28,7 @@ const zohoSettingsSchema = z.object({
     clientSecret: z.string().optional(),
     pipelineName: z.string().optional(),
     stageName: z.string().optional(),
+    zohoFieldMapping: z.array(z.any()).optional(),
 });
 
 export async function GET(req: Request) {
@@ -49,6 +50,7 @@ export async function GET(req: Request) {
             hasRefreshToken: !!settings?.zohoRefreshTokenEncrypted,
             pipelineName: settings?.zohoPipelineName || "Sales Pipeline",
             stageName: settings?.zohoStageName || "Closed Won",
+            zohoFieldMapping: settings?.zohoFieldMapping || [],
         });
     } catch (err) {
         console.error("Zoho Settings GET Error:", err);
@@ -77,7 +79,7 @@ export async function PUT(req: Request) {
             });
         }
 
-        const { clientId, clientSecret, pipelineName, stageName } = parsed.data;
+        const { clientId, clientSecret, pipelineName, stageName, zohoFieldMapping } = parsed.data;
 
         let settings = await prisma.globalSettings.findFirst();
 
@@ -87,16 +89,44 @@ export async function PUT(req: Request) {
         if (clientSecret) updateData.zohoClientSecretEncrypted = encrypt(clientSecret);
         if (pipelineName) updateData.zohoPipelineName = pipelineName;
         if (stageName) updateData.zohoStageName = stageName;
+        if (zohoFieldMapping) updateData.zohoFieldMapping = zohoFieldMapping;
+
+        const { zohoFieldMapping: mappingToSave, ...standardData } = updateData;
 
         if (settings) {
-            await prisma.globalSettings.update({
+            await (prisma.globalSettings as any).update({
                 where: { id: settings.id },
-                data: updateData,
+                data: standardData,
             });
+            
+            // Handle field mapping via raw SQL to bypass Prisma client generation issues (EPERM)
+            if (mappingToSave) {
+                try {
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "GlobalSettings" SET "zohoFieldMapping" = $1::jsonb WHERE id = $2`,
+                        JSON.stringify(mappingToSave),
+                        settings.id
+                    );
+                } catch (e) {
+                    console.error("Raw SQL Update Error (zohoFieldMapping):", e);
+                }
+            }
         } else {
-            await prisma.globalSettings.create({
-                data: updateData,
+            const newSettings = await (prisma.globalSettings as any).create({
+                data: standardData,
             });
+
+            if (mappingToSave) {
+                try {
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "GlobalSettings" SET "zohoFieldMapping" = $1::jsonb WHERE id = $2`,
+                        JSON.stringify(mappingToSave),
+                        newSettings.id
+                    );
+                } catch (e) {
+                    console.error("Raw SQL Create Error (zohoFieldMapping):", e);
+                }
+            }
         }
 
         return ok({ updated: true });

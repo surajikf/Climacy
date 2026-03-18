@@ -47,50 +47,97 @@ export async function POST(req: Request) {
         const xmlData = await response.text();
 
         // 2. Parse XML to JSON
-        const parser = new XMLParser();
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@_"
+        });
         const jsonObj = parser.parse(xmlData);
 
-        // Based on the observed structure: ApiResponse -> data -> ActiveClientDto[]
-        const clientsList = jsonObj?.ApiResponse?.data?.ActiveClientDto;
+        // Recursive helper to find the array of clients wherever it is in the JSON
+        const findClientsRecursive = (obj: any): any[] | null => {
+            if (!obj || typeof obj !== 'object') return null;
+            
+            // Look for ActiveClientDto or ArrayOfActiveClientDto or just any list containing ClientName
+            if (obj.ActiveClientDto) {
+                return Array.isArray(obj.ActiveClientDto) ? obj.ActiveClientDto : [obj.ActiveClientDto];
+            }
+            
+            // If the object itself looks like a client (has a name or id)
+            if (obj.ClientName || obj.clientname || obj.Customerid || obj.customerid) {
+                return [obj];
+            }
 
-        if (!clientsList || (Array.isArray(clientsList) && clientsList.length === 0)) {
-            console.log("[INVOICE_SYNC] No clients found in source.");
+            for (const key of Object.keys(obj)) {
+                // Skip primitive values
+                if (typeof obj[key] !== 'object') continue;
+                
+                const found = findClientsRecursive(obj[key]);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        const clientsArray = findClientsRecursive(jsonObj) || [];
+
+        if (clientsArray.length === 0) {
+            console.log("[INVOICE_SYNC] No clients found in source JSON structure.");
+            // Log structure for debugging if we find nothing
+            console.log("Structure keys:", Object.keys(jsonObj));
             return ok({
                 count: 0,
                 message: "No clients found in source (Empty Data).",
             });
         }
 
-        // Handle single client wrap if fast-xml-parser doesn't force array
-        const clientsArray = Array.isArray(clientsList) ? clientsList : [clientsList];
-
         let importCount = 0;
         let conflictCount = 0;
 
         console.log(`[INVOICE_SYNC] Processing ${clientsArray.length} clients...`);
 
+        // Helper to find a value by case-insensitive key and handle object wraps from XML parser
+        const findValue = (obj: any, targetKey: string) => {
+            if (!obj || typeof obj !== 'object') return null;
+            
+            // Find the actual key in the object that matches targetKey case-insensitively
+            const actualKey = Object.keys(obj).find(k => k.toLowerCase() === targetKey.toLowerCase());
+            if (!actualKey) return null;
+            
+            const value = obj[actualKey];
+            
+            // Handle array of strings (common in multiple XML tags of same name)
+            if (Array.isArray(value)) {
+                return value.map(v => (typeof v === 'object' ? (v['#text'] || v['text'] || JSON.stringify(v)) : v)).join(", ");
+            }
+            
+            // Handle if fast-xml-parser wrapped it in an object
+            if (value && typeof value === 'object') {
+                return value['#text'] || value['text'] || String(value);
+            }
+            
+            return value;
+        };
+
         // 3. Upsert logic: Handle with care
         for (const rawClient of clientsArray) {
             try {
-                const externalId = String(rawClient.customerid);
-                const email = rawClient.Client_Email?.trim();
+                const externalId = String(findValue(rawClient, 'customerid') || "");
+                const email = String(findValue(rawClient, 'Client_Email') || findValue(rawClient, 'email') || "").trim();
 
                 if (!email || !externalId) continue;
 
                 const isRoleBased = isRoleBasedEmail(email);
 
                 const parseDateStr = (dateStr: any) => {
-                    if (!dateStr || typeof dateStr !== "string") return null;
-                    
-                    // Standard JS Date constructor is usually good, but we ensure it handles the specific format
-                    // e.g., "10/30/2025 12:00:00 AM"
-                    const parsed = new Date(dateStr);
+                    if (!dateStr) return null;
+                    const ds = String(dateStr);
+                    const parsed = new Date(ds);
                     if (!isNaN(parsed.getTime())) return parsed;
-
-                    // Fallback for non-standard formats if needed
-                    console.warn(`[INVOICE_SYNC] Standard parsing failed for: ${dateStr}. Attempting manual fallbacks...`);
                     return null;
                 };
+
+                const serviceVal = findValue(rawClient, 'ServiceNames') || findValue(rawClient, 'serviceNames');
+                const serviceStr = serviceVal ? String(serviceVal) : null;
+                const lastContact = parseDateStr(findValue(rawClient, 'LastContacted')) || parseDateStr(findValue(rawClient, 'lastcontacted'));
 
                 await prisma.client.upsert({
                     where: {
@@ -100,30 +147,31 @@ export async function POST(req: Request) {
                         }
                     },
                     update: {
-                        clientName: String(rawClient.ClientName || "Unknown Client"),
-                        contactPerson: rawClient.ContactPerson ? String(rawClient.ContactPerson) : null,
+                        clientName: String(findValue(rawClient, 'ClientName') || findValue(rawClient, 'clientname') || "Unknown Client"),
+                        contactPerson: findValue(rawClient, 'ContactPerson') ? String(findValue(rawClient, 'ContactPerson')) : null,
                         email: email,
-                        primaryEmail: email.split(',')[0].trim(), // Keep it for compatibility if needed, though unused in UI
+                        primaryEmail: email.split(',')[0].trim(),
                         isRoleBased: isRoleBased,
-                        phone: rawClient.Client_TPhone ? String(rawClient.Client_TPhone).substring(0, 100) : null,
-                        mobile: rawClient.Client_Mobile ? String(rawClient.Client_Mobile).substring(0, 100) : null,
-                        gstin: rawClient.Client_GSTIN ? String(rawClient.Client_GSTIN).substring(0, 50) : null,
-                        clientSize: rawClient.ClientSize ? String(rawClient.ClientSize).substring(0, 50) : null,
-                        poc: rawClient.POC ? String(rawClient.POC).substring(0, 100) : null,
-                        address: rawClient.ClientAddress ? String(rawClient.ClientAddress).substring(0, 500) : null,
-                        lastInvoiceDate: parseDateStr(rawClient.LastInvoiceDate),
-                        clientAddedOn: parseDateStr(rawClient.Client_AddedOn),
-                        invoiceServiceNames: rawClient.ServiceNames ? String(rawClient.ServiceNames).substring(0, 200) : null,
-                        services: rawClient.ServiceNames ? {
-                            connectOrCreate: String(rawClient.ServiceNames).split(',').map(s => s.trim()).filter(Boolean).map(serviceName => ({
+                        phone: findValue(rawClient, 'Client_TPhone') ? String(findValue(rawClient, 'Client_TPhone')).substring(0, 100) : null,
+                        mobile: findValue(rawClient, 'Client_Mobile') ? String(findValue(rawClient, 'Client_Mobile')).substring(0, 100) : null,
+                        gstin: findValue(rawClient, 'Client_GSTIN') ? String(findValue(rawClient, 'Client_GSTIN')).substring(0, 50) : null,
+                        clientSize: findValue(rawClient, 'ClientSize') ? String(findValue(rawClient, 'ClientSize')).substring(0, 50) : null,
+                        poc: findValue(rawClient, 'POC') ? String(findValue(rawClient, 'POC')).substring(0, 100) : null,
+                        address: findValue(rawClient, 'ClientAddress') ? String(findValue(rawClient, 'ClientAddress')).substring(0, 500) : null,
+                        lastInvoiceDate: parseDateStr(findValue(rawClient, 'LastInvoiceDate')),
+                        lastContacted: lastContact,
+                        clientAddedOn: parseDateStr(findValue(rawClient, 'Client_AddedOn')),
+                        invoiceServiceNames: serviceStr ? serviceStr.substring(0, 200) : null,
+                        services: serviceStr ? {
+                            connectOrCreate: serviceStr.split(',').map(s => s.trim()).filter(Boolean).map(serviceName => ({
                                 where: { serviceName },
-                                create: { serviceName, industry: "Corporate" }
+                                create: { serviceName, category: "Corporate" }
                             }))
                         } : undefined
                     },
                     create: {
-                        clientName: String(rawClient.ClientName || "Unknown Client"),
-                        contactPerson: rawClient.ContactPerson ? String(rawClient.ContactPerson) : null,
+                        clientName: String(findValue(rawClient, 'ClientName') || findValue(rawClient, 'clientname') || "Unknown Client"),
+                        contactPerson: findValue(rawClient, 'ContactPerson') ? String(findValue(rawClient, 'ContactPerson')) : null,
                         email: email,
                         primaryEmail: email.split(',')[0].trim(),
                         industry: "Corporate", 
@@ -131,19 +179,20 @@ export async function POST(req: Request) {
                         source: "INVOICE_SYSTEM",
                         externalId: externalId,
                         isRoleBased: isRoleBased,
-                        phone: rawClient.Client_TPhone ? String(rawClient.Client_TPhone).substring(0, 100) : null,
-                        mobile: rawClient.Client_Mobile ? String(rawClient.Client_Mobile).substring(0, 100) : null,
-                        gstin: rawClient.Client_GSTIN ? String(rawClient.Client_GSTIN).substring(0, 50) : null,
-                        clientSize: rawClient.ClientSize ? String(rawClient.ClientSize).substring(0, 50) : null,
-                        poc: rawClient.POC ? String(rawClient.POC).substring(0, 100) : null,
-                        address: rawClient.ClientAddress ? String(rawClient.ClientAddress).substring(0, 500) : null,
-                        lastInvoiceDate: parseDateStr(rawClient.LastInvoiceDate),
-                        clientAddedOn: parseDateStr(rawClient.Client_AddedOn),
-                        invoiceServiceNames: rawClient.ServiceNames ? String(rawClient.ServiceNames).substring(0, 200) : null,
-                        services: rawClient.ServiceNames ? {
-                            connectOrCreate: String(rawClient.ServiceNames).split(',').map(s => s.trim()).filter(Boolean).map(serviceName => ({
+                        phone: findValue(rawClient, 'Client_TPhone') ? String(findValue(rawClient, 'Client_TPhone')).substring(0, 100) : null,
+                        mobile: findValue(rawClient, 'Client_Mobile') ? String(findValue(rawClient, 'Client_Mobile')).substring(0, 100) : null,
+                        gstin: findValue(rawClient, 'Client_GSTIN') ? String(findValue(rawClient, 'Client_GSTIN')).substring(0, 50) : null,
+                        clientSize: findValue(rawClient, 'ClientSize') ? String(findValue(rawClient, 'ClientSize')).substring(0, 50) : null,
+                        poc: findValue(rawClient, 'POC') ? String(findValue(rawClient, 'POC')).substring(0, 100) : null,
+                        address: findValue(rawClient, 'ClientAddress') ? String(findValue(rawClient, 'ClientAddress')).substring(0, 500) : null,
+                        lastInvoiceDate: parseDateStr(findValue(rawClient, 'LastInvoiceDate')),
+                        lastContacted: lastContact,
+                        clientAddedOn: parseDateStr(findValue(rawClient, 'Client_AddedOn')),
+                        invoiceServiceNames: serviceStr ? serviceStr.substring(0, 200) : null,
+                        services: serviceStr ? {
+                            connectOrCreate: serviceStr.split(',').map(s => s.trim()).filter(Boolean).map(serviceName => ({
                                 where: { serviceName },
-                                create: { serviceName, industry: "Corporate" }
+                                create: { serviceName, category: "Corporate" }
                             }))
                         } : undefined
                     }
@@ -160,6 +209,7 @@ export async function POST(req: Request) {
         return ok({
             count: importCount,
             conflicts: conflictCount,
+            debug: clientsArray[0] || null
         });
     } catch (err: any) {
         console.error("Invoice Sync Error:", err);

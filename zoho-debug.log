@@ -859,3 +859,251 @@ Unknown argument `primaryEmail`. Available options are marked with ?.
 [2026-03-16T11:03:58.945Z] [Zoho Sync] Successfully synced client: ABC Company (Role-Based: false)
 [2026-03-16T11:04:00.324Z] [Zoho Sync] Successfully synced client: Zylker Corp (Role-Based: true)
 [2026-03-16T11:04:00.326Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
+[2026-03-16T11:49:20.893Z] Total Deals fetched from Zoho: 2
+[2026-03-16T11:49:20.907Z] Deals after filtering: 2
+[2026-03-16T11:49:22.741Z] [Zoho Sync] Successfully synced client: ABC Company (Role-Based: false)
+[2026-03-16T11:49:24.091Z] [Zoho Sync] Successfully synced client: Zylker Corp (Role-Based: true)
+[2026-03-16T11:49:24.093Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
+[2026-03-16T12:25:34.199Z] Total Deals fetched from Zoho: 2
+[2026-03-16T12:25:34.217Z] Deals after filtering: 2
+[2026-03-16T12:25:35.088Z] Error processing Deal 1198824000000449439: 
+Invalid `prisma.client.upsert()` invocation:
+
+{
+  where: {
+    source_externalId: {
+      source: "ZOHO_BIGIN",
+      externalId: "1198824000000449439"
+    }
+  },
+  update: {
+    clientName: "ABC Company",
+    contactPerson: "Rajesh Jadhav",
+    email: "rajeshjadhav@mailinator.com",
+    primaryEmail: "rajeshjadhav@mailinator.com",
+    zohoTags: [],
+    isRoleBased: false,
+    metadata: {}
+  },
+  create: {
+    clientName: "ABC Company",
+    contactPerson: "Rajesh Jadhav",
+    email: "rajeshjadhav@mailinator.com",
+    primaryEmail: "rajeshjadhav@mailinator.com",
+    zohoTags: [],
+    isRoleBased: false,
+    metadata: {},
+    ~~~~~~~~
+    industry: "Imported",
+    relationshipLevel: "Warm Lead",
+    source: "ZOHO_BIGIN",
+    externalId: "1198824000000449439",
+?   id?: String,
+?   createdAt?: DateTime,
+?   updatedAt?: DateTime,
+?   gmailSourceAccount?: String | Null,
+?   lastContacted?: DateTime | Null,
+?   address?: String | Null,
+?   clientSize?: String | Null,
+?   gstin?: String | Null,
+?   lastInvoiceDate?: DateTime | Null,
+?   mobile?: String | Null,
+?   phone?: String | Null,
+?   poc?: String | Null,
+?   clientAddedOn?: DateTime | Null,
+?   invoiceServiceNames?: String | Null,
+?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput,
+?   services?: ServiceCreateNestedManyWithoutClientsInput
+  }
+}
+
+Unknown argument `metadata`. Available options are marked with ?.
+[2026-03-16T12:25:35.821Z] Error processing Deal 1198824000000446045: 
+Invalid `prisma.client.upsert()` invocation:
+
+{
+  where: {
+    source_externalId: {
+      source: "ZOHO_BIGIN",
+      externalId: "1198824000000446045"
+    }
+  },
+  update: {
+    clientName: "Zylker Corp",
+    contactPerson: "Ted Watson",
+    email: "support@bigin.com",
+    primaryEmail: "support@bigin.com",
+    zohoTags: [
+      "Hot"
+    ],
+    isRoleBased: true,
+    metadata: {}
+  },
+  create: {
+    clientName: "Zylker Corp",
+    contactPerson: "Ted Watson",
+    email: "support@bigin.com",
+    primaryEmail: "support@bigin.com",
+    zohoTags: [
+      "Hot"
+    ],
+    isRoleBased: true,
+    metadata: {},
+    ~~~~~~~~
+    industry: "Imported",
+    relationshipLevel: "Warm Lead",
+    source: "ZOHO_BIGIN",
+    externalId: "1198824000000446045",
+?   id?: String,
+?   createdAt?: DateTime,
+?   updatedAt?: DateTime,
+?   gmailSourceAccount?: String | Null,
+?   lastContacted?: DateTime | Null,
+?   address?: String | Null,
+?   clientSize?: String | Null,
+?   gstin?: String | Null,
+?   lastInvoiceDate?: DateTime | Null,
+?   mobile?: String | Null,
+?   phone?: String | Null,
+?   poc?: String | Null,
+?   clientAddedOn?: DateTime | Null,
+?   invoiceServiceNames?: String | Null,
+?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput,
+?   services?: ServiceCreateNestedManyWithoutClientsInput
+  }
+}
+
+Unknown argument `metadata`. Available options are marked with ?.
+[2026-03-16T12:25:35.823Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
+[2026-03-16T12:25:36.882Z] [STRICT_SYNC] Purged 1 orphaned records from ZOHO_BIGIN.
+[2026-03-16T12:28:33.051Z] Total Deals fetched from Zoho: 2
+[2026-03-16T12:28:33.059Z] Deals after filtering: 2
+[2026-03-16T12:28:33.787Z] Error processing Deal 1198824000000449439: 
+Invalid `prisma.client.upsert()` invocation:
+
+{
+  where: {
+    source_externalId: {
+      source: "ZOHO_BIGIN",
+      externalId: "1198824000000449439"
+    }
+  },
+  update: {
+    clientName: "ABC Company",
+    contactPerson: "Rajesh Jadhav",
+    email: "rajeshjadhav@mailinator.com",
+    primaryEmail: "rajeshjadhav@mailinator.com",
+    zohoTags: [],
+    isRoleBased: false,
+    metadata: {}
+  },
+  create: {
+    clientName: "ABC Company",
+    contactPerson: "Rajesh Jadhav",
+    email: "rajeshjadhav@mailinator.com",
+    primaryEmail: "rajeshjadhav@mailinator.com",
+    zohoTags: [],
+    isRoleBased: false,
+    metadata: {},
+    ~~~~~~~~
+    industry: "Imported",
+    relationshipLevel: "Warm Lead",
+    source: "ZOHO_BIGIN",
+    externalId: "1198824000000449439",
+?   id?: String,
+?   createdAt?: DateTime,
+?   updatedAt?: DateTime,
+?   gmailSourceAccount?: String | Null,
+?   lastContacted?: DateTime | Null,
+?   address?: String | Null,
+?   clientSize?: String | Null,
+?   gstin?: String | Null,
+?   lastInvoiceDate?: DateTime | Null,
+?   mobile?: String | Null,
+?   phone?: String | Null,
+?   poc?: String | Null,
+?   clientAddedOn?: DateTime | Null,
+?   invoiceServiceNames?: String | Null,
+?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput,
+?   services?: ServiceCreateNestedManyWithoutClientsInput
+  }
+}
+
+Unknown argument `metadata`. Available options are marked with ?.
+[2026-03-16T12:28:34.513Z] Error processing Deal 1198824000000446045: 
+Invalid `prisma.client.upsert()` invocation:
+
+{
+  where: {
+    source_externalId: {
+      source: "ZOHO_BIGIN",
+      externalId: "1198824000000446045"
+    }
+  },
+  update: {
+    clientName: "Zylker Corp",
+    contactPerson: "Ted Watson",
+    email: "support@bigin.com",
+    primaryEmail: "support@bigin.com",
+    zohoTags: [
+      "Hot"
+    ],
+    isRoleBased: true,
+    metadata: {}
+  },
+  create: {
+    clientName: "Zylker Corp",
+    contactPerson: "Ted Watson",
+    email: "support@bigin.com",
+    primaryEmail: "support@bigin.com",
+    zohoTags: [
+      "Hot"
+    ],
+    isRoleBased: true,
+    metadata: {},
+    ~~~~~~~~
+    industry: "Imported",
+    relationshipLevel: "Warm Lead",
+    source: "ZOHO_BIGIN",
+    externalId: "1198824000000446045",
+?   id?: String,
+?   createdAt?: DateTime,
+?   updatedAt?: DateTime,
+?   gmailSourceAccount?: String | Null,
+?   lastContacted?: DateTime | Null,
+?   address?: String | Null,
+?   clientSize?: String | Null,
+?   gstin?: String | Null,
+?   lastInvoiceDate?: DateTime | Null,
+?   mobile?: String | Null,
+?   phone?: String | Null,
+?   poc?: String | Null,
+?   clientAddedOn?: DateTime | Null,
+?   invoiceServiceNames?: String | Null,
+?   campaigns?: CampaignHistoryCreateNestedManyWithoutClientInput,
+?   services?: ServiceCreateNestedManyWithoutClientsInput
+  }
+}
+
+Unknown argument `metadata`. Available options are marked with ?.
+[2026-03-16T12:28:34.515Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
+[2026-03-16T12:30:20.191Z] Total Deals fetched from Zoho: 2
+[2026-03-16T12:30:20.196Z] Deals after filtering: 2
+[2026-03-16T12:30:21.531Z] Error processing Deal 1198824000000449439: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42804`. Message: `ERROR: column "metadata" is of type jsonb but expression is of type text
+HINT: You will need to rewrite or cast the expression.`
+[2026-03-16T12:30:22.695Z] Error processing Deal 1198824000000446045: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42804`. Message: `ERROR: column "metadata" is of type jsonb but expression is of type text
+HINT: You will need to rewrite or cast the expression.`
+[2026-03-16T12:30:22.697Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
+[2026-03-16T12:31:26.316Z] Total Deals fetched from Zoho: 2
+[2026-03-16T12:31:26.318Z] Deals after filtering: 2
+[2026-03-16T12:31:27.701Z] [Zoho Sync] Successfully synced client: ABC Company (Role-Based: false)
+[2026-03-16T12:31:29.038Z] [Zoho Sync] Successfully synced client: Zylker Corp (Role-Based: true)
+[2026-03-16T12:31:29.040Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
