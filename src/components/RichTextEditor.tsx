@@ -104,14 +104,29 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
     // but the editor's visual state is managed via this effect if we were doing decorations.
     // For simplicity and "Awesome" results, we'll use a dynamic overlay or a temporary swap.
     
-    const handleRefine = async (command: string) => {
+    const handleRefine = async (command: string, useFullBody = false) => {
         if (!editor) return;
         
-        const { from, to } = editor.state.selection;
-        const selectedText = editor.state.doc.textBetween(from, to, ' ');
-        
-        if (!selectedText || selectedText.length < 5) {
-            toast.error("Please select a longer paragraph to refine.");
+        let textToRefine = "";
+        let from = 0;
+        let to = 0;
+        let isFullBody = useFullBody;
+
+        if (!isFullBody) {
+            const sel = editor.state.selection;
+            from = sel.from;
+            to = sel.to;
+            textToRefine = editor.state.doc.textBetween(from, to, ' ');
+        }
+
+        // If no selection and not explicitly full body, use the full editor content
+        if (!textToRefine || textToRefine.length < 5) {
+            isFullBody = true;
+            textToRefine = editor.getHTML();
+        }
+
+        if (!textToRefine || textToRefine.length < 5) {
+            toast.error("No content to refine. Write or select some text first.");
             return;
         }
 
@@ -121,12 +136,17 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
             const res = await fetch("/api/campaigns/refine", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: selectedText, command })
+                body: JSON.stringify({ text: textToRefine, command })
             });
             const data = await res.json();
             if (data.success) {
-                editor.chain().focus().insertContentAt({ from, to }, data.data.refinedText).run();
-                toast.success("AI Refinement applied!");
+                if (isFullBody) {
+                    editor.commands.setContent(data.data.refinedText);
+                    onChange(data.data.refinedText);
+                } else {
+                    editor.chain().focus().insertContentAt({ from, to }, data.data.refinedText).run();
+                }
+                toast.success("✨ AI Refinement applied!");
             } else {
                 toast.error("AI couldn't process the refinement.");
             }
@@ -181,6 +201,47 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
         return processed;
     };
 
+    // Magic Pen categorized options
+    const magicPenCategories = [
+        {
+            title: "✍️ Tone & Voice",
+            items: [
+                { label: "Make Professional", cmd: "Rewrite to be more formal and executive. Use polished business language suitable for C-level communication." },
+                { label: "Make Persuasive", cmd: "Add a subtle, strategic push for action. Use persuasion techniques like social proof, urgency, and value highlight." },
+                { label: "Make Friendly & Warm", cmd: "Rewrite in a warm, approachable, and friendly tone while maintaining professionalism. Make it feel personal." },
+                { label: "Make Confident & Bold", cmd: "Rewrite with strong, authoritative language. Show expertise and confidence without being arrogant." },
+            ]
+        },
+        {
+            title: "📐 Structure & Length",
+            items: [
+                { label: "Shorten & Punchy", cmd: "Drastically shorten into 1-2 impactful sentences. Keep only the most critical point." },
+                { label: "Expand with Details", cmd: "Expand with more context, supporting detail, and examples while maintaining the core message." },
+                { label: "Add Bullet Points", cmd: "Restructure into clean bullet points for easier scanning. Keep each bullet concise." },
+                { label: "Format as Paragraphs", cmd: "Convert any lists or cluttered text into well-structured, flowing paragraphs with smooth transitions." },
+            ]
+        },
+        {
+            title: "🎯 Content Enhancement",
+            items: [
+                { label: "Fix Grammar & Spelling", cmd: "Fix all grammar, spelling, and punctuation errors. Do NOT change the meaning or tone." },
+                { label: "Add Social Proof", cmd: "Weave in subtle social proof elements like industry trends, success metrics, or credibility signals." },
+                { label: "Strengthen the CTA", cmd: "Make the call-to-action much stronger and more compelling. Create urgency without being pushy." },
+                { label: "Add a P.S. Line", cmd: "Add a compelling P.S. line at the end that reinforces the key benefit or creates gentle urgency." },
+            ]
+        },
+        {
+            title: "🔄 Full Email Operations",
+            fullBody: true,
+            items: [
+                { label: "Rewrite Entire Email", cmd: "Completely rewrite this email to be more engaging, professional, and conversion-oriented while preserving all {{variable}} placeholders and the core message." },
+                { label: "Improve Flow & Readability", cmd: "Improve the overall flow, transitions, and readability of the entire email. Make it effortless to read." },
+                { label: "Make More Concise", cmd: "Cut the entire email length by 40% while keeping the strongest points and all {{variable}} placeholders." },
+                { label: "Add Emotional Hook", cmd: "Add an emotional opening hook and a compelling closing that creates connection. Preserve all {{variable}} placeholders." },
+            ]
+        }
+    ];
+
     return (
         <div className="w-full border-2 border-slate-100 rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-slate-200/50">
             {/* Toolbar */}
@@ -202,8 +263,10 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
                             onClick={() => setShowMagicMenu(!showMagicMenu)}
                             disabled={isRefining}
                             className={cn(
-                                "flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200",
-                                isRefining && "animate-pulse"
+                                "flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all shadow-md",
+                                isRefining 
+                                    ? "bg-indigo-600 text-white animate-pulse shadow-indigo-200" 
+                                    : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-200"
                             )}
                         >
                             {isRefining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -211,23 +274,38 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
                         </button>
                         
                         {showMagicMenu && (
-                            <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 p-2 space-y-1 animate-in fade-in slide-in-from-top-1">
-                                <p className="text-[9px] font-bold text-slate-400 px-2 pb-1 uppercase tracking-tighter">AI Refine Selection</p>
-                                {[
-                                    { label: "Make Professional", cmd: "Rewrite to be more formal and executive." },
-                                    { label: "Make Persuasive", cmd: "Add a subtle, strategic push for action." },
-                                    { label: "Shorten & Punchy", cmd: "Summarize this into 1-2 impactful sentences." },
-                                    { label: "Change to Analytical", cmd: "Use data-driven, strategic vocabulary." }
-                                ].map(opt => (
-                                    <button 
-                                        key={opt.label}
-                                        onClick={() => handleRefine(opt.cmd)}
-                                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 text-[11px] font-bold text-slate-700 hover:text-indigo-700 transition-colors"
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
+                            <>
+                                {/* Backdrop to close menu */}
+                                <div className="fixed inset-0 z-40" onClick={() => setShowMagicMenu(false)} />
+                                <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-1 max-h-[70vh] overflow-y-auto">
+                                    {/* Smart helper text */}
+                                    <div className="px-3 py-2 mb-1 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                                        <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">
+                                            {editor.state.selection.from !== editor.state.selection.to 
+                                                ? "✅ Text selected — AI will refine your selection"
+                                                : "💡 No selection — AI will work on the full email"
+                                            }
+                                        </p>
+                                    </div>
+
+                                    {magicPenCategories.map((cat, catIdx) => (
+                                        <div key={cat.title}>
+                                            {catIdx > 0 && <div className="border-t border-slate-100 my-1" />}
+                                            <p className="text-[9px] font-bold text-slate-400 px-3 pt-2 pb-1 uppercase tracking-tighter">{cat.title}</p>
+                                            {cat.items.map(opt => (
+                                                <button 
+                                                    key={opt.label}
+                                                    onClick={() => handleRefine(opt.cmd, !!cat.fullBody)}
+                                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-50 text-[11px] font-semibold text-slate-700 hover:text-indigo-700 transition-all flex items-center gap-2 group"
+                                                >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-indigo-500 transition-colors shrink-0" />
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>
