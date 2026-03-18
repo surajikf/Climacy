@@ -41,6 +41,8 @@ export function replaceVariables(content: string, client: any) {
         companyName: client.clientName || "Acme Corp",
         industry: client.industry || "SaaS",
         services: client.invoiceServiceNames || "your business infrastructure",
+        location: client.address || "your headquarters",
+        relationship: client.relationshipLevel || "Valued Partner",
         tenureYears: client.clientAddedOn ? (new Date().getFullYear() - new Date(client.clientAddedOn).getFullYear()).toString() : "0"
     };
 

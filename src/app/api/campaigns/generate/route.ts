@@ -4,7 +4,7 @@ import Groq from "groq-sdk";
 import { getGlobalSettings } from "@/lib/settings";
 import { wrapInPremiumTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
-import { getSmartGreeting } from "@/lib/utils";
+import { getSmartGreeting, replaceVariables } from "@/lib/utils";
 import { z } from "zod";
 import { getTargetClients } from "@/domain/campaigns";
 
@@ -96,31 +96,22 @@ export async function POST(request: Request) {
             const lastActivity = lastInvoice ? `Last significant engagement: ${lastInvoice.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : "Ongoing relationship";
 
             // Enhanced default subject with personalization
-            let subject = `Strategic Perspective for ${client.clientName || "Your Team"} | Re: ${topic}`;
+            let subject = replaceVariables(topic || `Strategic Perspective for {{companyName}}`, client);
             let emailBody = "";
 
             if (useMock) {
                 console.warn(`${aiProvider} API key not configured. Falling back to mock generation.`);
-                emailBody = `<p>${greeting},</p>` +
-                    `<p>As a leader in the ${client.industry || "market"} sector, you understand that innovation and ${settings.brandResonance.toLowerCase()} are the cornerstones of long-term success.</p>` +
-                    `<p>Reflecting on our <strong>${relationshipDepth}</strong> status regarding ${servicesList} at ${client.clientName}, I wanted to share a specific perspective on <strong>${topic}</strong>.</p>` +
-                    `<p>${coreMessage}</p>` +
-                    `<p>In an advisory capacity, I believe this shift presents a unique opportunity to refine your operational trajectory. ${cta}</p>` +
-                    `<p>${settings.signature.replace(/\n/g, '<br>')}</p>`;
+                // High-fidelity personalization based on the MASTER DRAFT (topic and coreMessage)
+                emailBody = replaceVariables(coreMessage, client);
+                
+                // If the body doesn't start with the greeting, prepend it
+                if (!emailBody.toLowerCase().startsWith(greeting.toLowerCase().split(' ')[0])) {
+                    emailBody = `<p>${greeting},</p>${emailBody}`;
+                }
 
                 if (styleGuide) {
-                    emailBody = styleGuide.body
-                        .replace(/\{\{greeting\}\}/g, greeting)
-                        .replace(/\{\{clientName\}\}/g, client.clientName || "")
-                        .replace(/\{\{contactPerson\}\}/g, client.contactPerson || client.clientName || "Partner")
-                        .replace(/\{\{industry\}\}/g, client.industry || "market")
-                        .replace(/\{\{services\}\}/g, servicesList)
-                        .replace(/\{\{topic\}\}/g, topic)
-                        .replace(/\{\{cta\}\}/g, cta);
-
-                    subject = styleGuide.subject
-                        .replace(/\{\{clientName\}\}/g, client.clientName || "")
-                        .replace(/\{\{topic\}\}/g, topic);
+                    emailBody = replaceVariables(styleGuide.body, client);
+                    subject = replaceVariables(styleGuide.subject, client);
                 }
 
                 return {
@@ -159,50 +150,29 @@ export async function POST(request: Request) {
                     };
 
                     const prompt = `
-                        ${stylePrompt}
                         ${relationshipContext}
 
                         CORE LOGIC:
-                        - SENDER: A senior advisor at I Knowledge Factory with access to the full relationship history.
+                        - SENDER: Senior Advisor at I Knowledge Factory.
                         - RECIPIENT: ${client.clientName}.
-                        - SECTOR: ${client.industry}. (TASK: Perform a real-time analysis of the current ${client.industry} landscape to find a high-relevance hook).
-                        - SOCIAL PROOF: "${topic}". This is YOUR latest milestone project demonstrating capability.
+                        - SECTOR: ${client.industry}.
                         - OBJECTIVE: ${type}.
                         ${objectiveContexts[type] || ""}
 
                         GOAL: 
-                        ${styleGuide ? 
-                            `PERSONALIZATION TASK: Use the "Approved Master Draft" (HTML) provided above as your structural anchor. You MUST mirror its unique wording, tone, and specific value proposition. 
-                            
-                            CRITICAL SMART LOGIC:
-                            1. VARIABLE REPLACEMENT: If you find placeholders like {{greeting}}, {{clientName}}, {{industry}}, {{contactPerson}}, or {{tenureYears}}, replace them with the corresponding client data: ${greeting}, ${client.clientName}, ${client.industry}, ${client.contactPerson || 'Partner'}, ${tenureYears}.
-                            2. HTML HYGIENE: Preserve all HTML tags and inline styles 1:1. Only change the text content. 
-                            3. NO CODE BLOCKS: Do NOT wrap your response in markdown code blocks like \`\`\`html. Return PURE HTML string only.
-                            4. BESPOKE ADAPTATION: Weave in their specific context while maintaining the approved structural identicality to the Master Draft.` : 
-                            `GENERATION TASK: Write an "Executive Advisory" email from scratch that uses "${topic}" to provoke a strategic realization. It must feel 100% genuine, smart, and peer-to-peer. Return valid HTML segment (paragraphs, bolding etc).
-                            
-                            CRITICAL: The email MUST start with the following greeting: ${greeting}`
-                        }
-
-                        CRITICAL CONSTRAINTS:
-                        - NO AI CLICHES: Zero tolerance for "I hope this finds you well", "In today's landscape", "Leverage", "Synergy", or "I'm writing to".
-                        - NO OVER-ENTHUSIASM: No exclamation marks. Use calm, authoritative business logic.
-                        - VARIED STRUCTURE: Mix short, analytical observations with nuanced reasoning.
-                        - DIRECT START: Start with a sharp industry observation anchored by ${topic} or a relationship milestone.
-                        - MASTER DRAFT SYNC: If an Approved Master Draft is present, your output MUST be a high-fidelity personalization of that draft. Do not deviate from its core message or its HTML layout.
-                        - SINGLE SUBJECT: Return ONLY the subject line for the "subject" field and ONLY the body for the "body" field.
-
-                        ${!styleGuide ? `
-                        NARRATIVE FLOW:
-                        1. BENCHMARK OBSERVATION: How "${topic}" has shifted the benchmark in ${client.industry}.
-                        2. THE "FRICTION" PROVOCATION: Identify a specific, non-obvious friction point for ${client.clientName} (related to ${coreMessage}) that will cause them to lag behind this benchmark.
-                        3. ADVISORY BRIDGE: Position your philosophy ("${settings.brandResonance}") as the solver for this specific friction.
-                        4. LOW-FRICTION INQUIRY: Use "${cta}" to pivot to a high-level strategic discussion.
-                        ` : ""}
-
-                        STYLE: Formal, Intellectual, Observant. Signature is managed by template.
+                        You have been provided with a MASTER DRAFT (Subject and Body). Your task is to perform a HIGH-FIDELITY PERSONALIZATION of this draft for ${client.clientName}.
                         
-                        OUTPUT: PURE JSON { "subject": "...", "body": "...", "leadStrength": 0-100, "spamRisk": 0-100 }.
+                        MASTER SUBJECT: "${topic}"
+                        MASTER BODY: "${coreMessage}"
+                        
+                        CRITICAL SMART LOGIC:
+                        1. START WITH GREETING: The email MUST start with exactly this: "${greeting}"
+                        2. HIGH-FIDELITY SYNC: Mirror the unique wording, specialized tone, and specific value proposition of the MASTER BODY draft provided above.
+                        3. SMART VARIABLE INJECTION: Replace placeholders like {{firstName}}, {{lastName}}, {{fullName}}, {{companyName}}, {{industry}}, {{services}}, {{location}}, {{relationship}}, {{tenureYears}} with corresponding client data.
+                        4. SEAMLESS FLOW: Weave in the client's sector (${client.industry}) context where it feels natural based on the draft's logic.
+                        5. HTML FORMAT: Return a valid HTML segment for the body. Preserve any formatting from the draft.
+                        
+                        OUTPUT: Return a PURE JSON object with "subject" and "body" fields.
                     `;
 
                     let content: any = {};

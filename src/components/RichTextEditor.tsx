@@ -163,6 +163,8 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
             companyName: sampleData.clientName || "Acme Corp",
             industry: sampleData.industry || "SaaS",
             services: sampleData.invoiceServiceNames || "your business infrastructure",
+            location: sampleData.address || "your headquarters",
+            relationship: sampleData.relationshipLevel || "Valued Partner",
             tenureYears: ((new Date().getFullYear() - new Date(sampleData.clientAddedOn).getFullYear()) || "0").toString()
         };
 
@@ -310,7 +312,7 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
                             <ChevronDown className="w-3 h-3 opacity-50" />
                         </button>
                         <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl opacity-0 invisible group-hover/vars:opacity-100 group-hover/vars:visible transition-all z-50 p-2 space-y-1">
-                            {['greeting', 'firstName', 'lastName', 'fullName', 'companyName', 'industry', 'services', 'tenureYears'].map(v => (
+                            {['greeting', 'firstName', 'lastName', 'fullName', 'companyName', 'industry', 'services', 'location', 'relationship', 'tenureYears'].map(v => (
                                 <button 
                                     key={v}
                                     onClick={() => insertVariable(v)}

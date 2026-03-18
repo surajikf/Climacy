@@ -721,17 +721,16 @@ export default function CampaignGenerator() {
                         )}
                     </div>
 
-                    {/* Section 2: Narrative Context */}
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h3 className="text-base font-semibold text-slate-900">2. Narrative Context</h3>
+                            <h3 className="text-base font-semibold text-slate-900">2. Master Emailer (Sample)</h3>
                         </div>
                         <div className="p-6 space-y-6">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Subject Matter</label>
+                                <label className="text-sm font-medium text-slate-700">Master Subject Line</label>
                                 <input
                                     type="text"
-                                    placeholder="e.g. Q4 Strategic Realignment or Operational Efficiency Audit"
+                                    placeholder="e.g. Strategic Perspective for {{companyName}} | Re: Q4 Resilience"
                                     value={topic}
                                     onChange={(e) => setTopic(e.target.value)}
                                     className="w-full bg-white border border-slate-300 rounded-md px-4 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
@@ -739,29 +738,25 @@ export default function CampaignGenerator() {
                             </div>
                             <div className="space-y-1.5">
                                 <div className="flex justify-between items-end">
-                                    <label className="text-sm font-medium text-slate-700">Core Logic</label>
+                                    <label className="text-sm font-medium text-slate-700">Master Email Body (Your Sample)</label>
                                     <div className="flex gap-2">
                                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">{"{{clientName}}"}</span>
                                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">{"{{industry}}"}</span>
                                     </div>
                                 </div>
                                 <textarea
-                                    rows={5}
-                                    placeholder="Explain the specific problem you've observed or the unique value you're bringing. Avoid generic marketing pitch language..."
+                                    rows={8}
+                                    placeholder="Paste your sample emailer here. Use variables like {{greeting}}, {{firstName}}, or {{companyName}} for personalization..."
                                     value={coreMessage}
                                     onChange={(e) => setCoreMessage(e.target.value)}
                                     className="w-full bg-white border border-slate-300 rounded-md px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium resize-y"
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Conversion Vector (CTA)</label>
-                                <input
-                                    type="text"
-                                    value={cta}
-                                    placeholder="e.g. Schedule a 15-minute diagnostic session or Send over the efficiency benchmarks"
-                                    onChange={(e) => setCta(e.target.value)}
-                                    className="w-full bg-white border border-slate-300 rounded-md px-4 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
-                                />
+                            <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
+                                <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
+                                <p className="text-xs text-amber-900 leading-relaxed">
+                                    <strong>Advanced Personalization:</strong> AI will analyze your sample draft above and generate a bespoke version for every client, adapting the tone while strictly maintaining your core message.
+                                </p>
                             </div>
                         </div>
                     </div>
