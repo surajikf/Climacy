@@ -1,5 +1,4 @@
-
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "./src/generated/client";
 
 const prisma = new PrismaClient();
 
@@ -19,7 +18,7 @@ async function main() {
   console.log(`Found ${clientsWithServices.length} clients with services/invoiceServiceNames populated.`);
   
   if (clientsWithServices.length > 0) {
-    clientsWithServices.forEach(c => {
+    clientsWithServices.forEach((c: any) => {
       console.log(`Client: ${c.clientName}`);
       console.log(`- invoiceServiceNames: ${c.invoiceServiceNames}`);
       console.log(`- services count: ${c.services.length}`);
@@ -27,7 +26,7 @@ async function main() {
   } else {
     console.log("Checking first 3 raw clients...");
     const rawClients = await prisma.client.findMany({ take: 3 });
-    rawClients.forEach(c => {
+    rawClients.forEach((c: any) => {
       console.log(`Client: ${c.clientName} | Source: ${c.source} | Raw Services: ${c.invoiceServiceNames}`);
     });
   }
