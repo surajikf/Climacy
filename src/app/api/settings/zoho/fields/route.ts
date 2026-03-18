@@ -1,7 +1,7 @@
-import { getToken } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
 import { error, ok } from "@/lib/api-response";
+import { createClient } from "@/lib/supabase/server";
 
 const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, "0").substring(0, 32);
@@ -27,12 +27,10 @@ function decrypt(encryptedText: string | null): string | null {
 
 export async function GET(req: Request) {
   try {
-    const sessionToken = await getToken({
-      req: req as any,
-      secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
-    });
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!sessionToken || sessionToken.role !== "ADMIN") {
+    if (!user || user.user_metadata?.role !== "ADMIN") {
       return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
     }
 

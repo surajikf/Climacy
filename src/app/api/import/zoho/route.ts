@@ -1,15 +1,13 @@
-import { getToken } from "next-auth/jwt";
 import { syncZohoDeals } from "@/domain/integrations";
 import { ok, error } from "@/lib/api-response";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
     try {
-        const sessionToken = await getToken({
-            req: req as any,
-            secret: process.env.NEXTAUTH_SECRET || "default_local_insecure_secret",
-        });
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
 
-        if (!sessionToken || sessionToken.role !== "ADMIN") {
+        if (!user || user.user_metadata?.role !== "ADMIN") {
             return error(
                 "FORBIDDEN",
                 "Unauthorized access. Level-5 Clearance Required.",
