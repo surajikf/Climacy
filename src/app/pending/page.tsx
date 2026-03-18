@@ -1,3 +1,5 @@
+"use client";
+
 import { createClient } from "@/lib/supabase/client";
 import { Clock, LogOut, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
