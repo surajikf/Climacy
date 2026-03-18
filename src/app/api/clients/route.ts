@@ -150,8 +150,8 @@ export async function GET(request: Request) {
             page: resolvedPage,
             pageSize,
         });
-    } catch (error: any) {
-        console.error("Failed to fetch clients:", error);
+    } catch (err: any) {
+        console.error("Failed to fetch clients:", err);
         return error("INTERNAL_ERROR", "Failed to fetch clients");
     }
 }
@@ -175,11 +175,11 @@ export async function POST(request: Request) {
         });
 
         return ok(client);
-    } catch (error: any) {
-        if (error.code === 'P2002') {
+    } catch (err: any) {
+        if (err.code === 'P2002') {
             return error("CONFLICT", "A client with this email already exists.");
         }
-        console.error("Failed to create client:", error);
+        console.error("Failed to create client:", err);
         return error("INTERNAL_ERROR", "Failed to create client");
     }
 }
