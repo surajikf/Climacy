@@ -57,7 +57,7 @@ export async function POST(req: Request) {
         const nSync = nResults.status === "fulfilled" ? nResults.value : null;
 
         if (!ySync && !nSync) {
-            throw new Error("Critical failure: Both Active and Not Active node fetches failed.");
+            throw new Error(`Critical failure: Both nodes failed to fetch from ${INVOICE_BASE_URL}. Ensure this endpoint is publically accessible.`);
         }
 
         // Recursive helper to find the array of clients

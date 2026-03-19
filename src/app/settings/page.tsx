@@ -288,27 +288,36 @@ export default function Settings() {
                         </div>
                     </div>
 
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Invoice System Endpoint</label>
-                            <div className="relative group/input">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Globe className="h-4 w-4 text-slate-400" />
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Invoice System Endpoint</label>
+                                <div className="relative group/input">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <Globe className="h-4 w-4 text-slate-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={formData.invoiceApiUrl}
+                                        onChange={(e) => setFormData({ ...formData, invoiceApiUrl: e.target.value })}
+                                        className="w-full pl-11 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-medium"
+                                        placeholder="http://your-public-url/api/ApiService.asmx/GetClients"
+                                    />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={formData.invoiceApiUrl}
-                                    onChange={(e) => setFormData({ ...formData, invoiceApiUrl: e.target.value })}
-                                    className="w-full pl-11 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-medium"
-                                    placeholder="http://your-public-url/api/ApiService.asmx/GetClients"
+                                <p className="text-[9px] text-slate-400 italic ml-1 leading-relaxed">
+                                    <span className="text-amber-500 font-bold uppercase not-italic mr-1">Cloud Sync:</span>
+                                    Requires a public URL (via ngrok/tunnel) for Vercel synchronization.
+                                </p>
+                            </div>
+
+                            <div className="pt-2">
+                                <CredentialInput 
+                                    label="Internal API Key" 
+                                    value={formData.invoiceApiKey} 
+                                    field="invoiceApiKey" 
+                                    placeholder="Enter your system access key"
                                 />
                             </div>
-                            <p className="text-[9px] text-slate-400 italic ml-1 leading-relaxed">
-                                <span className="text-amber-500 font-bold uppercase not-italic mr-1">Cloud Sync:</span>
-                                Requires a public URL (via ngrok/tunnel) for Vercel synchronization.
-                            </p>
                         </div>
-                    </div>
                 </div>
 
                 {/* 2. Transmission Grid */}
