@@ -233,6 +233,7 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete }: an
                     title={
                         contact.relationshipLevel === "Active" ? "Active Customer: Verified entity with ongoing services or recent invoices. High priority for maintenance." :
                         contact.relationshipLevel === "Warm Lead" ? "High Potential: Lead or past client showing interest. Target for conversion campaigns." :
+                        contact.relationshipLevel === "Not Active" ? "Not Active: Present in invoice system with inactive status. Candidate for reactivation or monitoring." :
                         "Inactive/Past: No recent transactions. Candidate for re-engagement or recovery outreach."
                     }
                 >
@@ -240,7 +241,8 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete }: an
                         "w-2 h-2 rounded-full transition-transform group-hover/status:scale-125",
                         contact.relationshipLevel === "Active" ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" :
                             contact.relationshipLevel === "Warm Lead" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" :
-                                "bg-slate-300 shadow-[0_0_8px_rgba(148,163,184,0.3)]"
+                                contact.relationshipLevel === "Not Active" ? "bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.5)]" :
+                                    "bg-slate-300 shadow-[0_0_8px_rgba(148,163,184,0.3)]"
                     )} />
                     <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{contact.relationshipLevel}</span>
                 </div>
@@ -442,7 +444,7 @@ export default function ClientManager() {
         return Array.from(set).sort();
     }, [clients]);
 
-    const levels = ["Active", "Warm Lead", "Past Client"];
+    const levels = ["Active", "Warm Lead", "Past Client", "Not Active"];
     const sources = ["MANUAL", "ZOHO_BIGIN", "GMAIL", "INVOICE_SYSTEM"];
 
     const toggleFilter = (setter: any, current: string[], value: string) => {

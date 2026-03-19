@@ -12,13 +12,15 @@ import {
     AlignLeft, AlignCenter, AlignRight, AlignJustify,
     List, ListOrdered, Link as LinkIcon, Unlink,
     Type, Palette, ChevronDown, RotateCcw,
+    RotateCw,
     Type as TypeIcon, Eraser, CaseUpper,
     Variable, Quote, Highlighter, Sparkles,
     Eye, EyeOff, Loader2
 } from "lucide-react";
 import { cn, getSmartGreeting, getFirstName, getLastName } from "@/lib/utils";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
 
 // Custom Font Size Extension
 const FontSize = Extension.create({
@@ -68,6 +70,13 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
     const [isRefining, setIsRefining] = useState(false);
     const [showMagicMenu, setShowMagicMenu] = useState(false);
     const [isLivePreview, setIsLivePreview] = useState(false);
+    const [historyState, setHistoryState] = useState({ index: 0, length: 1 });
+
+    // Snapshot history so Undo works back to the very first email
+    const historyRef = useRef<string[]>([normalizeEmailBodyHtml(content || "")]);
+    const historyIndexRef = useRef<number>(0);
+    const isApplyingHistoryRef = useRef<boolean>(false);
+    const lastRecordedRef = useRef<string>(normalizeEmailBodyHtml(content || ""));
 
     const editor = useEditor({
         extensions: [
@@ -91,7 +100,21 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
         content: content,
         immediatelyRender: false,
         onUpdate: ({ editor }) => {
-            onChange(editor.getHTML());
+            const html = editor.getHTML();
+            onChange(html);
+
+            if (isApplyingHistoryRef.current) return;
+            if (html === lastRecordedRef.current) return;
+
+            // If user edited after undoing, drop redo tail
+            if (historyIndexRef.current < historyRef.current.length - 1) {
+                historyRef.current.splice(historyIndexRef.current + 1);
+            }
+
+            historyRef.current.push(html);
+            historyIndexRef.current = historyRef.current.length - 1;
+            lastRecordedRef.current = html;
+            setHistoryState({ index: historyIndexRef.current, length: historyRef.current.length });
         },
         editorProps: {
             attributes: {
@@ -99,6 +122,30 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
             },
         },
     });
+
+    // Reset history only when upstream content truly changes (new email loaded).
+    // Parent components re-pass `content` on every keystroke; we must NOT reset then.
+    useEffect(() => {
+        if (!editor) return;
+        const normalized = normalizeEmailBodyHtml(content || "");
+        // If the parent is just reflecting our latest change, do nothing.
+        if (normalized.trim() === lastRecordedRef.current.trim()) return;
+
+        const current = editor.getHTML();
+        const isDifferent = normalized.trim() !== current.trim();
+
+        if (isDifferent) {
+            isApplyingHistoryRef.current = true;
+            editor.commands.setContent(normalized);
+            isApplyingHistoryRef.current = false;
+        }
+
+        historyRef.current.splice(0, historyRef.current.length, normalized);
+        historyIndexRef.current = 0;
+        lastRecordedRef.current = normalized;
+        setHistoryState({ index: 0, length: 1 });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [content, editor]);
 
     // Smart Sync: When live preview is on, we don't change the underlying HTML, 
     // but the editor's visual state is managed via this effect if we were doing decorations.
@@ -141,10 +188,24 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
             const data = await res.json();
             if (data.success) {
                 if (isFullBody) {
-                    editor.commands.setContent(data.data.refinedText);
-                    onChange(data.data.refinedText);
+                    const normalized = normalizeEmailBodyHtml(data.data.refinedText);
+                    isApplyingHistoryRef.current = true;
+                    editor.commands.setContent(normalized);
+                    isApplyingHistoryRef.current = false;
+                    onChange(normalized);
+
+                    if (normalized !== lastRecordedRef.current) {
+                        if (historyIndexRef.current < historyRef.current.length - 1) {
+                            historyRef.current.splice(historyIndexRef.current + 1);
+                        }
+                        historyRef.current.push(normalized);
+                        historyIndexRef.current = historyRef.current.length - 1;
+                        lastRecordedRef.current = normalized;
+                        setHistoryState({ index: historyIndexRef.current, length: historyRef.current.length });
+                    }
                 } else {
-                    editor.chain().focus().insertContentAt({ from, to }, data.data.refinedText).run();
+                    const normalized = normalizeEmailBodyHtml(data.data.refinedText);
+                    editor.chain().focus().insertContentAt({ from, to }, normalized).run();
                 }
                 toast.success("✨ AI Refinement applied!");
             } else {
@@ -158,6 +219,36 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
     };
 
     if (!editor) return null;
+
+    const handleUndo = () => {
+        if (!editor) return;
+        if (historyIndexRef.current <= 0) return;
+
+        const nextIndex = historyIndexRef.current - 1;
+        const snapshot = historyRef.current[nextIndex];
+        isApplyingHistoryRef.current = true;
+        editor.commands.setContent(snapshot);
+        isApplyingHistoryRef.current = false;
+        historyIndexRef.current = nextIndex;
+        lastRecordedRef.current = snapshot;
+        onChange(snapshot);
+        setHistoryState({ index: historyIndexRef.current, length: historyRef.current.length });
+    };
+
+    const handleRedo = () => {
+        if (!editor) return;
+        if (historyIndexRef.current >= historyRef.current.length - 1) return;
+
+        const nextIndex = historyIndexRef.current + 1;
+        const snapshot = historyRef.current[nextIndex];
+        isApplyingHistoryRef.current = true;
+        editor.commands.setContent(snapshot);
+        isApplyingHistoryRef.current = false;
+        historyIndexRef.current = nextIndex;
+        lastRecordedRef.current = snapshot;
+        onChange(snapshot);
+        setHistoryState({ index: historyIndexRef.current, length: historyRef.current.length });
+    };
 
     const insertVariable = (variable: string) => {
         editor.chain().focus().insertContent(`{{${variable}}}`).run();
@@ -249,10 +340,16 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
                 {/* History */}
                 <div className="flex items-center border-r border-slate-200 pr-2 mr-1">
                     <ToolbarButton 
-                        onClick={() => editor.chain().focus().undo().run()}
-                        disabled={!editor.can().undo()}
+                        onClick={handleUndo}
+                        disabled={historyState.index <= 0}
                         icon={<RotateCcw className="w-4 h-4" />}
-                        title="Undo"
+                        title={historyState.index <= 0 ? "Undo (at start)" : "Undo"}
+                    />
+                    <ToolbarButton 
+                        onClick={handleRedo}
+                        disabled={historyState.index >= historyState.length - 1}
+                        icon={<RotateCw className="w-4 h-4" />}
+                        title={historyState.index >= historyState.length - 1 ? "Redo (at latest)" : "Redo"}
                     />
                 </div>
 

@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
 
 const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: number, label: string, icon: any, color?: "blue" | "red" | "emerald" | "slate" }) => {
     const radius = 18;
@@ -128,10 +130,66 @@ export default function CampaignResults() {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isDispatching, setIsDispatching] = useState(false);
     const [dispatchProgress, setDispatchProgress] = useState(0);
+    const [draftRestored, setDraftRestored] = useState(false);
+    const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
+    const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
 
     useEffect(() => {
         fetchLatestResults();
     }, []);
+
+    const activeDraftContext = campaigns[activeIndex]?.id ? `campaigns:results:${campaigns[activeIndex].id}` : null;
+
+    // Restore draft when active campaign changes
+    useEffect(() => {
+        if (!activeDraftContext) return;
+        let cancelled = false;
+        setDraftRestored(false);
+        setPendingDraft(null);
+        setHasEditedSinceLoad(false);
+        (async () => {
+            try {
+                const res = await fetch(`/api/drafts/${encodeURIComponent(activeDraftContext)}`);
+                const json = await res.json();
+                const draft = json?.data?.draft;
+                if (!cancelled && draft) {
+                    // Never auto-restore; ask user explicitly.
+                    setPendingDraft({
+                        subject: draft.subject || "",
+                        bodyHtml: draft.bodyHtml || "",
+                        updatedAt: draft.updatedAt,
+                    });
+                }
+            } catch {
+                // non-blocking
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeDraftContext]);
+
+    // Debounced autosave
+    useEffect(() => {
+        if (!activeDraftContext) return;
+        if (pendingDraft && !hasEditedSinceLoad) return;
+        const t = setTimeout(() => {
+            fetch(`/api/drafts/${encodeURIComponent(activeDraftContext)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subject: editedSubject || "",
+                    bodyHtml: normalizeEmailBodyHtml(editedBody || ""),
+                    metadata: {
+                        campaignId: campaigns[activeIndex]?.id,
+                        clientId: campaigns[activeIndex]?.clientId,
+                    },
+                }),
+            }).catch(() => {});
+        }, 700);
+        return () => clearTimeout(t);
+    }, [activeDraftContext, editedSubject, editedBody, campaigns, activeIndex, pendingDraft, hasEditedSinceLoad]);
 
     const fetchLatestResults = async () => {
         try {
@@ -377,58 +435,6 @@ export default function CampaignResults() {
                 {/* Center: Neural Composer */}
                 <div className="lg:col-span-6 space-y-6">
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[750px] transition-all">
-                        {/* Toolbar */}
-                        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => document.execCommand("bold")}
-                                    className="p-2 hover:bg-white rounded-md text-slate-400 hover:text-slate-900 transition-all border border-transparent hover:border-slate-200 active:scale-95"
-                                    title="Bold"
-                                >
-                                    <Bold className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => document.execCommand("italic")}
-                                    className="p-2 hover:bg-white rounded-md text-slate-400 hover:text-slate-900 transition-all border border-transparent hover:border-slate-200 active:scale-95"
-                                    title="Italic"
-                                >
-                                    <Italic className="w-3.5 h-3.5" />
-                                </button>
-                                <div className="w-px h-4 bg-slate-200 mx-1" />
-                                <button
-                                    onClick={() => document.execCommand("insertUnorderedList")}
-                                    className="p-2 hover:bg-white rounded-md text-slate-400 hover:text-slate-900 transition-all border border-transparent hover:border-slate-200 active:scale-95"
-                                    title="Bullet List"
-                                >
-                                    <List className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const url = prompt("Enter Link URL:");
-                                        if (url) document.execCommand("createLink", false, url);
-                                    }}
-                                    className="p-2 hover:bg-white rounded-md text-slate-400 hover:text-slate-900 transition-all border border-transparent hover:border-slate-200 active:scale-95"
-                                    title="Insert Link"
-                                >
-                                    <Link className="w-3.5 h-3.5" />
-                                </button>
-                                <div className="w-px h-4 bg-slate-200 mx-1" />
-                                <button
-                                    onClick={() => document.execCommand("removeFormat")}
-                                    className="p-2 hover:bg-white rounded-md text-slate-400 hover:text-slate-900 transition-all border border-transparent hover:border-slate-200 active:scale-95"
-                                    title="Clear Formatting"
-                                >
-                                    <Type className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    AI Optimized
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="p-10 space-y-8 flex-1 overflow-y-auto custom-scrollbar bg-white">
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 group">
@@ -438,7 +444,7 @@ export default function CampaignResults() {
                                 <input
                                     type="text"
                                     value={editedSubject}
-                                    onChange={(e) => setEditedSubject(e.target.value)}
+                                    onChange={(e) => { setEditedSubject(e.target.value); setHasEditedSinceLoad(true); }}
                                     className="w-full bg-transparent border-none text-2xl font-bold text-slate-900 outline-none placeholder:text-slate-200 focus:ring-0 leading-tight p-0"
                                     placeholder="Evolutionary Subject..."
                                 />
@@ -451,12 +457,49 @@ export default function CampaignResults() {
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Narrative Surface</label>
                                 </div>
-                                <div
-                                    contentEditable
-                                    onInput={(e) => setEditedBody(e.currentTarget.innerHTML)}
-                                    dangerouslySetInnerHTML={{ __html: editedBody }}
-                                    className="w-full min-h-[400px] bg-transparent border-none text-base leading-relaxed text-slate-700 outline-none font-medium placeholder:text-slate-200 p-0 selection:bg-blue-100 prose prose-slate max-w-none"
-                                    style={{ whiteSpace: 'pre-wrap' }}
+                                {pendingDraft && (
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg uppercase tracking-widest">
+                                        <span>Draft found for this campaign. Restore it?</span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setEditedSubject(pendingDraft.subject || "");
+                                                    setEditedBody(pendingDraft.bodyHtml || "");
+                                                    setDraftRestored(true);
+                                                    setPendingDraft(null);
+                                                    toast.info("Draft restored.");
+                                                }}
+                                                className="px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                                            >
+                                                Restore
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    try {
+                                                        await fetch(`/api/drafts/${encodeURIComponent(activeDraftContext)}`, { method: "DELETE" });
+                                                    } catch {}
+                                                    setPendingDraft(null);
+                                                    toast.info("Draft discarded.");
+                                                }}
+                                                className="px-3 py-1.5 rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors"
+                                            >
+                                                Discard
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                {draftRestored && !pendingDraft && (
+                                    <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-lg uppercase tracking-widest">
+                                        Draft restored and autosaving
+                                    </div>
+                                )}
+                                <RichTextEditor
+                                    content={editedBody}
+                                    onChange={(v) => { setEditedBody(v); setHasEditedSinceLoad(true); }}
+                                    placeholder="Refine the narrative..."
+                                    sampleData={activeCampaign?.client}
                                 />
                             </div>
                         </div>

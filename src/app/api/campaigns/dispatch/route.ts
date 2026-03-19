@@ -4,6 +4,8 @@ import { wrapInPremiumTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
 import { replaceVariables } from "@/lib/utils";
 import { z } from "zod";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { sanitizeEmailHtml } from "@/lib/email-sanitize";
 
 const dispatchSchema = z.object({
     campaignId: z.string().min(1, "Campaign ID is required"),
@@ -45,7 +47,8 @@ export async function POST(request: Request) {
         }
 
         // 2. Dispatch Strategic Communication: Final Variable Synchronization
-        const synchronizedBody = replaceVariables(body, campaign.client);
+        const normalizedBody = sanitizeEmailHtml(normalizeEmailBodyHtml(body));
+        const synchronizedBody = replaceVariables(normalizedBody, campaign.client);
         const htmlBody = wrapInPremiumTemplate(synchronizedBody, campaign.client.clientName);
 
         const result = await sendStrategicEmail({

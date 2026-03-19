@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { sanitizeEmailHtml } from "@/lib/email-sanitize";
 
 export async function PATCH(
     request: Request,
@@ -20,10 +22,11 @@ export async function PATCH(
         }
 
         const currentOutput = JSON.parse(original.generatedOutput);
+        const nextBody = emailBody ? sanitizeEmailHtml(normalizeEmailBodyHtml(emailBody)) : undefined;
         const updatedOutput = JSON.stringify({
             ...currentOutput,
             subject: subject || currentOutput.subject,
-            body: emailBody || currentOutput.body
+            body: nextBody || currentOutput.body
         });
 
         const updated = await prisma.campaignHistory.update({

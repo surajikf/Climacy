@@ -31,10 +31,10 @@ export async function middleware(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     const { pathname } = request.nextUrl;
 
-    // Allow public access to auth APIs, debug APIs, Next.js internal routes, and static files
+    // Allow public access to APIs (API routes handle auth/authorization themselves),
+    // Next.js internal routes, and static files.
     if (
-        pathname.startsWith('/api/auth') ||
-        pathname.startsWith('/api/debug') ||
+        pathname.startsWith('/api') ||
         pathname.startsWith('/_next') ||
         pathname === '/favicon.ico' ||
         pathname.includes('.')
@@ -88,5 +88,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.).*)'],
+    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.).*)'],
 };

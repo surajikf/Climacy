@@ -7,6 +7,7 @@ import { ok, error } from "@/lib/api-response";
 import { getSmartGreeting, replaceVariables } from "@/lib/utils";
 import { z } from "zod";
 import { getTargetClients } from "@/domain/campaigns";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
 
 const generateCampaignSchema = z.object({
     type: z.string().min(1, "Campaign type is required"),
@@ -229,6 +230,9 @@ export async function POST(request: Request) {
                     if (resEmailBody.includes("```")) {
                         resEmailBody = resEmailBody.replace(/```html\n?|```\n?/g, "").trim();
                     }
+
+                    // Global-standard formatting normalization (paragraphs, spacing, lists)
+                    resEmailBody = normalizeEmailBodyHtml(resEmailBody);
                     
                     // Logic Boost: Relationship-weighted lead strength
                     let leadStrength = normalizeMetric(content.leadStrength, 75);

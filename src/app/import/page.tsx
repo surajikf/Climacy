@@ -21,6 +21,7 @@ export default function ImportIntegrationsPage() {
 
     const [isInvoiceSyncing, setIsInvoiceSyncing] = useState(false);
     const [invoiceLastSync, setInvoiceLastSync] = useState<string | null>("Never");
+    const [invoiceSyncNote, setInvoiceSyncNote] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [isZohoSyncing, setIsZohoSyncing] = useState(false);
@@ -136,13 +137,22 @@ export default function ImportIntegrationsPage() {
 
     const handleInvoiceSync = async () => {
         setIsInvoiceSyncing(true);
+        setInvoiceSyncNote(null);
         try {
-            const res = await fetch("/api/import/invoice", { method: "POST" });
+            const res = await fetch("/api/import/invoice?mode=fast", { method: "POST" });
             const result = await res.json();
 
             if (result.success) {
                 const data = result.data;
-                toast.success(`Successfully imported ${data.count || 0} clients from internal invoice system.`);
+                const bg = data?.partial?.backgroundNotActiveScheduled;
+                toast.success(
+                    bg
+                        ? `Active clients synced (${data.count || 0}). Not Active sync running in background.`
+                        : `Successfully imported ${data.count || 0} clients from internal invoice system.`
+                );
+                if (bg) {
+                    setInvoiceSyncNote("Active clients updated. Not Active clients are syncing in the background (page is usable).");
+                }
                 setInvoiceLastSync(new Date().toLocaleString());
             } else {
                 toast.error(result.error?.message || "Failed to sync from Invoice System");
@@ -211,7 +221,12 @@ export default function ImportIntegrationsPage() {
                     <div className="bg-slate-50 p-6 flex items-center justify-between">
                         <div className="text-xs font-semibold text-slate-400 flex items-center gap-2">
                             <RefreshCw className="w-3.5 h-3.5" />
-                            Last Sync: {invoiceLastSync}
+                            <div className="flex flex-col">
+                                <div>Last Sync: {invoiceLastSync}</div>
+                                {invoiceSyncNote ? (
+                                    <div className="mt-1 text-[11px] font-semibold text-indigo-600">{invoiceSyncNote}</div>
+                                ) : null}
+                            </div>
                         </div>
                         <button
                             onClick={handleInvoiceSync}

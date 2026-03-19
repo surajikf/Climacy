@@ -3,6 +3,8 @@ import { z } from "zod";
 import { sendStrategicEmail } from "@/lib/mail";
 import { wrapInPremiumTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { sanitizeEmailHtml } from "@/lib/email-sanitize";
 
 const testSendSchema = z.object({
     email: z.string().email(),
@@ -20,11 +22,12 @@ export async function POST(request: NextRequest) {
         }
 
         const { email, subject, body: html } = parser.data;
+        const safeHtml = sanitizeEmailHtml(normalizeEmailBodyHtml(html));
 
         const result = await sendStrategicEmail({
             to: email,
             subject: `[TEST] ${subject}`,
-            html: wrapInPremiumTemplate(html, "Valued Partner"),
+            html: wrapInPremiumTemplate(safeHtml, "Valued Partner"),
             text: "This is a test email from Climacy Campaign Builder. Please view it in an HTML-compatible client."
         });
 

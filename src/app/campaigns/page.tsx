@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { ClientPickerModal } from "@/components/ClientPickerModal";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { wrapInPremiumTemplate } from "@/lib/email-template";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
 
 const campaignTypes = [
     { id: "Broadcast", name: "Broadcast", desc: "Wide-angle communication for large-scale synchronization.", icon: Radio, target: "Active & Warm Leads", bestFor: "Strategic pivots or major infrastructure news." },
@@ -94,6 +95,69 @@ export default function CampaignGenerator() {
     // Test Email State
     const [testEmail, setTestEmail] = useState("");
     const [isSendingTest, setIsSendingTest] = useState(false);
+
+    // Draft persistence
+    const [draftRestored, setDraftRestored] = useState(false);
+    const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
+    const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
+    const draftContext = isReviewing && sampleData
+        ? `campaigns:sample:${sampleData.clientId || sampleData.id || "auto"}`
+        : null;
+
+    // Restore draft when entering review for this sample
+    useEffect(() => {
+        if (!draftContext) return;
+        let cancelled = false;
+        setDraftRestored(false);
+        setPendingDraft(null);
+        setHasEditedSinceLoad(false);
+        (async () => {
+            try {
+                const res = await fetch(`/api/drafts/${encodeURIComponent(draftContext)}`);
+                const json = await res.json();
+                const draft = json?.data?.draft;
+                if (!cancelled && draft) {
+                    // Never auto-restore; ask user explicitly.
+                    setPendingDraft({
+                        subject: draft.subject || "",
+                        bodyHtml: draft.bodyHtml || "",
+                        updatedAt: draft.updatedAt,
+                    });
+                }
+            } catch {
+                // non-blocking
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draftContext]);
+
+    // Debounced autosave
+    useEffect(() => {
+        if (!draftContext) return;
+        // If there is a pending draft and the user hasn't edited, don't overwrite anything.
+        if (pendingDraft && !hasEditedSinceLoad) return;
+        const t = setTimeout(() => {
+            fetch(`/api/drafts/${encodeURIComponent(draftContext)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subject: editedSubject || "",
+                    bodyHtml: normalizeEmailBodyHtml(editedBody || ""),
+                    metadata: {
+                        type: selectedType,
+                        topic,
+                        tone,
+                        cta,
+                        clientId: sampleData?.clientId || sampleData?.id,
+                    },
+                }),
+            }).catch(() => {});
+        }, 700);
+        return () => clearTimeout(t);
+    }, [draftContext, editedSubject, editedBody, selectedType, topic, tone, cta, sampleData, pendingDraft, hasEditedSinceLoad]);
 
     useEffect(() => {
         fetch("/api/services")
@@ -427,7 +491,7 @@ export default function CampaignGenerator() {
                                             <input
                                                 type="text"
                                                 value={editedSubject}
-                                                onChange={(e) => setEditedSubject(e.target.value)}
+                                        onChange={(e) => { setEditedSubject(e.target.value); setHasEditedSinceLoad(true); }}
                                                 className="w-full bg-slate-50/50 border-2 border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition-all font-bold shadow-inner"
                                             />
                                             
@@ -454,11 +518,49 @@ export default function CampaignGenerator() {
                                                 </div>
                                             )}
                                         </div>
+                                        {pendingDraft && (
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg uppercase tracking-widest">
+                                                <span>Draft found for this sample. Restore it?</span>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditedSubject(pendingDraft.subject || "");
+                                                            setEditedBody(pendingDraft.bodyHtml || "");
+                                                            setDraftRestored(true);
+                                                            setPendingDraft(null);
+                                                            toast.info("Draft restored.");
+                                                        }}
+                                                        className="px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                                                    >
+                                                        Restore
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            try {
+                                                                await fetch(`/api/drafts/${encodeURIComponent(draftContext!)}`, { method: "DELETE" });
+                                                            } catch {}
+                                                            setPendingDraft(null);
+                                                            toast.info("Draft discarded.");
+                                                        }}
+                                                        className="px-3 py-1.5 rounded-md bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors"
+                                                    >
+                                                        Discard
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {draftRestored && !pendingDraft && (
+                                            <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-lg uppercase tracking-widest">
+                                                Draft restored and autosaving
+                                            </div>
+                                        )}
                                         <div className="space-y-1.5 min-h-[400px]">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Email Body (Rich Text control)</label>
                                             <RichTextEditor 
                                                 content={editedBody} 
-                                                onChange={setEditedBody}
+                                                onChange={(v) => { setEditedBody(v); setHasEditedSinceLoad(true); }}
                                                 placeholder="Begin your strategized draft..."
                                                 sampleData={sampleData}
                                             />

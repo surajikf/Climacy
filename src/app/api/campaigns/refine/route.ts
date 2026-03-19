@@ -3,6 +3,7 @@ import Groq from "groq-sdk";
 import { getGlobalSettings } from "@/lib/settings";
 import { ok, error } from "@/lib/api-response";
 import { z } from "zod";
+import { normalizeEmailBodyHtml } from "@/lib/email-format";
 
 const refineSchema = z.object({
     text: z.string().min(1, "Text to refine is required"),
@@ -75,8 +76,11 @@ export async function POST(request: Request) {
             refinedText = chatCompletion.choices[0].message.content || text;
         }
 
+        const inputWasHtml = /<\s*\/?\s*[a-zA-Z][^>]*>/.test(text);
+        const normalized = inputWasHtml ? normalizeEmailBodyHtml(refinedText.trim()) : refinedText.trim();
+
         return ok({ 
-            refinedText: refinedText.trim(),
+            refinedText: normalized,
             originalText: text 
         });
 
