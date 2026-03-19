@@ -10,6 +10,8 @@ export interface GlobalSettings {
     googleClientSecret: string;
     googleRefreshToken: string;
     googleEmail: string;
+    invoiceApiKey: string;
+    invoiceApiUrl: string;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -21,6 +23,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     googleClientSecret: "",
     googleRefreshToken: "",
     googleEmail: "",
+    invoiceApiKey: "",
+    invoiceApiUrl: "",
 };
 
 export async function getGlobalSettings(): Promise<GlobalSettings> {
@@ -60,6 +64,8 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
             googleClientSecret: safeDecrypt(settings.googleClientSecretEncrypted) || process.env.GOOGLE_CLIENT_SECRET || "",
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted) || process.env.GOOGLE_REFRESH_TOKEN || "",
             googleEmail: safeDecrypt(settings.googleEmailEncrypted) || process.env.EMAIL_USER || "",
+            invoiceApiKey: safeDecrypt(settings.invoiceApiKeyEncrypted) || process.env.INVOICE_API_KEY || "",
+            invoiceApiUrl: safeDecrypt(settings.invoiceApiUrlEncrypted) || process.env.INVOICE_API_URL || "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients",
         };
 
         // NEW: Multi-account lookup (highest priority) - wrapped in try/catch to avoid model-not-found errors

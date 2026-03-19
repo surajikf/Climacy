@@ -16,6 +16,8 @@ const settingsSchema = z.object({
     googleClientSecret: z.string().optional(),
     googleRefreshToken: z.string().optional(),
     googleEmail: z.string().optional(),
+    invoiceApiKey: z.string().optional(),
+    invoiceApiUrl: z.string().optional()
 });
 
 export async function GET() {
@@ -66,6 +68,8 @@ export async function GET() {
             googleClientSecret: safeDecrypt(settings.googleClientSecretEncrypted),
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted),
             googleEmail: safeDecrypt(settings.googleEmailEncrypted),
+            invoiceApiKey: safeDecrypt(settings.invoiceApiKeyEncrypted),
+            invoiceApiUrl: safeDecrypt(settings.invoiceApiUrlEncrypted) || "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients",
             gmailAccounts: [] as any[]
         };
 
@@ -143,6 +147,10 @@ export async function POST(request: Request) {
                 updateData.googleRefreshTokenEncrypted = encrypt(data.googleRefreshToken);
             if (data.googleEmail && data.googleEmail !== MASK)
                 updateData.googleEmailEncrypted = encrypt(data.googleEmail);
+            if (data.invoiceApiKey && data.invoiceApiKey !== MASK)
+                updateData.invoiceApiKeyEncrypted = encrypt(data.invoiceApiKey);
+            if (data.invoiceApiUrl && data.invoiceApiUrl !== MASK)
+                updateData.invoiceApiUrlEncrypted = encrypt(data.invoiceApiUrl);
         } catch (encError) {
             console.error("Encryption stage failure:", encError);
             return error(
@@ -186,6 +194,8 @@ export async function POST(request: Request) {
             googleClientSecret: safeDecrypt(settings.googleClientSecretEncrypted),
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted),
             googleEmail: safeDecrypt(settings.googleEmailEncrypted),
+            invoiceApiKey: safeDecrypt(settings.invoiceApiKeyEncrypted),
+            invoiceApiUrl: safeDecrypt(settings.invoiceApiUrlEncrypted),
             gmailAccounts
         });
     } catch (err: any) {

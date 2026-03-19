@@ -3,6 +3,7 @@ import { isRoleBasedEmail } from "@/lib/email-utils";
 import { XMLParser } from "fast-xml-parser";
 import { ok, error } from "@/lib/api-response";
 import { createClient } from "@/lib/supabase/server";
+import { getGlobalSettings } from "@/lib/settings";
 
 export async function POST(req: Request) {
     try {
@@ -17,9 +18,8 @@ export async function POST(req: Request) {
             );
         }
 
-        console.log("[INVOICE_SYNC] Starting optimized hybrid sync...");
-
-        const INVOICE_BASE_URL = "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients";
+        const settings = await getGlobalSettings();
+        const INVOICE_BASE_URL = settings.invoiceApiUrl || "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients";
         const REQUEST_TIMEOUT_MS = 30000;
         const urlObj = new URL(req.url);
         const mode = (urlObj.searchParams.get("mode") || "fast").toLowerCase();

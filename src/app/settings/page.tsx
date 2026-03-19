@@ -16,7 +16,8 @@ import {
     Zap,
     Globe,
     Cpu,
-    ArrowLeft
+    ArrowLeft,
+    Network
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SmartLoader } from "@/components/SmartLoader";
@@ -39,6 +40,8 @@ export default function Settings() {
         googleClientSecret: "",
         googleRefreshToken: "",
         googleEmail: "",
+        invoiceApiKey: "",
+        invoiceApiUrl: "",
         gmailAccounts: [] as any[]
     };
 
@@ -266,6 +269,43 @@ export default function Settings() {
                             <p className="text-[10px] text-slate-400 font-medium mt-3 flex items-center gap-1.5 uppercase tracking-tight">
                                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                                 Encrypted node storage active.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 1.5 Internal Connection Hub */}
+                <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm space-y-8">
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-50">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
+                                <Network className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Internal Connection Hub</h3>
+                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">Sync Pipeline Configuration</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Invoice System Endpoint</label>
+                            <div className="relative group/input">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Globe className="h-4 w-4 text-slate-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={formData.invoiceApiUrl}
+                                    onChange={(e) => setFormData({ ...formData, invoiceApiUrl: e.target.value })}
+                                    className="w-full pl-11 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-medium"
+                                    placeholder="http://your-public-url/api/ApiService.asmx/GetClients"
+                                />
+                            </div>
+                            <p className="text-[9px] text-slate-400 italic ml-1 leading-relaxed">
+                                <span className="text-amber-500 font-bold uppercase not-italic mr-1">Cloud Sync:</span>
+                                Requires a public URL (via ngrok/tunnel) for Vercel synchronization.
                             </p>
                         </div>
                     </div>
