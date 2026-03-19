@@ -41,6 +41,19 @@ export default function ImportIntegrationsPage() {
     const [zohoFields, setZohoFields] = useState<{ deals: any[], contacts: any[] }>({ deals: [], contacts: [] });
     const [isLoadingFields, setIsLoadingFields] = useState(false);
     const [fieldMapping, setFieldMapping] = useState<any[]>([]);
+    const [globalSettings, setGlobalSettings] = useState<any>(null);
+
+    const fetchGlobalSettings = async () => {
+        try {
+            const res = await fetch("/api/settings");
+            const result = await res.json();
+            if (result.success) {
+                setGlobalSettings(result.data);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const fetchSettings = async () => {
         try {
@@ -103,7 +116,7 @@ export default function ImportIntegrationsPage() {
 
     useEffect(() => {
         setLoading(true);
-        Promise.all([fetchSettings(), fetchGmailAccounts()]).finally(() => setLoading(false));
+        Promise.all([fetchSettings(), fetchGmailAccounts(), fetchGlobalSettings()]).finally(() => setLoading(false));
     }, []);
 
     const handleGmailSync = async (accountId: string, accountName: string) => {
@@ -207,8 +220,15 @@ export default function ImportIntegrationsPage() {
                 {/* Invoice System Card */}
                 <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden flex flex-col group hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300">
                     <div className="p-8 border-b border-slate-100 flex-1 relative bg-gradient-to-br from-indigo-50/50 to-white">
-                        <div className="absolute top-8 right-8 text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md flex items-center gap-1.5 border border-emerald-100">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+                        <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
+                            <div className="text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md flex items-center gap-1.5 border border-emerald-100">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+                            </div>
+                            {typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') && globalSettings?.invoiceApiUrl?.includes('192.168.') && (
+                                <div className="text-[9px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 px-2 py-1 rounded-md border border-amber-100 animate-bounce">
+                                    Local IP Error
+                                </div>
+                            )}
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-300">
                             <FileText className="w-6 h-6 text-white" />
@@ -217,6 +237,23 @@ export default function ImportIntegrationsPage() {
                         <p className="text-sm text-slate-500 leading-relaxed font-medium">
                             Automatically pulls the master client list from the internal accounting module. Ensures all active billing entities are present in the communication database.
                         </p>
+                        
+                        {typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') && globalSettings?.invoiceApiUrl?.includes('192.168.') && (
+                            <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-2">
+                                <p className="text-[10px] font-bold text-amber-800 uppercase tracking-tight flex items-center gap-2">
+                                    <Shield className="w-3 h-3" /> Cloud Connectivity Warning
+                                </p>
+                                <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+                                    Your endpoint is set to a local IP address. Vercel cannot reach this address.
+                                </p>
+                                <a 
+                                    href="/settings" 
+                                    className="block w-full text-center py-1.5 bg-amber-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-amber-700 transition-colors"
+                                >
+                                    Fix in Settings
+                                </a>
+                            </div>
+                        )}
                     </div>
                     <div className="bg-slate-50 p-6 flex items-center justify-between">
                         <div className="text-xs font-semibold text-slate-400 flex items-center gap-2">
