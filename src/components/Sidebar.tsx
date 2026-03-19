@@ -97,9 +97,9 @@ export function Sidebar() {
     return (
         <div className="w-64 h-screen border-r border-slate-200 bg-slate-50 flex flex-col z-50 sticky top-0 hidden md:flex">
             <div className="p-6 pt-8 pb-8 flex justify-start">
-                <Link href="https://www.ikf.co.in/" target="_blank" className="flex items-center gap-2 group cursor-pointer">
+                <div className="flex items-center gap-2 group">
                     <img src="/logo.png" alt="I Knowledge Factory Pvt. Ltd." className="h-12 w-auto object-contain" />
-                </Link>
+                </div>
             </div>
 
             <nav className="flex-1 px-4 space-y-1 mt-4 custom-scrollbar overflow-y-auto">
