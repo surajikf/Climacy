@@ -4,8 +4,6 @@ import { decrypt } from "./encryption";
 export interface GlobalSettings {
     aiProvider: string;
     aiModel: string;
-    brandResonance: string;
-    signature: string;
     groqApiKey: string;
     openaiApiKey: string;
     googleClientId: string;
@@ -17,8 +15,6 @@ export interface GlobalSettings {
 const DEFAULT_SETTINGS: GlobalSettings = {
     aiProvider: "Groq",
     aiModel: "llama-3.3-70b-versatile",
-    brandResonance: "Strategic, insightful, and helpful.",
-    signature: "Best regards,\nStrategic Partnership Team",
     groqApiKey: "",
     openaiApiKey: "",
     googleClientId: "",
@@ -55,11 +51,9 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
             }
         };
 
-        return {
+        const baseSettings = {
             aiProvider: settings.aiProvider,
             aiModel: settings.aiModel,
-            brandResonance: settings.brandResonance,
-            signature: settings.signature,
             groqApiKey: safeDecrypt(settings.groqApiKeyEncrypted) || process.env.GROQ_API_KEY || "",
             openaiApiKey: safeDecrypt(settings.openaiApiKeyEncrypted) || process.env.OPENAI_API_KEY || "",
             googleClientId: safeDecrypt(settings.googleClientIdEncrypted) || process.env.GOOGLE_CLIENT_ID || "",
@@ -67,6 +61,22 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted) || process.env.GOOGLE_REFRESH_TOKEN || "",
             googleEmail: safeDecrypt(settings.googleEmailEncrypted) || process.env.EMAIL_USER || "",
         };
+
+        // NEW: Multi-account lookup (highest priority) - wrapped in try/catch to avoid model-not-found errors
+        try {
+            const defaultAccount = await (prisma.gmailAccount as any).findFirst({
+                where: { isDefault: true }
+            });
+
+            if (defaultAccount) {
+                baseSettings.googleEmail = defaultAccount.email;
+                baseSettings.googleRefreshToken = safeDecrypt(defaultAccount.refreshTokenEncrypted);
+            }
+        } catch (multiAccErr) {
+            console.warn("Multi-account settings not yet initialized in client. Using legacy config.");
+        }
+
+        return baseSettings;
     } catch (error) {
         console.error("Failed to fetch global settings:", error);
         return DEFAULT_SETTINGS;

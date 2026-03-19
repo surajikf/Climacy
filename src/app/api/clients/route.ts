@@ -76,6 +76,55 @@ export async function GET(request: Request) {
         const page = Math.max(parseInt(searchParams.get("page") || "1", 10) || 1, 1);
         const pageSizeRaw = parseInt(searchParams.get("pageSize") || "25", 10) || 25;
 
+        // Fetch granular source stats for the mini dashboard
+        const sourceStatsRaw = await prisma.client.groupBy({
+            by: ['source', 'relationshipLevel'],
+            _count: { _all: true }
+        });
+
+        const gmailStatsRaw = await prisma.client.groupBy({
+            by: ['gmailSourceAccount'],
+            where: { source: 'GMAIL' },
+            _count: { _all: true }
+        });
+
+        // Initialize structured stats
+        const sourceStats: any = {};
+        sourceStatsRaw.forEach(curr => {
+            const s = curr.source;
+            if (!sourceStats[s]) sourceStats[s] = { total: 0, active: 0, inactive: 0 };
+            sourceStats[s].total += curr._count._all;
+            if (curr.relationshipLevel === 'Active') {
+                sourceStats[s].active += curr._count._all;
+            } else {
+                sourceStats[s].inactive += curr._count._all;
+            }
+        });
+
+        // Add Gmail specifics
+        if (sourceStats['GMAIL']) {
+            sourceStats['GMAIL'].accounts = gmailStatsRaw.reduce((acc: any, curr: any) => {
+                acc[curr.gmailSourceAccount || 'Unknown'] = curr._count._all;
+                return acc;
+            }, {});
+        }
+
+        // Add Zoho specifics (Tags breakdown)
+        if (sourceStats['ZOHO_BIGIN']) {
+            const zohoClients = await prisma.client.findMany({
+                where: { source: 'ZOHO_BIGIN' },
+                select: { zohoTags: true }
+            });
+            
+            const tagCounts: Record<string, number> = {};
+            zohoClients.forEach(c => {
+                (c.zohoTags || []).forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                });
+            });
+            sourceStats['ZOHO_BIGIN'].accounts = tagCounts; // Reusing 'accounts' for tags in Zoho view
+        }
+
         const { data: clients, total, page: resolvedPage, pageSize } = await listClients({
             industries,
             levels,
@@ -149,6 +198,7 @@ export async function GET(request: Request) {
             total,
             page: resolvedPage,
             pageSize,
+            sourceStats,
         });
     } catch (err: any) {
         console.error("Failed to fetch clients:", err);

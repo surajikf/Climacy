@@ -79,8 +79,6 @@ model GlobalSettings {
   id                          String   @id @default("singleton")
   aiProvider                  String   @default("Groq")
   aiModel                     String   @default("llama-3.3-70b-versatile")
-  brandResonance              String   @default("Strategic, insightful, and helpful.")
-  signature                   String   @default("Best regards,\nStrategic Partnership Team")
   groqApiKeyEncrypted         String?
   openaiApiKeyEncrypted       String?
   googleClientIdEncrypted     String?
@@ -117,6 +115,7 @@ model GmailAccount {
   refreshTokenEncrypted String
   accessTokenEncrypted  String?
   expiresAt             DateTime?
+  isDefault             Boolean   @default(false)
   updatedAt             DateTime  @updatedAt
 }
 

@@ -29,6 +29,9 @@ import {
     Tag,
     Upload,
     ShieldCheck,
+    LogOut,
+    UserCircle2,
+    DownloadCloud,
     Phone,
     Loader2
 } from "lucide-react";
@@ -285,6 +288,7 @@ export default function ClientManager() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(25);
     const [total, setTotal] = useState(0);
+    const [sourceStats, setSourceStats] = useState<Record<string, any>>({});
     const [filterIndustry, setFilterIndustry] = useState<string[]>([]);
     const [filterLevel, setFilterLevel] = useState<string[]>([]);
     const [filterService, setFilterService] = useState<string[]>([]);
@@ -355,9 +359,10 @@ export default function ClientManager() {
             const result = await res.json();
             
             if (result.success) {
-                const { clients: fetchedClients, total: fetchedTotal } = result.data;
+                const { clients: fetchedClients, total: fetchedTotal, sourceStats: fetchedSourceStats } = result.data;
                 setClients(fetchedClients || []);
                 setTotal(fetchedTotal || 0);
+                setSourceStats(fetchedSourceStats || {});
             } else {
                 console.error("API Error:", result.error);
                 setClients([]);
@@ -619,8 +624,88 @@ export default function ClientManager() {
 
             {view === "clients" || view === "rolebased" ? (
                 <>
-                    <div className="sticky top-4 z-40 flex flex-col gap-4 bg-white/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all">
-                        <div className="flex flex-wrap items-center gap-4">
+                    <div className="sticky top-4 z-40 flex flex-col gap-3 bg-white/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all">
+                        {/* Mini Dashboard for Sources */}
+                        <div className="flex flex-wrap gap-2 px-1">
+                            {Object.entries(sourceStats).map(([source, stats]: any, idx) => {
+                            const icons: Record<string, any> = {
+                                INVOICE_SYSTEM: DownloadCloud,
+                                ZOHO_BIGIN: Database,
+                                GMAIL: Mail,
+                                MANUAL: User
+                            };
+                            const colors: Record<string, string> = {
+                                INVOICE_SYSTEM: "text-indigo-600 bg-indigo-50 border-indigo-100 ring-indigo-500/10",
+                                ZOHO_BIGIN: "text-amber-600 bg-amber-50 border-amber-100 ring-amber-500/10",
+                                GMAIL: "text-rose-600 bg-rose-50 border-rose-100 ring-rose-500/10",
+                                MANUAL: "text-emerald-600 bg-emerald-50 border-emerald-100 ring-emerald-500/10"
+                            };
+                            const Icon = icons[source] || Database;
+                            const colorClass = colors[source] || "text-slate-600 bg-slate-50 border-slate-100";
+
+                            return (
+                                <div key={source} className="group/tooltip relative">
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: idx * 0.1 }}
+                                        className={cn(
+                                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-tight shadow-sm cursor-help hover:ring-2 transition-all",
+                                            colorClass
+                                        )}
+                                    >
+                                        <Icon className="w-3 h-3" />
+                                        <span>{source.split('_')[0]}</span>
+                                        <span className="opacity-30">|</span>
+                                        <span className="text-slate-900">{stats.total}</span>
+                                    </motion.div>
+
+                                    {/* Smart Rich Tooltip */}
+                                    <div className="absolute bottom-full left-0 mb-2 w-48 invisible group-hover/tooltip:visible opacity-0 group-hover/tooltip:opacity-100 translate-y-2 group-hover/tooltip:translate-y-0 transition-all duration-200 z-[100]">
+                                        <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-xl overflow-hidden">
+                                            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{source.replace('_', ' ')}</span>
+                                                <Icon className="w-3 h-3 text-slate-400" />
+                                            </div>
+                                            <div className="p-3 space-y-2.5">
+                                                {source === 'INVOICE_SYSTEM' && (
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Active</p>
+                                                            <p className="text-xs font-black text-emerald-600">{stats.active}</p>
+                                                        </div>
+                                                        <div className="space-y-0.5 text-right">
+                                                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Not Active</p>
+                                                            <p className="text-xs font-black text-slate-600">{stats.inactive}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Account Breakdown (for Gmail/Zoho) */}
+                                                {stats.accounts && Object.keys(stats.accounts).length > 0 && (
+                                                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mb-1">
+                                                            {source === 'ZOHO_BIGIN' ? 'Tags Breakdown' : 'Account Breakdown'}
+                                                        </p>
+                                                        {Object.entries(stats.accounts).map(([acc, count]: any) => (
+                                                            <div key={acc} className="flex items-center justify-between gap-2 overflow-hidden">
+                                                                <span className="text-[9px] font-bold text-slate-700 truncate flex-1" title={acc}>{acc}</span>
+                                                                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1 rounded">{count}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Tooltip Arrow */}
+                                        <div className="ml-4 w-2 h-2 bg-white border-r border-b border-slate-200 rotate-45 -translate-y-1" />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4">
                             <div className="flex flex-1 min-w-[300px] items-center gap-3 px-5 py-3 bg-slate-100/50 rounded-2xl group focus-within:bg-white border border-transparent focus-within:border-blue-500/30 focus-within:ring-4 focus-within:ring-blue-50/50 transition-all duration-500">
                                 <Search className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                                 <input

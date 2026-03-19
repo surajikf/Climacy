@@ -62,7 +62,7 @@ export function Sidebar() {
     useEffect(() => {
         const fetchSidebarStats = async () => {
             try {
-                const res = await fetch("/api/sidebar/stats");
+                const res = await fetch("/api/dashboard-stats");
                 if (res.ok) setStats(await res.json());
             } catch (error) {
                 console.error("Sidebar stats failure", error);

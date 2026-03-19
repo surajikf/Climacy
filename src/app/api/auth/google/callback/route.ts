@@ -53,50 +53,38 @@ export async function GET(request: Request) {
         const userData = await userResponse.json();
         const email = userData.email;
 
-        // 3. Persist based on Context (Strategic vs Multi-Account)
-        console.log(`[AUTH] Successfully retrieved tokens for ${email}. Context: ${state || 'Strategic'}`);
+        // 3. Persist to GmailAccount model (Always)
+        console.log(`[AUTH] Successfully retrieved tokens for ${email}.`);
 
-        if (state) {
-            // MULTI-ACCOUNT FLOW: Save to GmailAccount model
-            const expiresAt = expires_in ? new Date(Date.now() + expires_in * 1000) : null;
+        const expiresAt = expires_in ? new Date(Date.now() + expires_in * 1000) : null;
+        
+        // Check if any default account exists
+        const defaultAccount = await prisma.gmailAccount.findFirst({
+            where: { isDefault: true }
+        });
 
-            await prisma.gmailAccount.upsert({
-                where: { email },
-                update: {
-                    accountName: state, // e.g., "Sales", "Accounts", "Boss"
-                    refreshTokenEncrypted: refresh_token ? encrypt(refresh_token) : undefined,
-                    accessTokenEncrypted: encrypt(access_token),
-                    expiresAt,
-                },
-                create: {
-                    email,
-                    accountName: state,
-                    refreshTokenEncrypted: encrypt(refresh_token || ""),
-                    accessTokenEncrypted: encrypt(access_token),
-                    expiresAt,
-                },
-            });
+        const accountData: any = {
+            email,
+            accountName: state || email.split('@')[0], // Use state (label) OR email prefix
+            refreshTokenEncrypted: refresh_token ? encrypt(refresh_token) : undefined,
+            accessTokenEncrypted: encrypt(access_token),
+            expiresAt,
+            isDefault: !defaultAccount, // Make default if none exist
+        };
 
-            // Redirect back to Import with success
-            return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/import?auth=success&account=${encodeURIComponent(state)}`);
-        } else {
-            // STRATEGIC FLOW: Save to GlobalSettings (Legacy compat)
-            const updateData: any = {
-                googleEmailEncrypted: encrypt(email),
-            };
+        await (prisma.gmailAccount as any).upsert({
+            where: { email },
+            update: {
+                accountName: accountData.accountName,
+                refreshTokenEncrypted: accountData.refreshTokenEncrypted,
+                accessTokenEncrypted: accountData.accessTokenEncrypted,
+                expiresAt: accountData.expiresAt,
+            },
+            create: accountData,
+        });
 
-            if (refresh_token) {
-                updateData.googleRefreshTokenEncrypted = encrypt(refresh_token);
-            }
-
-            await prisma.globalSettings.update({
-                where: { id: "singleton" },
-                data: updateData
-            });
-
-            // Return to Settings with success
-            return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings?auth=success`);
-        }
+        // Redirect back to Settings with success
+        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings?auth=success`);
 
     } catch (error: any) {
         console.error("Neural Link Callback Error:", error);

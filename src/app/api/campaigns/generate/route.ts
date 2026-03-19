@@ -251,7 +251,7 @@ export async function POST(request: Request) {
                     };
                 } catch (err) {
                     console.error(`AI Generation failed for client ${client.id}, falling back to template:`, err);
-                    const fallbackBody = `<p>Dear ${client.contactPerson || client.clientName || "Partner"},</p><p>[AI Synthesis Failed - Template Fallback]</p><p>Regarding <strong>${topic}</strong>: ${coreMessage}</p><p>${cta}</p><p>${settings.signature.replace(/\n/g, '<br>')}</p>`;
+                    const fallbackBody = `<p>Dear ${client.contactPerson || client.clientName || "Partner"},</p><p>[AI Synthesis Failed - Template Fallback]</p><p>Regarding <strong>${topic}</strong>: ${coreMessage}</p><p>${cta}</p>`;
                     return {
                         clientId: client.id,
                         clientName: client.clientName,

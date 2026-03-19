@@ -33,14 +33,13 @@ export default function Settings() {
     const defaultSettings = {
         aiProvider: "Groq",
         aiModel: "llama-3.3-70b-versatile",
-        brandResonance: "Strategic, insightful, and helpful.",
-        signature: "Best regards,\nStrategic Partnership Team",
         groqApiKey: "",
         openaiApiKey: "",
         googleClientId: "",
         googleClientSecret: "",
         googleRefreshToken: "",
-        googleEmail: ""
+        googleEmail: "",
+        gmailAccounts: [] as any[]
     };
 
     const [formData, setFormData] = useState(defaultSettings);
@@ -56,7 +55,8 @@ export default function Settings() {
             if (result.success) {
                 setFormData({
                     ...defaultSettings,
-                    ...result.data
+                    ...result.data,
+                    gmailAccounts: result.data.gmailAccounts || []
                 });
             }
         } catch (err) {
@@ -280,10 +280,10 @@ export default function Settings() {
                             </div>
                             <div>
                                 <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Transmission Grid</h3>
-                                <p className="text-xs font-medium text-slate-400">Manage Google OAuth2 Email IDs for campaign delivery.</p>
+                                <p className="text-xs font-medium text-slate-400">Manage Google OAuth2 identities for campaign delivery.</p>
                             </div>
                         </div>
-                        {formData.googleEmail && (
+                        {formData.gmailAccounts.some((a: any) => a.isDefault) && (
                             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
                                 <ShieldCheck className="w-3 h-3" />
                                 Neural Link Active
@@ -293,81 +293,99 @@ export default function Settings() {
 
                     <div className="grid md:grid-cols-2 gap-x-12 gap-y-8">
                         <CredentialInput
-                            label="Client ID"
+                            label="Google Client ID"
                             value={formData.googleClientId}
                             field="googleClientId"
                             placeholder="••••••••.apps.googleusercontent.com"
                         />
                         <CredentialInput
-                            label="Client Secret"
+                            label="Google Client Secret"
                             value={formData.googleClientSecret}
                             field="googleClientSecret"
                             placeholder="GOCSPX-••••••••"
                         />
                     </div>
 
-                    <div className="pt-4 flex flex-col items-center gap-4 bg-slate-50/50 rounded-xl p-6 border border-dashed border-slate-200">
-                        <div className="text-center space-y-1">
-                            <p className="text-xs font-semibold text-slate-600">Neural Authorization Bridge</p>
-                            <p className="text-[10px] text-slate-400 max-w-xs mx-auto">Authorize your Client ID and Secret to establish a persistent link with the Gmail database.</p>
+                    {/* Account List */}
+                    <div className="space-y-4 pt-4">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Connected Sync Nodes</h4>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (!formData.googleClientId || !formData.googleClientSecret) {
+                                        toast.error("Google App ID and Secret required to link accounts.");
+                                        return;
+                                    }
+                                    await handleSave();
+                                    const label = window.prompt("Enter a label for this account (e.g. Sales, Support):", "Primary");
+                                    if (label === null) return; // Cancelled
+                                    window.location.href = `/api/auth/google?state=${encodeURIComponent(label)}`;
+                                }}
+                                className="flex items-center gap-2 text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-all active:scale-95"
+                            >
+                                <Zap className="w-3 h-3" />
+                                Connect New Identity
+                            </button>
                         </div>
-                        <button
-                            type="button"
-                            onClick={async () => {
-                                if (!formData.googleClientId || !formData.googleClientSecret) {
-                                    toast.error("ID and Secret required to initiate link.");
-                                    return;
-                                }
-                                await handleSave(); // Wait for save to complete
-                                window.location.href = "/api/auth/google";
-                            }}
-                            className={cn(
-                                "flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95",
-                                formData.googleEmail
-                                    ? "bg-white border border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300"
-                                    : "bg-slate-900 border border-slate-800 text-white hover:bg-slate-800"
-                            )}
-                        >
-                            <Zap className={cn("w-3.5 h-3.5", !formData.googleEmail && "text-emerald-400 animate-pulse")} />
-                            {formData.googleEmail ? "Refresh Neural Link" : "Establish Neural Link"}
-                        </button>
-                        {formData.googleEmail && (
-                            <p className="text-[10px] text-slate-400 font-medium">Linked Account: <span className="text-slate-600 underline">{formData.googleEmail}</span></p>
+
+                        {formData.gmailAccounts.length > 0 ? (
+                            <div className="grid gap-3">
+                                {formData.gmailAccounts.map((account: any) => (
+                                    <div key={account.id} className={cn(
+                                        "flex items-center justify-between p-4 rounded-xl border transition-all",
+                                        account.isDefault ? "bg-blue-50/30 border-blue-200" : "bg-white border-slate-100 hover:border-slate-200"
+                                    )}>
+                                        <div className="flex items-center gap-4">
+                                            <div className={cn(
+                                                "w-10 h-10 rounded-full flex items-center justify-center border",
+                                                account.isDefault ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-200" : "bg-slate-50 text-slate-400 border-slate-100"
+                                            )}>
+                                                <Mail className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black text-slate-900 uppercase tracking-tight">{account.accountName}</span>
+                                                    {account.isDefault && (
+                                                        <span className="text-[8px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded uppercase tracking-tighter shadow-sm">Default Node</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-400 lowercase">{account.email}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {!account.isDefault && (
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const res = await fetch("/api/settings/google/default", {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify({ accountId: account.id })
+                                                        });
+                                                        const result = await res.json();
+                                                        if (result.success) {
+                                                            toast.success("Operational node set as default.");
+                                                            fetchSettings();
+                                                        } else {
+                                                            toast.error("Failed to reconfigure neural priority.");
+                                                        }
+                                                    }}
+                                                    className="text-[9px] font-black text-slate-500 hover:text-blue-600 uppercase tracking-widest px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-200 hover:bg-blue-50/50 transition-all"
+                                                >
+                                                    Set as Default
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-10 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No Identities Connected</p>
+                                <p className="text-[10px] text-slate-400 mt-1 italic font-medium">Initialize the Neural Bridge to establish your first link.</p>
+                            </div>
                         )}
-                    </div>
-                </div>
-
-                {/* 3. Operational Voice */}
-                <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm space-y-8">
-                    <div className="flex items-center gap-3 pb-4 border-b border-slate-50">
-                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-600">
-                            <Mail className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Operational Voice</h3>
-                            <p className="text-xs font-medium text-slate-400">Establish Global narrative and acoustic signatures.</p>
-                        </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-12">
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Baseline Resonance</label>
-                            <input
-                                type="text"
-                                value={formData.brandResonance}
-                                onChange={(e) => setFormData({ ...formData, brandResonance: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium text-slate-700 text-sm"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Global Signature</label>
-                            <textarea
-                                rows={4}
-                                value={formData.signature}
-                                onChange={(e) => setFormData({ ...formData, signature: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-3 outline-none focus:bg-white focus:border-blue-500 transition-all text-slate-600 font-medium text-sm resize-none leading-relaxed"
-                            />
-                        </div>
                     </div>
                 </div>
             </div>

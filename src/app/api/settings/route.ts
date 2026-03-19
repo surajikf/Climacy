@@ -66,7 +66,33 @@ export async function GET() {
             googleClientSecret: safeDecrypt(settings.googleClientSecretEncrypted),
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted),
             googleEmail: safeDecrypt(settings.googleEmailEncrypted),
+            gmailAccounts: [] as any[]
         };
+
+        let gmailAccounts = [] as any[];
+        try {
+            gmailAccounts = await (prisma.gmailAccount as any).findMany({
+                orderBy: { updatedAt: 'desc' }
+            });
+
+            // Migration check: if we have a singleton email but no GmailAccount record for it
+            if (responseData.googleEmail && !gmailAccounts.find((a: any) => a.email.toLowerCase() === responseData.googleEmail.toLowerCase())) {
+                await (prisma.gmailAccount as any).create({
+                    data: {
+                        email: responseData.googleEmail.toLowerCase(),
+                        accountName: "Primary",
+                        refreshTokenEncrypted: settings.googleRefreshTokenEncrypted || "",
+                        isDefault: true
+                    }
+                });
+                // Refresh counts
+                gmailAccounts = await (prisma.gmailAccount as any).findMany({ orderBy: { updatedAt: 'desc' } });
+            }
+        } catch (multiAccErr) {
+            console.warn("Multi-account models not yet available in Prisma client. Skipping sync.");
+        }
+        
+        responseData.gmailAccounts = gmailAccounts;
 
         return ok(responseData);
     } catch (err) {
@@ -102,8 +128,6 @@ export async function POST(request: Request) {
         const updateData: any = {
             aiProvider: data.aiProvider,
             aiModel: data.aiModel,
-            brandResonance: data.brandResonance,
-            signature: data.signature,
         };
 
         try {
@@ -145,6 +169,15 @@ export async function POST(request: Request) {
             }
         };
 
+        let gmailAccounts = [] as any[];
+        try {
+            gmailAccounts = await (prisma.gmailAccount as any).findMany({
+                orderBy: { updatedAt: 'desc' }
+            });
+        } catch (e) {
+            console.warn("Multi-account models not yet available in Prisma client during POST return.");
+        }
+
         return ok({
             ...settings,
             groqApiKey: safeDecrypt(settings.groqApiKeyEncrypted),
@@ -153,6 +186,7 @@ export async function POST(request: Request) {
             googleClientSecret: safeDecrypt(settings.googleClientSecretEncrypted),
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted),
             googleEmail: safeDecrypt(settings.googleEmailEncrypted),
+            gmailAccounts
         });
     } catch (err: any) {
         console.error("CRITICAL Settings Save Failure:", err);

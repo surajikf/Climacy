@@ -478,7 +478,7 @@ export default function CampaignResults() {
                                                 type="button"
                                                 onClick={async () => {
                                                     try {
-                                                        await fetch(`/api/drafts/${encodeURIComponent(activeDraftContext)}`, { method: "DELETE" });
+                                                        await fetch(`/api/drafts/${encodeURIComponent(activeDraftContext!)}`, { method: "DELETE" });
                                                     } catch {}
                                                     setPendingDraft(null);
                                                     toast.info("Draft discarded.");

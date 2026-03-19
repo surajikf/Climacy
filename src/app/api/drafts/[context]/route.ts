@@ -154,14 +154,14 @@ export async function PUT(
       update: {
         subject,
         bodyHtml,
-        ...(metadata !== undefined ? { metadata } : {}),
+        ...(metadata !== undefined ? { metadata: metadata as any } : {}),
       },
       create: {
         userId: user.id,
         context: decoded,
         subject,
         bodyHtml,
-        metadata: metadata ?? {},
+        metadata: (metadata ?? {}) as any,
       },
       select: {
         context: true,
