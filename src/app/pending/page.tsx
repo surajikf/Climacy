@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Clock, LogOut, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function PendingPage() {
     const [user, setUser] = useState<any>(null);
@@ -45,6 +46,9 @@ export default function PendingPage() {
                     </div>
 
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Clearance Pending</h1>
+                    <div className="mt-2 flex justify-center">
+                        <Breadcrumbs />
+                    </div>
 
                     <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8">
                         Your neural profile has been generated successfully, but requires <span className="font-bold text-slate-700">Level-5 Admin</span> clearance before you can access the matrix.

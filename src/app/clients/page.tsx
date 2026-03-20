@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import { categorizeEmail, CATEGORIES, CATEGORY_COLORS, EmailCategory } from "@/lib/emailCategorization";
 import { motion, AnimatePresence } from "framer-motion";
 import { SmartLoader } from "@/components/SmartLoader";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete }: any) => {
     return (
@@ -411,7 +412,7 @@ export default function ClientManager() {
                 setNewServiceData({ serviceName: "", category: "Digital", description: "" });
             } else {
                 const data = await res.json();
-                toast.error(data.error || "Failed to sync service record.");
+                toast.error(data.error?.message || data.error || "Failed to sync service record.");
             }
         } catch (err) {
             console.error(err);
@@ -568,6 +569,9 @@ export default function ClientManager() {
                     <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
                         {view === "clients" ? "Portfolio" : view === "services" ? "Capabilities" : "Role-Based Contacts"}
                     </h2>
+                    <div className="mt-2">
+                        <Breadcrumbs />
+                    </div>
                     <p className="text-sm font-medium text-slate-500">
                         {view === "clients" ? "Manage and segment your company records." :
                             view === "services" ? "Configure service offerings and categories." :

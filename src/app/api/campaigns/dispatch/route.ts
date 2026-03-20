@@ -1,11 +1,12 @@
 import prisma from "@/lib/prisma";
 import { sendStrategicEmail } from "@/lib/mail";
-import { wrapInPremiumTemplate } from "@/lib/email-template";
+import { wrapInEmailTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
 import { replaceVariables } from "@/lib/utils";
 import { z } from "zod";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
 import { sanitizeEmailHtml } from "@/lib/email-sanitize";
+import { parseCampaignGeneratedOutput } from "@/lib/campaign-output";
 
 const dispatchSchema = z.object({
     campaignId: z.string().min(1, "Campaign ID is required"),
@@ -37,8 +38,15 @@ export async function POST(request: Request) {
             });
         }
 
-        const content = JSON.parse(campaign.generatedOutput);
-        const { subject, body } = content;
+        let parsedOutput;
+        try {
+            parsedOutput = parseCampaignGeneratedOutput(campaign.generatedOutput);
+        } catch (parseErr: any) {
+            return error("BAD_REQUEST", parseErr?.message || "Campaign payload is invalid.", {
+                status: 400,
+            });
+        }
+        const { subject, body } = parsedOutput;
 
         if (!campaign.client.email) {
             return error("BAD_REQUEST", "Target company lacks a valid email ID.", {
@@ -49,7 +57,7 @@ export async function POST(request: Request) {
         // 2. Dispatch Strategic Communication: Final Variable Synchronization
         const normalizedBody = sanitizeEmailHtml(normalizeEmailBodyHtml(body));
         const synchronizedBody = replaceVariables(normalizedBody, campaign.client);
-        const htmlBody = wrapInPremiumTemplate(synchronizedBody, campaign.client.clientName);
+        const htmlBody = wrapInEmailTemplate("standard", synchronizedBody, campaign.client.clientName);
 
         const result = await sendStrategicEmail({
             to: campaign.client.email,

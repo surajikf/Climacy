@@ -8,6 +8,7 @@
     "build": "prisma generate --schema=./prisma/schema.prisma && next build",
     "start": "next start",
     "lint": "eslint",
+    "worker": "tsx scripts/job-worker.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

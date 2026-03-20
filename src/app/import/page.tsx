@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DownloadCloud, FileText, Database, Loader2, RefreshCw, CheckCircle2, Cloud, X, Key, Shield, Mail, User, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { SmartLoader } from "@/components/SmartLoader";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { safeImportRequest, type ImportSyncStatus } from "@/lib/import-sync";
 
 export default function ImportIntegrationsPage() {
     const [user, setUser] = useState<any>(null);
@@ -19,17 +21,14 @@ export default function ImportIntegrationsPage() {
         getUser();
     }, [supabase]);
 
-    const [isInvoiceSyncing, setIsInvoiceSyncing] = useState(false);
     const [invoiceLastSync, setInvoiceLastSync] = useState<string | null>("Never");
     const [invoiceSyncNote, setInvoiceSyncNote] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const [isZohoSyncing, setIsZohoSyncing] = useState(false);
     const [zohoLastSync, setZohoLastSync] = useState<string | null>("Never");
 
     // Gmail State
     const [gmailAccounts, setGmailAccounts] = useState<any[]>([]);
-    const [isGmailSyncing, setIsGmailSyncing] = useState<Record<string, boolean>>({});
     const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
     const [gmailLabel, setGmailLabel] = useState("Sales Team");
 
@@ -42,6 +41,15 @@ export default function ImportIntegrationsPage() {
     const [isLoadingFields, setIsLoadingFields] = useState(false);
     const [fieldMapping, setFieldMapping] = useState<any[]>([]);
     const [globalSettings, setGlobalSettings] = useState<any>(null);
+    const [syncStatus, setSyncStatus] = useState<{
+        invoice: ImportSyncStatus;
+        zoho: ImportSyncStatus;
+        gmail: Record<string, ImportSyncStatus>;
+    }>({ invoice: "idle", zoho: "idle", gmail: {} });
+    const inFlightKeysRef = useRef<Set<string>>(new Set());
+    const setGmailStatus = (accountId: string, status: ImportSyncStatus) => {
+        setSyncStatus((prev) => ({ ...prev, gmail: { ...prev.gmail, [accountId]: status } }));
+    };
 
     const fetchGlobalSettings = async () => {
         try {
@@ -120,26 +128,56 @@ export default function ImportIntegrationsPage() {
     }, []);
 
     const handleGmailSync = async (accountId: string, accountName: string) => {
-        setIsGmailSyncing(prev => ({ ...prev, [accountId]: true }));
+        const lockKey = `gmail:${accountId}`;
+        if (inFlightKeysRef.current.has(lockKey)) return;
+        inFlightKeysRef.current.add(lockKey);
+        setGmailStatus(accountId, "syncing");
         try {
-            const res = await fetch("/api/import/gmail", {
+            const result = await safeImportRequest<{ jobId: string }>("/api/import/gmail", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ accountId })
             });
-            const result = await res.json();
 
-            if (result.success) {
-                const data = result.data;
-                const message = `Successfully imported ${data.count || 0} clients from ${accountName} Gmail.${data.conflicts > 0 ? ` Detected ${data.conflicts} existing record conflicts.` : ""}`;
-                toast.success(message);
-            } else {
-                toast.error(result.error?.message || `Failed to sync from ${accountName}`);
+            const jobId = result.data?.jobId;
+            if (!result.ok || !jobId) {
+                toast.error(result.message || `Failed to sync from ${accountName}`);
+                setGmailStatus(accountId, "error");
+                return;
             }
+
+            const pollJob = async () => {
+                const maxAttempts = 900; // ~30 minutes @ 2s
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+                    const json = await res.json().catch(() => null);
+                    const job = json?.data?.job;
+
+                    if (json?.success && job) {
+                        if (job.status === "SUCCEEDED") return job;
+                        if (job.status === "FAILED") throw new Error(job.error || "Gmail import failed.");
+                    }
+
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+
+                throw new Error("Gmail import timed out.");
+            };
+
+            const finalJob: any = await pollJob();
+            const data = finalJob?.result || {};
+            const count = Number(data.count || 0);
+            const conflicts = Number(data.conflicts || 0);
+
+            const message = `Successfully imported ${count} clients from ${accountName} Gmail.${conflicts > 0 ? ` Detected ${conflicts} existing record conflicts.` : ""}`;
+            toast.success(message);
+            setGmailStatus(accountId, conflicts > 0 ? "warning" : "success");
+            await fetchGmailAccounts();
         } catch (error) {
             toast.error(`Network error during ${accountName} sync.`);
+            setGmailStatus(accountId, "error");
         } finally {
-            setIsGmailSyncing(prev => ({ ...prev, [accountId]: false }));
+            inFlightKeysRef.current.delete(lockKey);
         }
     };
 
@@ -149,13 +187,19 @@ export default function ImportIntegrationsPage() {
     };
 
     const handleInvoiceSync = async () => {
-        setIsInvoiceSyncing(true);
+        const lockKey = "invoice";
+        if (inFlightKeysRef.current.has(lockKey)) return;
+        inFlightKeysRef.current.add(lockKey);
+        setSyncStatus((prev) => ({ ...prev, invoice: "syncing" }));
         setInvoiceSyncNote(null);
         try {
-            const res = await fetch("/api/import/invoice?mode=fast", { method: "POST" });
-            const result = await res.json();
-
-            if (result.success) {
+            const result = await safeImportRequest<any>(
+                "/api/import/invoice?mode=fast",
+                { method: "POST" },
+                // Invoice sync can legitimately take longer due to upstream ERP latency.
+                { timeoutMs: 120000, retryOnce: false }
+            );
+            if (result.ok && result.data) {
                 const data = result.data;
                 const bg = data?.partial?.backgroundNotActiveScheduled;
                 toast.success(
@@ -167,51 +211,62 @@ export default function ImportIntegrationsPage() {
                     setInvoiceSyncNote("Active clients updated. Not Active clients are syncing in the background (page is usable).");
                 }
                 setInvoiceLastSync(new Date().toLocaleString());
+                setSyncStatus((prev) => ({ ...prev, invoice: bg ? "warning" : "success" }));
             } else {
-                toast.error(result.error?.message || "Failed to sync from Invoice System");
+                toast.error(result.message || "Failed to sync from Invoice System");
+                setSyncStatus((prev) => ({ ...prev, invoice: "error" }));
             }
         } catch (error) {
             toast.error("Network error during Invoice Sync.");
+            setSyncStatus((prev) => ({ ...prev, invoice: "error" }));
         } finally {
-            setIsInvoiceSyncing(false);
+            inFlightKeysRef.current.delete(lockKey);
         }
     };
 
     const handleZohoSync = async () => {
-        setIsZohoSyncing(true);
+        const lockKey = "zoho";
+        if (inFlightKeysRef.current.has(lockKey)) return;
+        inFlightKeysRef.current.add(lockKey);
+        setSyncStatus((prev) => ({ ...prev, zoho: "syncing" }));
         try {
-            const res = await fetch("/api/import/zoho", {
+            const result = await safeImportRequest<{ count: number; conflicts: number; purged?: number }>("/api/import/zoho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ pipelineStage: zohoConfig.stageName })
             });
-            const result = await res.json();
-
-            if (result.success) {
+            if (result.ok && result.data) {
                 const data = result.data;
                 const message = `Successfully imported ${data.count || 0} clients from Zoho Bigin.${data.conflicts > 0 ? ` Detected ${data.conflicts} existing record conflicts.` : ""}`;
                 toast.success(message);
                 setZohoLastSync(new Date().toLocaleString());
+                setSyncStatus((prev) => ({ ...prev, zoho: data.conflicts > 0 ? "warning" : "success" }));
+                await fetchSettings();
             } else {
-                toast.error(result.error?.message || "Failed to sync from Zoho Bigin");
+                toast.error(result.message || "Failed to sync from Zoho Bigin");
+                setSyncStatus((prev) => ({ ...prev, zoho: "error" }));
             }
         } catch (error) {
             toast.error("Network error during Zoho Bigin Sync.");
+            setSyncStatus((prev) => ({ ...prev, zoho: "error" }));
         } finally {
-            setIsZohoSyncing(false);
+            inFlightKeysRef.current.delete(lockKey);
         }
     };
 
     if (loading) return <SmartLoader label="Initializing Studio" description="Connecting to data nodes..." />;
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-20 max-w-5xl mx-auto">
+        <div className="space-y-8 animate-in fade-in duration-500 pb-20 w-full px-3 sm:px-4 lg:px-6">
             <header className="px-2">
                 <div className="flex items-center gap-3 text-blue-600 mb-2">
                     <DownloadCloud className="w-5 h-5" />
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Universal Data Ingestion</span>
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">Integrations Studio</h2>
+                <div className="mt-2">
+                    <Breadcrumbs />
+                </div>
                 <p className="text-slate-500 font-medium text-sm mt-1">Connect external data channels and synchronize your client base.</p>
             </header>
 
@@ -223,6 +278,16 @@ export default function ImportIntegrationsPage() {
                         <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
                             <div className="text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md flex items-center gap-1.5 border border-emerald-100">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
+                            </div>
+                            <div className={cn(
+                                "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md border",
+                                syncStatus.invoice === "syncing" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                    syncStatus.invoice === "success" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                        syncStatus.invoice === "warning" ? "bg-amber-50 text-amber-700 border-amber-100" :
+                                            syncStatus.invoice === "error" ? "bg-rose-50 text-rose-700 border-rose-100" :
+                                                "bg-slate-50 text-slate-500 border-slate-100"
+                            )}>
+                                {syncStatus.invoice}
                             </div>
                             {typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') && globalSettings?.invoiceApiUrl?.includes('192.168.') && (
                                 <div className="text-[9px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 px-2 py-1 rounded-md border border-amber-100 animate-bounce">
@@ -267,10 +332,10 @@ export default function ImportIntegrationsPage() {
                         </div>
                         <button
                             onClick={handleInvoiceSync}
-                            disabled={isInvoiceSyncing || (user?.user_metadata?.role !== "ADMIN")}
+                            disabled={syncStatus.invoice === "syncing" || (user?.user_metadata?.role !== "ADMIN")}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
-                            {isInvoiceSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+                            {syncStatus.invoice === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
                             Run Sync
                         </button>
                     </div>
@@ -281,6 +346,16 @@ export default function ImportIntegrationsPage() {
                     <div className="p-8 border-b border-slate-100 flex-1 relative bg-gradient-to-br from-orange-50/50 to-white">
                         <div className="absolute top-8 right-8 text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-600 px-2 py-1 rounded-md flex items-center gap-1.5 border border-amber-100">
                             {zohoConfig.hasRefreshToken ? "Connected" : "Configuration Needed"}
+                        </div>
+                        <div className={cn(
+                            "absolute top-16 right-8 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md border",
+                            syncStatus.zoho === "syncing" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                syncStatus.zoho === "success" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                    syncStatus.zoho === "warning" ? "bg-amber-50 text-amber-700 border-amber-100" :
+                                        syncStatus.zoho === "error" ? "bg-rose-50 text-rose-700 border-rose-100" :
+                                            "bg-slate-50 text-slate-500 border-slate-100"
+                        )}>
+                            {syncStatus.zoho}
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mb-6 shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform duration-300">
                             <Cloud className="w-6 h-6 text-white" />
@@ -315,10 +390,10 @@ export default function ImportIntegrationsPage() {
                         {zohoConfig.hasRefreshToken ? (
                             <button
                                 onClick={handleZohoSync}
-                                disabled={isZohoSyncing || (user?.user_metadata?.role !== "ADMIN")}
+                                disabled={syncStatus.zoho === "syncing" || (user?.user_metadata?.role !== "ADMIN")}
                                 className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
-                                {isZohoSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+                                {syncStatus.zoho === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
                                 Run Sync
                             </button>
                         ) : (
@@ -368,12 +443,15 @@ export default function ImportIntegrationsPage() {
                                         <span className="truncate max-w-[120px]">{acc.email}</span>
                                         <button
                                             onClick={() => handleGmailSync(acc.id, acc.accountName)}
-                                            disabled={isGmailSyncing[acc.id]}
+                                            disabled={syncStatus.gmail[acc.id] === "syncing"}
                                             className="text-blue-600 hover:underline flex items-center gap-1 disabled:opacity-50"
                                         >
-                                            {isGmailSyncing[acc.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                            {syncStatus.gmail[acc.id] === "syncing" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                                             Sync
                                         </button>
+                                    </div>
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Status: {syncStatus.gmail[acc.id] || "idle"}
                                     </div>
                                 </div>
                             ))}

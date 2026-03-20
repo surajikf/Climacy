@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, Server } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function LoginPage() {
     const [mounted, setMounted] = useState(false);
@@ -65,6 +66,9 @@ export default function LoginPage() {
                             <Server className="w-7 h-7 text-white" />
                         </div>
                         <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">System Access</h1>
+                        <div className="mt-3 flex justify-center">
+                            <Breadcrumbs />
+                        </div>
                         <p className="text-sm font-medium text-slate-500 mt-2">I Knowledge Factory Neural Matrix</p>
                     </div>
 

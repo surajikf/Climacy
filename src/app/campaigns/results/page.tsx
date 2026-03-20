@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
     Copy,
     FileDown,
@@ -33,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { sanitizeEmailHtml } from "@/lib/email-sanitize";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: number, label: string, icon: any, color?: "blue" | "red" | "emerald" | "slate" }) => {
     const radius = 18;
@@ -133,10 +136,92 @@ export default function CampaignResults() {
     const [draftRestored, setDraftRestored] = useState(false);
     const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
     const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
+    const [jobCreatedAt, setJobCreatedAt] = useState<string | null>(null);
+
+    const searchParams = useSearchParams();
+    const jobId = searchParams.get("jobId");
+
+    const safeParseGeneratedOutput = (generatedOutput: string) => {
+        try {
+            const parsed = JSON.parse(generatedOutput);
+            const subject = typeof parsed?.subject === "string" ? parsed.subject : "";
+            const body = typeof parsed?.body === "string"
+                ? sanitizeEmailHtml(normalizeEmailBodyHtml(parsed.body))
+                : "";
+            if (!subject.trim() || !body.trim()) return null;
+            return {
+                ...parsed,
+                subject,
+                body,
+            };
+        } catch {
+            return null;
+        }
+    };
 
     useEffect(() => {
-        fetchLatestResults();
-    }, []);
+        let cancelled = false;
+
+        const start = async () => {
+            // Reset state when switching jobId so we don't show old campaigns.
+            setCampaigns([]);
+            setActiveIndex(0);
+            setEditedBody("");
+            setEditedSubject("");
+            setSelectedIds(new Set());
+            setJobCreatedAt(null);
+            setDraftRestored(false);
+            setPendingDraft(null);
+            setHasEditedSinceLoad(false);
+
+            if (!jobId) {
+                fetchLatestResults(null);
+                return;
+            }
+
+            // Wait for the queued batch generation job to complete,
+            // so the results page shows fresh campaign payloads immediately.
+            const poll = async () => {
+                try {
+                    const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+                    const json = await res.json();
+                    const job = json?.data?.job;
+
+                    if (json?.success && job) {
+                        if (!jobCreatedAt && job.createdAt) {
+                            setJobCreatedAt(String(job.createdAt));
+                        }
+
+                        if (job.status === "SUCCEEDED") {
+                            if (cancelled) return;
+                            await fetchLatestResults(job.createdAt ? String(job.createdAt) : jobCreatedAt);
+                            return;
+                        }
+
+                        if (job.status === "FAILED") {
+                            if (cancelled) return;
+                            toast.error(job.error || "Batch generation failed.");
+                            setLoading(false);
+                            return;
+                        }
+                    }
+                } catch {
+                    // Non-blocking; keep polling.
+                }
+
+                if (!cancelled) setTimeout(poll, 2000);
+            };
+
+            setLoading(true);
+            poll();
+        };
+
+        start();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [jobId]);
 
     const activeDraftContext = campaigns[activeIndex]?.id ? `campaigns:results:${campaigns[activeIndex].id}` : null;
 
@@ -191,19 +276,28 @@ export default function CampaignResults() {
         return () => clearTimeout(t);
     }, [activeDraftContext, editedSubject, editedBody, campaigns, activeIndex, pendingDraft, hasEditedSinceLoad]);
 
-    const fetchLatestResults = async () => {
+    const fetchLatestResults = async (sinceOverride?: string | null) => {
         try {
             const res = await fetch("/api/campaigns/history?limit=20");
             const result = await res.json();
             if (result.success) {
-                const processed = result.data.map((c: any) => ({
-                    ...c,
-                    content: JSON.parse(c.generatedOutput)
-                }));
+                const since = sinceOverride !== undefined ? sinceOverride : jobCreatedAt;
+                const sinceTs = since ? new Date(since).getTime() : null;
+                const processed = result.data
+                    .map((c: any) => {
+                        const content = safeParseGeneratedOutput(c.generatedOutput);
+                        if (!content) return null;
+                        const dateTs = c?.dateCreated ? new Date(c.dateCreated).getTime() : null;
+                        if (sinceTs !== null && dateTs !== null && dateTs < sinceTs) return null;
+                        return { ...c, content };
+                    })
+                    .filter(Boolean);
                 setCampaigns(processed);
                 if (processed.length > 0) {
                     setEditedBody(processed[0].content.body);
                     setEditedSubject(processed[0].content.subject);
+                } else {
+                    toast.error("Campaign payloads are invalid. Please regenerate campaigns.");
                 }
             }
         } catch (err) {
@@ -233,46 +327,98 @@ export default function CampaignResults() {
     };
 
     const handleBatchDispatch = async () => {
-        const idsToDispatch = selectedIds.size > 0
-            ? Array.from(selectedIds)
-            : [campaigns[activeIndex].id];
+        const selectedCampaigns = selectedIds.size > 0
+            ? campaigns.filter(c => selectedIds.has(c.id))
+            : [campaigns[activeIndex]];
 
-        setIsDispatching(true);
-        setDispatchProgress(0);
+        const dispatchable = selectedCampaigns.filter((c: any) => {
+            if (!c?.id || !c?.content?.subject || !c?.content?.body) return false;
+            return true;
+        });
 
-        let successCount = 0;
-        const total = idsToDispatch.length;
-
-        for (let i = 0; i < idsToDispatch.length; i++) {
-            try {
-                const res = await fetch("/api/campaigns/dispatch", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ campaignId: idsToDispatch[i] })
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    successCount++;
-                } else {
-                    toast.error(`Dispatch failed: ${data.error || "Neural Link Failure"}`);
-                }
-            } catch (err) {
-                console.error(`Dispatch failed for ${idsToDispatch[i]}:`, err);
-                toast.error("Critical transmission failure.");
-            }
-            setDispatchProgress(Math.round(((i + 1) / total) * 100));
+        if (dispatchable.length === 0) {
+            toast.error("No valid campaigns selected for dispatch.");
+            return;
         }
 
-        setIsDispatching(false);
-        setDispatchProgress(0);
-        setSelectedIds(new Set());
+        if (dispatchable.length < selectedCampaigns.length) {
+            toast.warning("Some selected campaigns were skipped due to invalid payload.");
+        }
 
-        if (successCount === total) {
-            toast.success(`Strategic Success: ${total} nodes dispatched.`);
-        } else {
-            toast.warning(`Partial Success: ${successCount}/${total} nodes dispatched. Check neural logs.`);
+        const idsToDispatch = dispatchable.map((c: any) => c.id);
+
+        try {
+            setIsDispatching(true);
+            setDispatchProgress(0);
+
+            const res = await fetch("/api/campaigns/dispatch/batch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ campaignIds: idsToDispatch })
+            });
+
+            const data = await res.json().catch(() => null);
+            const jobId = data?.data?.jobId as string | undefined;
+
+            if (!res.ok || !data?.success || !jobId) {
+                toast.error(data?.error?.message || "Failed to enqueue dispatch.");
+                setIsDispatching(false);
+                setDispatchProgress(0);
+                return;
+            }
+
+            const poll = async () => {
+                try {
+                    const jr = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+                    const jdata = await jr.json();
+                    const job = jdata?.data?.job;
+
+                    if (!jdata?.success || !job) {
+                        setTimeout(poll, 2000);
+                        return;
+                    }
+
+                    if (job.status === "RUNNING" || job.status === "QUEUED") {
+                        setDispatchProgress(Math.max(0, Math.min(100, job.progress || 0)));
+                        setTimeout(poll, 2000);
+                        return;
+                    }
+
+                    if (job.status === "FAILED") {
+                        toast.error(job.error || "Dispatch batch failed.");
+                        setIsDispatching(false);
+                        setDispatchProgress(0);
+                        return;
+                    }
+
+                    if (job.status === "SUCCEEDED") {
+                        const r = job.result || {};
+                        const total = r.total ?? idsToDispatch.length;
+                        const successCount = r.successCount ?? r.successes ?? 0;
+                        if (successCount === total) {
+                            toast.success(`Strategic Success: ${total} nodes dispatched.`);
+                        } else {
+                            toast.warning(`Partial Success: ${successCount}/${total} nodes dispatched. Check neural logs.`);
+                        }
+
+                        setIsDispatching(false);
+                        setDispatchProgress(100);
+                        setSelectedIds(new Set());
+                        // Refresh history after dispatch completes (keep newly-generated filter if present)
+                        await fetchLatestResults(jobCreatedAt);
+                        return;
+                    }
+                } catch {
+                    setTimeout(poll, 2000);
+                }
+            };
+
+            poll();
+        } catch (err) {
+            console.error(err);
+            setIsDispatching(false);
+            setDispatchProgress(0);
+            toast.error("Failed to dispatch batch.");
         }
     };
 
@@ -303,7 +449,7 @@ export default function CampaignResults() {
                 const newCampaigns = [...campaigns];
                 newCampaigns[activeIndex] = {
                     ...updated,
-                    content: JSON.parse(updated.generatedOutput)
+                    content: safeParseGeneratedOutput(updated.generatedOutput) || newCampaigns[activeIndex].content
                 };
                 setCampaigns(newCampaigns);
                 toast.success("Timeline evolved: Matrix resonance updated.");
@@ -322,13 +468,13 @@ export default function CampaignResults() {
     const charCount = editedBody.length;
 
     if (loading) return (
-        <div className="max-w-[1600px] mx-auto py-10 px-6">
+        <div className="w-full py-8 px-3 sm:px-4 lg:px-6">
             <StudioSkeleton />
         </div>
     );
 
     if (campaigns.length === 0) return (
-        <div className="max-w-[1600px] mx-auto min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-6">
+        <div className="w-full min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-sm">
                 <Zap className="w-6 h-6 text-slate-400" />
             </div>
@@ -348,13 +494,16 @@ export default function CampaignResults() {
     const activeCampaign = campaigns[activeIndex];
 
     return (
-        <div className="max-w-[1600px] mx-auto space-y-8 pb-20 px-6">
+        <div className="w-full space-y-8 pb-20 px-3 sm:px-4 lg:px-6">
             <header className="flex items-center justify-between px-2">
                 <div>
                     <h2 className="text-3xl font-semibold tracking-tight text-slate-900 flex items-center gap-3">
                         Neural Composer
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-600 uppercase tracking-widest animate-pulse">Sync Active</span>
                     </h2>
+                    <div className="mt-2">
+                        <Breadcrumbs />
+                    </div>
                     <p className="text-sm font-medium text-slate-500 mt-1">Refine the communication vector for maximum strategic resonance.</p>
                 </div>
                 <button
@@ -426,6 +575,11 @@ export default function CampaignResults() {
                                     )}>
                                         {c.content?.subject}
                                     </p>
+                                    <div className="pl-3.5">
+                                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500">
+                                            Standard
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         ))}

@@ -59,6 +59,38 @@ model CampaignHistory {
   client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum JobType {
+  CAMPAIGN_GENERATE
+  CAMPAIGN_DISPATCH_BATCH
+  GMAIL_IMPORT
+}
+
+model Job {
+  id           String    @id @default(cuid())
+  type         JobType
+  status       JobStatus @default(QUEUED)
+  progress     Int       @default(0)
+  payload      Json
+  result       Json?
+  error        String?
+  attempts     Int       @default(0)
+  lockedAt     DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, lockedAt])
+  @@index([type, createdAt])
+}
+
 model EmailDraft {
   id        String   @id @default(cuid())
   userId    String

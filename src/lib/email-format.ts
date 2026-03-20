@@ -62,6 +62,19 @@ function plainTextToHtml(text: string) {
   return blocks.join("");
 }
 
+export function dedupeLeadingSalutation(html: string) {
+  if (!html) return html;
+  const stripTags = (s: string) => s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const match = html.match(/^\s*(<p\b[^>]*>[\s\S]*?<\/p>)\s*(<p\b[^>]*>[\s\S]*?<\/p>)([\s\S]*)$/i);
+  if (!match) return html;
+  const firstText = stripTags(match[1]).toLowerCase();
+  const secondText = stripTags(match[2]).toLowerCase();
+  if (firstText.startsWith("dear ") && secondText.startsWith("dear ")) {
+    return `${match[1]}${match[3]}`;
+  }
+  return html;
+}
+
 /**
  * Normalizes email body content so it renders with global-standard spacing:
  * - Plain text becomes paragraphs / lists.
@@ -82,6 +95,7 @@ export function normalizeEmailBodyHtml(input: string) {
 
   // Work on HTML-ish content
   let html = noFences.replace(/\r\n/g, "\n");
+  html = dedupeLeadingSalutation(html);
 
   // Normalize <br> variants
   html = html.replace(/<br\s*\/?>/gi, "<br>");
@@ -103,6 +117,6 @@ export function normalizeEmailBodyHtml(input: string) {
   // Clean up empty paragraphs
   html = html.replace(/<p>\s*<\/p>/gi, "");
 
-  return html.trim();
+  return dedupeLeadingSalutation(html.trim());
 }
 

@@ -9,6 +9,7 @@ interface Client {
     clientName: string;
     industry: string;
     contactPerson?: string;
+    relationshipLevel?: string;
 }
 
 interface ClientPickerModalProps {
@@ -21,6 +22,7 @@ interface ClientPickerModalProps {
     mode?: 'single' | 'oversight';
     excludedIds?: string[];
     onToggleExclusion?: (clientId: string) => void;
+    onSetExcludedIds?: (ids: string[]) => void;
 }
 
 export function ClientPickerModal({ 
@@ -32,7 +34,8 @@ export function ClientPickerModal({
     loading,
     mode = 'single',
     excludedIds = [],
-    onToggleExclusion
+    onToggleExclusion,
+    onSetExcludedIds
 }: ClientPickerModalProps) {
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -45,6 +48,52 @@ export function ClientPickerModal({
             c.contactPerson?.toLowerCase().includes(query)
         );
     }, [clients, searchQuery]);
+
+    const activeClients = useMemo(() => {
+        // Treat "Warm Lead" as active-like so the user can target Active + Warm in one bucket.
+        return clients.filter((c) => {
+            const rel = (c.relationshipLevel || "").toLowerCase().trim();
+            return rel === "active" || rel === "warm lead";
+        });
+    }, [clients]);
+    const notActiveClients = useMemo(() => {
+        return clients.filter((c) => {
+            const rel = (c.relationshipLevel || "").toLowerCase().trim();
+            return rel !== "active" && rel !== "warm lead";
+        });
+    }, [clients]);
+
+    const excludedIdSet = useMemo(() => new Set(excludedIds), [excludedIds]);
+    const allClientIds = useMemo(() => clients.map((c) => c.id), [clients]);
+    const activeClientIds = useMemo(() => activeClients.map((c) => c.id), [activeClients]);
+    const notActiveClientIds = useMemo(() => notActiveClients.map((c) => c.id), [notActiveClients]);
+
+    const selectedCount = useMemo(() => {
+        return allClientIds.filter((id) => !excludedIdSet.has(id)).length;
+    }, [allClientIds, excludedIdSet]);
+
+    const selectedActiveCount = useMemo(() => {
+        return activeClientIds.filter((id) => !excludedIdSet.has(id)).length;
+    }, [activeClientIds, excludedIdSet]);
+
+    const selectedNotActiveCount = useMemo(() => {
+        return notActiveClientIds.filter((id) => !excludedIdSet.has(id)).length;
+    }, [notActiveClientIds, excludedIdSet]);
+
+    const setExcludedIdsExactly = (ids: string[]) => {
+        // excludedIds are "NOT selected" recipients
+        onSetExcludedIds?.(Array.from(new Set(ids)));
+    };
+
+    // Smart selection semantics:
+    // - Select All: include every client
+    // - Exclude All: exclude every client
+    // - Select All Active: include only Active + Warm Lead (exclude the rest)
+    // - Select All Not Active: include only Not Active (everything else)
+    const selectAll = () => setExcludedIdsExactly([]);
+    const excludeAll = () => setExcludedIdsExactly(allClientIds);
+    const selectAllActiveOnly = () => setExcludedIdsExactly(notActiveClientIds);
+    const selectAllNotActiveOnly = () => setExcludedIdsExactly(activeClientIds);
 
     if (!isOpen) return null;
 
@@ -67,7 +116,7 @@ export function ClientPickerModal({
                                 {mode === 'oversight' ? 'Review Target Audience' : 'Select Sample Client'}
                             </h3>
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mt-0.5">
-                                {mode === 'oversight' ? `${clients.filter(c => !excludedIds.includes(c.id)).length} Verified Recipients` : 'Anchoring Campaign Tone'}
+                                {mode === 'oversight' ? `${selectedCount} Verified Recipients` : 'Anchoring Campaign Tone'}
                             </p>
                         </div>
                     </div>
@@ -89,6 +138,45 @@ export function ClientPickerModal({
                             autoFocus
                         />
                     </div>
+                    {mode === "oversight" && (
+                        <div className="mt-3 space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={selectAll}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={excludeAll}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
+                                >
+                                    Exclude All
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={activeClientIds.length === 0}
+                                    onClick={selectAllActiveOnly}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Select All Active
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={notActiveClientIds.length === 0}
+                                    onClick={selectAllNotActiveOnly}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Select All Not Active
+                                </button>
+                            </div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Active Selected: {selectedActiveCount}/{activeClients.length} · Not Active Selected: {selectedNotActiveCount}/{notActiveClients.length}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* List */}

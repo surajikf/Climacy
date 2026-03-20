@@ -5,6 +5,7 @@ import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, ShieldCheck, Mail, U
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function AdminDashboard() {
     const [user, setUser] = useState<any>(null);
@@ -59,7 +60,7 @@ export default function AdminDashboard() {
                 fetchUsers(); // Refresh list
             } else {
                 const data = await res.json();
-                toast.error(data.error || "Failed to update access policy.");
+                toast.error(data.error?.message || data.error || "Failed to update access policy.");
             }
         } catch (error) {
             toast.error("Network instability detected.");
@@ -71,13 +72,16 @@ export default function AdminDashboard() {
     }
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+        <div className="w-full space-y-8 animate-in fade-in duration-500 pb-20 px-3 sm:px-4 lg:px-6">
             <header className="px-2">
                 <div className="flex items-center gap-3 text-red-600 mb-2">
                     <ShieldAlert className="w-5 h-5" />
                     <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">Access Management</h2>
+                <div className="mt-2">
+                    <Breadcrumbs />
+                </div>
                 <p className="text-slate-500 font-medium text-sm mt-1">Approve or revoke access to the Neural Matrix.</p>
             </header>
 

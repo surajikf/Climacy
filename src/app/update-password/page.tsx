@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Server } from "lucide-react";
 import { toast } from "sonner";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function UpdatePasswordPage() {
     const [mounted, setMounted] = useState(false);
@@ -51,6 +52,9 @@ export default function UpdatePasswordPage() {
                             <Server className="w-7 h-7 text-white" />
                         </div>
                         <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">Security Update</h1>
+                        <div className="mt-3 flex justify-center">
+                            <Breadcrumbs />
+                        </div>
                         <p className="text-sm font-medium text-slate-500 mt-2">Establish a new passkey</p>
                     </div>
 

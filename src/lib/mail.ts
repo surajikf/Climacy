@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
 import { getGlobalSettings } from "./settings";
 import path from "path";
-import fs from "fs";
+import prisma from "./prisma";
+import { decrypt } from "./encryption";
 
 interface MailOptions {
     to: string;
@@ -13,11 +14,28 @@ interface MailOptions {
 export async function sendStrategicEmail({ to, subject, text, html }: MailOptions) {
     // --- Tactical Credential Retrieval (Dynamic) ---
     const settings = await getGlobalSettings();
-
-    const user = settings.googleEmail;
     const clientId = settings.googleClientId;
     const clientSecret = settings.googleClientSecret;
-    const refreshToken = settings.googleRefreshToken;
+
+    // Prefer the currently connected default Gmail identity (single source of truth).
+    // This avoids stale legacy singleton values causing OAuth mismatch (535).
+    let user = settings.googleEmail;
+    let refreshToken = settings.googleRefreshToken;
+    try {
+        const defaultAccount = await (prisma.gmailAccount as any).findFirst({
+            where: { isDefault: true },
+            orderBy: { updatedAt: "desc" },
+        });
+
+        if (defaultAccount) {
+            user = defaultAccount.email || user;
+            refreshToken = defaultAccount.refreshTokenEncrypted
+                ? decrypt(defaultAccount.refreshTokenEncrypted)
+                : refreshToken;
+        }
+    } catch {
+        // Keep existing fallback path (settings table / env).
+    }
 
     const isConfigurationValid = user && clientId && clientSecret && refreshToken;
 
@@ -30,6 +48,27 @@ export async function sendStrategicEmail({ to, subject, text, html }: MailOption
     }
 
     try {
+        // Preflight refresh-token exchange so we can fail with precise guidance.
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                client_id: clientId,
+                client_secret: clientSecret,
+                refresh_token: refreshToken,
+                grant_type: "refresh_token",
+            }),
+        });
+
+        if (!tokenResponse.ok) {
+            const tokenErr = await tokenResponse.text();
+            console.error("[MAIL] OAuth refresh preflight failed:", tokenErr);
+            return {
+                success: false,
+                error: "Google OAuth refresh failed. Reconnect Gmail identity in Settings (Connect New Identity) and set it as Default.",
+            };
+        }
+
         console.log(`[MAIL] Attempting dispatch to ${to} using ${user}`);
         console.log(`[MAIL] Config: ClientID: ${clientId?.substring(0, 5)}... ClientSecret: ${clientSecret?.substring(0, 5)}... RefreshToken: ${refreshToken?.substring(0, 5)}...`);
 

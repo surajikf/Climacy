@@ -18,10 +18,14 @@ export async function GET(request: Request) {
         const clientId = decrypt(settings.googleClientIdEncrypted);
         const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
 
-        // We need these scopes for reading email headers and identifying the user
+        // Request scopes needed for both:
+        // 1) Gmail import (read)
+        // 2) Campaign/test dispatch via Gmail OAuth2 SMTP (send)
         const scopes = [
             "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/gmail.readonly"
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://mail.google.com/"
         ].join(" ");
 
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, User, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function RegisterPage() {
     const [name, setName] = useState("");
@@ -45,7 +46,7 @@ export default function RegisterPage() {
                     router.refresh();
                 }
             } else {
-                toast.error(data.error || "Profile initialization failed.");
+                toast.error(data.error?.message || data.error || "Profile initialization failed.");
                 setLoading(false);
             }
         } catch (error) {
@@ -68,6 +69,9 @@ export default function RegisterPage() {
                             <ShieldAlert className="w-7 h-7 text-white" />
                         </div>
                         <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">Request Access</h1>
+                        <div className="mt-3 flex justify-center">
+                            <Breadcrumbs />
+                        </div>
                         <p className="text-sm font-medium text-slate-500 mt-2">Level-5 Clearance Required</p>
                     </div>
 

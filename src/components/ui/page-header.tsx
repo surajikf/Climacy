@@ -6,10 +6,11 @@ interface PageHeaderProps {
   subtitle?: string;
   eyebrow?: string;
   actions?: React.ReactNode;
+  belowTitle?: React.ReactNode;
   className?: string;
 }
 
-export function PageHeader({ title, subtitle, eyebrow, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, eyebrow, actions, belowTitle, className }: PageHeaderProps) {
   return (
     <header
       className={cn(
@@ -26,6 +27,7 @@ export function PageHeader({ title, subtitle, eyebrow, actions, className }: Pag
         <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
           {title}
         </h2>
+        {belowTitle && <div className="mt-2">{belowTitle}</div>}
         {subtitle && (
           <p className="text-sm font-medium text-slate-500">{subtitle}</p>
         )}

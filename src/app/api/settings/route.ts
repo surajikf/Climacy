@@ -8,8 +8,6 @@ const MASK = "••••••••••••••••";
 const settingsSchema = z.object({
     aiProvider: z.string().min(1),
     aiModel: z.string().min(1),
-    brandResonance: z.string().min(1),
-    signature: z.string().min(1),
     groqApiKey: z.string().optional(),
     openaiApiKey: z.string().optional(),
     googleClientId: z.string().optional(),
@@ -27,8 +25,6 @@ export async function GET() {
             return ok({
                 aiProvider: "Groq",
                 aiModel: "llama-3.3-70b-versatile",
-                brandResonance: "Strategic, insightful, and helpful.",
-                signature: "Best regards,\nStrategic Partnership Team",
             });
         }
 
@@ -40,8 +36,6 @@ export async function GET() {
             return ok({
                 aiProvider: "Groq",
                 aiModel: "llama-3.3-70b-versatile",
-                brandResonance: "Strategic, insightful, and helpful.",
-                signature: "Best regards,\nStrategic Partnership Team",
                 groqApiKey: "",
                 openaiApiKey: "",
                 googleClientId: "",

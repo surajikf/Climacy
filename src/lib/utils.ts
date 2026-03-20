@@ -7,10 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getSmartGreeting(contactPerson?: string | null) {
     if (!contactPerson || !contactPerson.trim()) {
-        return "Hello Sir/Ma'am";
+        return "Dear Sir/Ma'am";
     }
     const firstName = getFirstName(contactPerson);
-    return `Hello ${firstName}`;
+    if (!firstName) return "Dear Sir/Ma'am";
+    return `Dear ${firstName}`;
 }
 
 export function getFirstName(contactPerson?: string | null) {
@@ -38,11 +39,13 @@ export function replaceVariables(content: string, client: any) {
         firstName: getFirstName(client.contactPerson || client.poc),
         lastName: getLastName(client.contactPerson || client.poc),
         fullName: client.contactPerson || client.poc || "Valued Partner",
-        companyName: client.clientName || "Acme Corp",
-        industry: client.industry || "SaaS",
-        services: client.invoiceServiceNames || "your business infrastructure",
-        location: client.address || "your headquarters",
-        relationship: client.relationshipLevel || "Valued Partner",
+        // Use neutral corporate phrasing when the specific client details are missing.
+        // Avoid fake defaults like "Acme Corp" which can make emails feel templated/AI-generated.
+        companyName: client.clientName || "your organization",
+        industry: client.industry || "your industry",
+        services: client.invoiceServiceNames || "your current offering",
+        location: client.address || "your team",
+        relationship: client.relationshipLevel || "your current priorities",
         tenureYears: client.clientAddedOn ? (new Date().getFullYear() - new Date(client.clientAddedOn).getFullYear()).toString() : "0"
     };
 

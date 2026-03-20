@@ -1117,3 +1117,8 @@ HINT: You will need to rewrite or cast the expression.`
 [2026-03-19T06:20:52.802Z] [Zoho Sync] Successfully synced client: ABC Company (Role-Based: false)
 [2026-03-19T06:20:54.429Z] [Zoho Sync] Successfully synced client: Zylker Corp (Role-Based: true)
 [2026-03-19T06:20:54.475Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...
+[2026-03-19T11:58:04.860Z] Total Deals fetched from Zoho: 2
+[2026-03-19T11:58:04.895Z] Deals after filtering: 2
+[2026-03-19T11:58:07.018Z] [Zoho Sync] Successfully synced client: ABC Company (Role-Based: false)
+[2026-03-19T11:58:09.153Z] [Zoho Sync] Successfully synced client: Zylker Corp (Role-Based: true)
+[2026-03-19T11:58:09.156Z] [STRICT_SYNC] Initiating cleanup for source ZOHO_BIGIN...

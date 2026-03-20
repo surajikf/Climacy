@@ -32,8 +32,10 @@ import { SmartLoader } from "@/components/SmartLoader";
 import { toast } from "sonner";
 import { ClientPickerModal } from "@/components/ClientPickerModal";
 import { RichTextEditor } from "@/components/RichTextEditor";
-import { wrapInPremiumTemplate } from "@/lib/email-template";
+import { wrapInEmailTemplate } from "@/lib/email-template";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { sanitizeEmailHtml } from "@/lib/email-sanitize";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 const campaignTypes = [
     { id: "Broadcast", name: "Broadcast", desc: "Wide-angle communication for large-scale synchronization.", icon: Radio, target: "Active & Warm Leads", bestFor: "Strategic pivots or major infrastructure news." },
@@ -71,6 +73,7 @@ export default function CampaignGenerator() {
     const [editedSubject, setEditedSubject] = useState("");
     const [editedBody, setEditedBody] = useState("");
     const [reviewTab, setReviewTab] = useState<"edit" | "preview">("edit");
+    // Email templates were removed; emails are always wrapped in the default "standard" format.
     
     // Client Selection State
     const [targetClients, setTargetClients] = useState<any[]>([]);
@@ -85,6 +88,16 @@ export default function CampaignGenerator() {
     const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
     const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
     const [showSubjectSuggestions, setShowSubjectSuggestions] = useState(false);
+    const [sampleQuality, setSampleQuality] = useState<number>(0);
+    const [sampleQualityFixes, setSampleQualityFixes] = useState<string[]>([]);
+    const [isAutoRefining, setIsAutoRefining] = useState(false);
+    const [styleMemory, setStyleMemory] = useState<{
+        preferredTone?: string;
+        preferredCtaStyle?: string;
+        avgSentenceLength?: number;
+        prefersConcise?: boolean;
+        learnedPatterns?: string[];
+    }>({});
 
     const toggleExclusion = (id: string) => {
         setExcludedClientIds(prev => 
@@ -169,6 +182,15 @@ export default function CampaignGenerator() {
     }, []);
 
     useEffect(() => {
+        try {
+            const raw = localStorage.getItem("campaignStyleMemory");
+            if (raw) setStyleMemory(JSON.parse(raw));
+        } catch {
+            // ignore malformed cache
+        }
+    }, []);
+
+    useEffect(() => {
         if (!selectedType) return;
         setLoadingAudience(true);
 
@@ -246,7 +268,8 @@ export default function CampaignGenerator() {
                     serviceLogic: serviceLogic,
                     sampleOnly: true,
                     clientId, // Optional specific client
-                    excludedClientIds
+                    excludedClientIds,
+                    styleMemory
                 }),
             });
 
@@ -257,7 +280,9 @@ export default function CampaignGenerator() {
                 const output = JSON.parse(sample.generatedOutput);
                 setSampleData(sample);
                 setEditedSubject(output.subject);
-                setEditedBody(output.body);
+                setEditedBody(sanitizeEmailHtml(normalizeEmailBodyHtml(output.body || "")));
+                setSampleQuality(output.personalizationQuality || 0);
+                setSampleQualityFixes(Array.isArray(output.qualityFixes) ? output.qualityFixes : []);
                 setIsReviewing(true);
             } else {
                 toast.error(data.error?.message || "Failed to generate preview sample.");
@@ -319,8 +344,16 @@ export default function CampaignGenerator() {
             });
             const data = await res.json();
             if (data.success) {
-                setSubjectSuggestions(data.data.suggestions);
+                const ranked = Array.isArray(data.data?.ranked) ? data.data.ranked : [];
+                setSubjectSuggestions(
+                    ranked.length > 0
+                        ? ranked.map((r: any) => `${r.subject}`)
+                        : (data.data?.suggestions || [])
+                );
                 setShowSubjectSuggestions(true);
+                if (Array.isArray(data.data?.warnings) && data.data.warnings.length > 0) {
+                    toast.warning(data.data.warnings[0]);
+                }
             } else {
                 toast.error("Subject optimization failed.");
             }
@@ -332,6 +365,37 @@ export default function CampaignGenerator() {
     };
 
     const handleGenerateAll = async () => {
+        const plain = editedBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        const sentences = plain.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+        const avgSentenceLength = sentences.length
+            ? Math.round(sentences.reduce((acc, s) => acc + s.split(/\s+/).filter(Boolean).length, 0) / sentences.length)
+            : undefined;
+        const nextStyleMemory = {
+            preferredTone: tone,
+            preferredCtaStyle: cta.length > 80 ? "detailed" : "direct",
+            avgSentenceLength,
+            prefersConcise: plain.split(/\s+/).filter(Boolean).length < 180,
+            learnedPatterns: [
+                editedSubject.slice(0, 120),
+                plain.slice(0, 220),
+            ].filter(Boolean),
+        };
+        setStyleMemory(nextStyleMemory);
+        try {
+            localStorage.setItem("campaignStyleMemory", JSON.stringify(nextStyleMemory));
+        } catch {
+            // ignore storage failure
+        }
+
+        if ((editedSubject || "").trim().length < 8) {
+            toast.error("Subject is too short. Add a clearer value-led subject before batch generation.");
+            return;
+        }
+        if ((editedBody || "").replace(/<[^>]*>/g, "").trim().length < 80) {
+            toast.error("Email body is too short for quality outreach. Please add more context.");
+            return;
+        }
+
         setIsGenerating(true);
         try {
             setTerminalStep(3);
@@ -348,14 +412,22 @@ export default function CampaignGenerator() {
                     tone, 
                     cta, 
                     styleGuide: { subject: editedSubject, body: editedBody },
+                    styleMemory: nextStyleMemory,
                     serviceFilters: selectedServices,
                     serviceLogic: serviceLogic,
-                    excludedClientIds: [...excludedClientIds, sampleData?.clientId].filter(Boolean)
+                    excludedClientIds: [...excludedClientIds, sampleData?.clientId].filter(Boolean),
                 }),
             });
 
-            if (res.ok) window.location.href = "/campaigns/results";
-            else toast.error("Batch generation failed.");
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.success) {
+                const jobId = data?.data?.jobId as string | undefined;
+                window.location.href = jobId
+                    ? `/campaigns/results?jobId=${encodeURIComponent(jobId)}`
+                    : "/campaigns/results";
+            } else {
+                toast.error(data?.error?.message || "Batch generation failed.");
+            }
         } catch (err) {
             console.error(err);
             setIsGenerating(false);
@@ -386,13 +458,40 @@ export default function CampaignGenerator() {
                 toast.success("Strategic test dispatch successful!");
                 setTestEmail(""); // Clear after success
             } else {
-                toast.error(data.error || "Tactical bypass failed. Check credentials.");
+                toast.error(data.error?.message || data.error || "Tactical bypass failed. Check credentials.");
             }
         } catch (err) {
             console.error(err);
             toast.error("Network disruption during dispatch.");
         } finally {
             setIsSendingTest(false);
+        }
+    };
+
+    const handleSmartRefine = async (command: string) => {
+        if (!editedBody?.trim()) return;
+        setIsAutoRefining(true);
+        try {
+            const res = await fetch("/api/campaigns/refine", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    text: editedBody,
+                    command,
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.data?.refinedText) {
+                setEditedBody(sanitizeEmailHtml(normalizeEmailBodyHtml(data.data.refinedText)));
+                setHasEditedSinceLoad(true);
+                toast.success("Smart refinement applied.");
+            } else {
+                toast.error(data.error?.message || "Smart refinement failed.");
+            }
+        } catch {
+            toast.error("Unable to run refinement right now.");
+        } finally {
+            setIsAutoRefining(false);
         }
     };
 
@@ -410,12 +509,16 @@ export default function CampaignGenerator() {
             4: "Campaign ready for review..."
         };
 
-        return <SmartLoader label={labels[terminalStep] || "Processing"} description={descs[terminalStep] || "Initializing logic..."} />;
+        return (
+            <div className="w-full pb-20 px-3 sm:px-4 lg:px-6 min-h-[60vh] flex items-center">
+                <SmartLoader label={labels[terminalStep] || "Processing"} description={descs[terminalStep] || "Initializing logic..."} />
+            </div>
+        );
     }
 
     if (isReviewing && sampleData) {
         return (
-            <div className="max-w-[1200px] mx-auto pb-20 px-6">
+            <div className="w-full pb-20 px-3 sm:px-4 lg:px-6">
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <button 
@@ -526,7 +629,7 @@ export default function CampaignGenerator() {
                                                         type="button"
                                                         onClick={() => {
                                                             setEditedSubject(pendingDraft.subject || "");
-                                                            setEditedBody(pendingDraft.bodyHtml || "");
+                                                        setEditedBody(sanitizeEmailHtml(pendingDraft.bodyHtml || ""));
                                                             setDraftRestored(true);
                                                             setPendingDraft(null);
                                                             toast.info("Draft restored.");
@@ -556,7 +659,7 @@ export default function CampaignGenerator() {
                                                 Draft restored and autosaving
                                             </div>
                                         )}
-                                        <div className="space-y-1.5 min-h-[400px]">
+                                        <div className="space-y-1.5 min-h-[600px]">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Email Body (Rich Text control)</label>
                                             <RichTextEditor 
                                                 content={editedBody} 
@@ -569,13 +672,18 @@ export default function CampaignGenerator() {
                                 ) : (
                                     <div className="space-y-6">
                                         <div className="pb-4 border-b border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Subject</p>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject</p>
+                                                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600">
+                                                    Standard
+                                                </span>
+                                            </div>
                                             <h4 className="text-lg font-bold text-slate-900">{editedSubject}</h4>
                                         </div>
-                                        <div className="rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50">
+                                        <div className="rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50 h-[600px]">
                                             <iframe 
-                                                srcDoc={wrapInPremiumTemplate(editedBody, sampleData.clientName, { isPreview: true })}
-                                                className="w-full h-[600px] border-none"
+                                                srcDoc={wrapInEmailTemplate("standard", editedBody, sampleData.clientName, { isPreview: true })}
+                                                className="w-full h-full border-none"
                                                 title="Email Preview"
                                             />
                                         </div>
@@ -624,23 +732,7 @@ export default function CampaignGenerator() {
                                 excludedIds={excludedClientIds}
                             />
 
-                            <div className="space-y-4">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Smart Guidelines</h4>
-                                <ul className="space-y-3">
-                                    {[
-                                        "Keep tone consistent for the batch.",
-                                        "Use {{clientName}} for personalization.",
-                                        "Formatting will be preserved.",
-                                        "HTML tags are supported for styling."
-                                    ].map((guide, i) => (
-                                        <li key={i} className="flex items-center gap-2 text-[11px] font-medium text-slate-600">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                            {guide}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-
+                            
                             <div className="pt-6 border-t border-slate-100 space-y-4">
                                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Test Dispatch</h4>
                                 <div className="space-y-2">
@@ -699,9 +791,12 @@ export default function CampaignGenerator() {
     };
 
     return (
-        <div className="max-w-[1600px] mx-auto pb-20 px-6">
+        <div className="w-full pb-20 px-3 sm:px-4 lg:px-6">
             <div className="mb-8 px-2 md:px-0">
                 <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Campaign Builder</h2>
+                  <div className="mt-2">
+                    <Breadcrumbs />
+                  </div>
                 <p className="text-sm font-medium text-slate-500 mt-1">Configure and deploy intelligent multi-node communications.</p>
             </div>
 
@@ -1016,6 +1111,7 @@ export default function CampaignGenerator() {
                 mode="oversight"
                 excludedIds={excludedClientIds}
                 onToggleExclusion={toggleExclusion}
+                onSetExcludedIds={setExcludedClientIds}
                 onSelect={() => {}}
             />
         </div>

@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SmartLoader } from "@/components/SmartLoader";
 import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function Settings() {
     const [saved, setSaved] = useState(false);
@@ -156,11 +157,12 @@ export default function Settings() {
     };
 
     return (
-        <form onSubmit={handleFormSubmit} className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-500">
+        <form onSubmit={handleFormSubmit} className="w-full space-y-8 pb-20 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
             <PageHeader
                 title="Configuration"
                 subtitle="Manage your system nodes and operational vectors."
                 eyebrow="System Settings"
+                belowTitle={<Breadcrumbs />}
                 actions={
                     <>
                     <button

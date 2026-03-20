@@ -4,286 +4,336 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import {
-  Users,
-  Zap,
-  Activity,
   ChevronRight,
-  Target,
-  BarChart3,
-  Mail,
-  TrendingUp,
-  ArrowUpRight,
   Loader2,
-  Shield,
-  UserCheck
+  CheckCircle2,
+  CircleDashed,
+  AlertTriangle,
+  Database,
+  Users,
+  Activity,
+  Mail,
+  LineChart,
+  RefreshCw,
+  Flame,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
 import { SmartLoader } from "@/components/SmartLoader";
+import { DashboardStatsResponse } from "@/types/dashboard";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export default function Dashboard() {
   const router = useRouter();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DashboardStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchStats();
   }, []);
 
-  const fetchStats = async () => {
+  useEffect(() => {
+    const t = setInterval(() => {
+      fetchStats(true);
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fetchStats = async (silent = false) => {
+    if (silent) setIsRefreshing(true);
+    setLoadError(null);
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/stats");
       const result = await res.json();
       if (result.success) {
         setData(result.data);
+        setLastRefreshedAt(new Date());
+      } else {
+        setLoadError(result.error?.message || "Unable to fetch dashboard insights.");
       }
     } catch (err) {
       console.error(err);
+      setLoadError("Unable to load dashboard right now.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   if (loading) return <SmartLoader label="Analyzing Dashboard" description="Fetching real-time business metrics..." />;
-
-  const totalClients = data?.stats?.totalClients || 0;
-  const activeClients = data?.stats?.activeClients || 0;
-  const pastClients = data?.stats?.pastClients || 0;
-  const integrityScore = data?.integrityScore || 0;
-
-  const healthSuggestions: string[] = [];
-  const opportunitySuggestions: string[] = [];
-  const riskSuggestions: string[] = [];
-
-  if (totalClients > 0 && activeClients / totalClients < 0.5) {
-    opportunitySuggestions.push("Large portion of your database is cold. Consider a Reactivation or Broadcast campaign.");
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 space-y-4 text-center">
+          <AlertTriangle className="w-6 h-6 text-amber-500 mx-auto" />
+          <h2 className="text-lg font-semibold text-slate-900">Dashboard unavailable</h2>
+          <p className="text-sm text-slate-500">{loadError}</p>
+          <button
+            onClick={() => fetchStats(false)}
+            className="w-full py-2.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  if (data?.recentCampaigns?.length === 0 && totalClients > 0) {
-    opportunitySuggestions.push("No recent outreach detected. Launch a quick Broadcast to re-introduce your services.");
-  }
-
-  if (integrityScore < 80) {
-    healthSuggestions.push("Profile Health is below 80%. Improve data quality from Integrations Studio or by enriching client records.");
-  }
-
-  if (pastClients > 0) {
-    riskSuggestions.push("You have past clients in the database. A focused Reactivation campaign could win back business.");
-  }
-
-  if (healthSuggestions.length === 0 && opportunitySuggestions.length === 0 && riskSuggestions.length === 0) {
-    opportunitySuggestions.push("Your system looks healthy. Create a Targeted campaign for your best-fit clients.");
-  }
-
-  const stats = [
-    {
-      label: "Client Database",
-      description: "Total contacts stored",
-      value: data?.stats?.totalClients || 0,
-      icon: Users,
-      trend: data?.stats?.trends?.growth,
-      sparkline: data?.stats?.trends?.sparklines?.clients || [0, 0, 0, 0, 0, 0, 0],
-      color: "blue"
+  const safe = data || {
+    stats: { totalClients: 0, activeClients: 0, warmLeads: 0, pastClients: 0, trends: { clients: "0", engagement: "0", growth: "0%", sparklines: { clients: [], campaigns: [] } } },
+    chartData: [],
+    industryDistribution: [],
+    serviceUtilization: [],
+    integrityScore: 100,
+    recentCampaigns: [],
+    sourceStats: { zoho: 0, invoice: 0, gmail: [] },
+    dataHealth: { completeness: 100, staleRecords: 0, profileIntegrity: 100 },
+    audienceState: { activeRatio: 0, warmRatio: 0, pastRatio: 0, noContact30d: 0 },
+    campaignState: { lastCampaignAt: null, campaigns7d: 0, campaigns30d: 0, testDispatchFailures: 0 },
+    recommendedAction: {
+      actionType: "launch_targeted",
+      reason: "No immediate risk detected.",
+      impactEstimate: "Start a focused campaign for your best-fit audience.",
+      targetCount: 0,
+      ctaRoute: "/campaigns",
     },
+    processChecklist: [],
+    updatedAt: new Date().toISOString(),
+    confidence: "Low" as const,
+  };
+
+  const summaryCards = [
+    { id: "database", label: "Database", value: safe.stats.totalClients, sub: "total clients", icon: Database },
+    { id: "activeRatio", label: "Active Ratio", value: `${safe.audienceState.activeRatio}%`, sub: "currently active", icon: Users },
     {
-      label: "Active Clients",
-      description: "Recently engaged contacts",
-      value: data?.stats?.activeClients || 0,
-      icon: UserCheck,
-      sparkline: [12, 15, 14, 18, 22, 25, 24],
-      color: "indigo"
+      id: "lastOutreach",
+      label: "Last Outreach",
+      value: safe.campaignState.lastCampaignAt
+        ? formatDistanceToNow(new Date(safe.campaignState.lastCampaignAt), { addSuffix: true })
+        : "No outreach yet",
+      sub: "campaign recency",
+      icon: Activity,
     },
-    {
-      label: "Email Impact",
-      description: "Total messages sent",
-      value: (data?.stats?.trends?.engagement || "0").toString().replace('+', '') || 0,
-      icon: Mail,
-      sparkline: data?.stats?.trends?.sparklines?.campaigns || [0, 0, 0, 0, 0, 0, 0],
-      color: "emerald"
-    },
-    {
-      label: "Growth Trend",
-      description: "Monthly database expansion",
-      value: data?.stats?.trends?.growth || "0%",
-      icon: TrendingUp,
-      sparkline: [2, 4, 3, 5, 8, 12, 15],
-      color: "amber"
-    }
   ];
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="flex-1 w-full max-w-[1280px] mx-auto p-4 md:p-8 lg:p-10 space-y-10">
-        {/* Modern Compact Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-200">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-slate-900 rounded-lg">
-                <Activity className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Analytics Engine v1.0</span>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-            <p className="text-xs font-medium text-slate-500">
-              Monitoring <span className="text-slate-900 font-bold">{totalClients} clients</span> across your strategic matrix.
-            </p>
-          </div>
+  const maxTrendValue = Math.max(1, ...(safe.chartData || []).map((d) => d.value || 0));
+  const clientSpark = safe?.stats?.trends?.sparklines?.clients || [];
+  const campaignSpark = safe?.stats?.trends?.sparklines?.campaigns || [];
+  const clientDelta = clientSpark.length > 1 ? clientSpark[clientSpark.length - 1] - clientSpark[0] : 0;
+  const campaignDelta = campaignSpark.length > 1 ? campaignSpark[campaignSpark.length - 1] - campaignSpark[0] : 0;
+  const activeWarmTotal = Math.max(1, safe.stats.activeClients + safe.stats.warmLeads + safe.stats.pastClients);
 
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="w-full px-4 md:px-8 xl:px-10 py-6 space-y-5">
+        <header className="bg-card border border-border rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">Operations Console</p>
+            <h1 className="text-2xl md:text-3xl font-semibold text-foreground">Dashboard</h1>
+            <div className="mt-2">
+              <Breadcrumbs />
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">One place to decide: what needs attention and what to do next.</p>
+          </div>
           <div className="flex items-center gap-3">
+            <div className="text-xs text-muted-foreground">
+              Updated {formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })} · Confidence {safe.confidence}
+              {lastRefreshedAt ? ` · Refreshed ${formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}` : ""}
+            </div>
             <button
-              onClick={() => router.push("/clients")}
-              title="Navigate to the full client database."
-              className="group flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition-all active:scale-95 shadow-lg shadow-slate-900/10"
+              onClick={() => fetchStats(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
             >
-              Open Matrix
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
             </button>
           </div>
         </header>
 
-        {/* Global Stats - Compact Grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              title={`${stat.label}: ${stat.description}`}
-              className="group bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-default"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-2.5 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl group-hover:bg-${stat.color}-600 group-hover:text-white transition-colors duration-300`}>
-                  <stat.icon className="w-4 h-4" />
-                </div>
-                {stat.trend && (
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                    {stat.trend}
-                  </span>
-                )}
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {summaryCards.map((card) => (
+            <div key={card.id} className="bg-card border border-border rounded-2xl px-4 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">{card.label}</span>
+                <card.icon className="w-4 h-4 text-muted-foreground" />
               </div>
-
-              <div className="space-y-0.5">
-                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</h3>
-                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{stat.value}</h2>
-                <p className="text-[10px] text-slate-500 font-medium h-0 overflow-hidden group-hover:h-auto transition-all duration-300 pt-1">
-                  {stat.description}
-                </p>
-              </div>
-            </motion.div>
+              <div className="text-xl font-semibold text-foreground">{card.value}</div>
+              <div className="text-xs text-muted-foreground">{card.sub}</div>
+            </div>
           ))}
+          <div className="bg-card border border-border rounded-2xl px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">Profile Health</div>
+            <div className="text-xl font-semibold text-foreground">{safe.dataHealth.profileIntegrity}%</div>
+            <div className="text-xs text-muted-foreground">data integrity</div>
+          </div>
         </section>
 
-        {/* Intelligence Layer */}
-        <div className="grid lg:grid-cols-12 gap-8 items-start">
-          {/* Activity Trends */}
-          <div className="lg:col-span-8">
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-              <div className="flex flex-col mb-10 space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-                  <h3 className="text-lg font-bold text-slate-900">Communication Pulse</h3>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+          <section className="xl:col-span-4 bg-card border border-border rounded-2xl p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold mb-2">Next Best Action</p>
+            <h2 className="text-lg font-semibold text-foreground mb-2">{safe.recommendedAction.actionType.replace(/_/g, " ")}</h2>
+            <p className="text-sm text-muted-foreground mb-2">{safe.recommendedAction.reason}</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Impact: {safe.recommendedAction.impactEstimate} · Target: {safe.recommendedAction.targetCount}
+            </p>
+            <button
+              onClick={() => router.push(safe.recommendedAction.ctaRoute)}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+            >
+              Take Action
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </section>
+
+          <section className="xl:col-span-5 bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-foreground">Today&apos;s Process</h3>
+              <button onClick={() => router.push("/campaigns")} className="text-xs text-muted-foreground hover:text-foreground">Open campaigns</button>
+            </div>
+            <div className="space-y-2">
+              {(safe.processChecklist || []).map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 border border-border rounded-xl px-3 py-2">
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {item.status === "done" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : item.status === "in_progress" ? (
+                        <Loader2 className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
+                      ) : (
+                        <CircleDashed className="w-4 h-4 text-muted-foreground shrink-0" />
+                      )}
+                      <span className="text-sm text-foreground truncate">{item.label}</span>
+                    </div>
+                    {item.details ? (
+                      <div className="text-[11px] text-muted-foreground truncate mt-1">{item.details}</div>
+                    ) : null}
+                  </div>
+                  <button onClick={() => router.push(item.route)} className="text-xs text-muted-foreground hover:text-foreground">Open</button>
                 </div>
-                <p className="text-xs text-slate-500 font-medium italic">Analyzed daily outreach volume across your network.</p>
-              </div>
-
-              <div className="h-[280px] flex items-end gap-4 px-2">
-                {data?.chartData?.map((item: any, i: number) => {
-                  const maxValue = Math.max(...data.chartData.map((d: any) => d.value), 1);
-                  const height = (item.value / maxValue) * 100;
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-3 group/bar h-full">
-                      <div className="w-full relative flex flex-col justify-end h-full">
-                        <div 
-                          className="w-full bg-slate-50 rounded-xl group-hover/bar:bg-slate-100 transition-all relative h-full border border-slate-100"
-                          title={`${item.label}: ${item.value} units`}
-                        >
-                          <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: `${height}%` }}
-                            transition={{ duration: 1, delay: i * 0.05 }}
-                            className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-xl group-hover/bar:bg-blue-600 transition-colors"
-                          />
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              ))}
+              {(safe.processChecklist || []).length === 0 && (
+                <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-3">
+                  No process steps available yet. Start from Integrations.
+                </div>
+              )}
             </div>
-          </div>
-
-          {/* Side Intelligence */}
-          <aside className="lg:col-span-4 space-y-8">
-            {/* Source Breakdown */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Data Sources</h3>
-                <p className="text-[10px] text-slate-500 font-medium">Provenance breakdown</p>
+            <div className="mt-4 pt-3 border-t border-border">
+              <div className="flex items-center gap-2 mb-2">
+                <LineChart className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground">7-day Outreach Trend</span>
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  {campaignDelta >= 0 ? "+" : ""}{campaignDelta} weekly change
+                </span>
               </div>
-              
-              <div className="space-y-3">
-                {[
-                  { label: "Zoho Bigin", value: data?.sourceStats?.zoho, icon: Zap, color: "blue" },
-                  { label: "Invoice System", value: data?.sourceStats?.invoice, icon: Target, color: "emerald" },
-                ].map((item, idx) => (
-                  <div 
-                    key={idx} 
-                    className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-900 group transition-all rounded-2xl border border-slate-100 cursor-help"
-                    title={`Source: ${item.label}. Total: ${item.value || 0}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 bg-white text-slate-400 rounded-lg group-hover:bg-slate-800 transition-colors`}>
-                        <item.icon className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="text-[11px] font-bold text-slate-600 group-hover:text-white transition-colors">{item.label}</span>
+              <div className="h-20 flex items-end gap-2">
+                {(safe.chartData || []).map((point) => (
+                  <div key={point.label} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full h-14 bg-muted rounded-md relative overflow-hidden">
+                      <div
+                        className="absolute bottom-0 inset-x-0 bg-primary rounded-md"
+                        style={{ height: `${Math.max(6, Math.round((point.value / maxTrendValue) * 100))}%` }}
+                      />
                     </div>
-                    <span className="text-sm font-bold text-slate-900 group-hover:text-white transition-colors">{item.value || 0}</span>
-                  </div>
-                ))}
-
-                {data?.sourceStats?.gmail?.map((g: any, i: number) => (
-                  <div 
-                    key={i} 
-                    className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-900 group transition-all rounded-2xl border border-slate-100 cursor-help"
-                    title={`Direct import from: ${g.email}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 bg-white text-slate-400 rounded-lg group-hover:bg-slate-800 transition-colors shrink-0">
-                        <Mail className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="text-[11px] font-bold text-slate-600 group-hover:text-white transition-colors truncate">{g.email}</span>
-                    </div>
-                    <span className="text-sm font-bold text-slate-900 group-hover:text-white transition-colors">{g.count}</span>
+                    <span className="text-[10px] text-muted-foreground">{point.label}</span>
                   </div>
                 ))}
               </div>
             </div>
+          </section>
 
-            {/* Outreach Accelerator */}
-            <div className="p-8 bg-slate-900 rounded-3xl shadow-xl space-y-6">
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-white tracking-tight">Expand Reach</h3>
-                <p className="text-slate-400 text-[10px] font-medium leading-relaxed">
-                  Initiate AI-assisted outreach cycles to drive strategic growth.
-                </p>
-              </div>
-              <button 
-                onClick={() => router.push("/campaigns")}
-                className="w-full py-3.5 bg-white text-slate-900 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-              >
-                Start Campaign
-                <Zap className="w-3.5 h-3.5 fill-current" />
-              </button>
+          <aside className="xl:col-span-3 bg-card border border-border rounded-2xl p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-foreground">Live Details</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">No contact 30d</span><span className="font-medium text-foreground">{safe.audienceState.noContact30d}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Campaigns (7d)</span><span className="font-medium text-foreground">{safe.campaignState.campaigns7d}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Campaigns (30d)</span><span className="font-medium text-foreground">{safe.campaignState.campaigns30d}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Client trend (7d)</span><span className="font-medium text-foreground">{clientDelta >= 0 ? "+" : ""}{clientDelta}</span></div>
             </div>
+            <div className="pt-2 border-t border-border space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Audience Mix</span>
+                <span className="text-muted-foreground">{safe.stats.activeClients + safe.stats.warmLeads + safe.stats.pastClients} tracked</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                <div className="bg-emerald-500" style={{ width: `${Math.round((safe.stats.activeClients / activeWarmTotal) * 100)}%` }} />
+                <div className="bg-amber-500" style={{ width: `${Math.round((safe.stats.warmLeads / activeWarmTotal) * 100)}%` }} />
+                <div className="bg-slate-400" style={{ width: `${Math.round((safe.stats.pastClients / activeWarmTotal) * 100)}%` }} />
+              </div>
+              <div className="grid grid-cols-3 text-[11px] text-muted-foreground gap-2">
+                <div className="text-center">Active {safe.stats.activeClients}</div>
+                <div className="text-center">Warm {safe.stats.warmLeads}</div>
+                <div className="text-center">Past {safe.stats.pastClients}</div>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-border">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mb-2">Sources</div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Invoice</span><span className="text-foreground font-medium">{safe.sourceStats.invoice}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Zoho</span><span className="text-foreground font-medium">{safe.sourceStats.zoho}</span></div>
+                {safe.sourceStats.gmail.slice(0, 2).map((g) => (
+                  <div key={g.email} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground truncate">{g.email}</span>
+                    <span className="text-foreground font-medium">{g.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/clients")}
+              className="w-full py-2.5 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Review Clients
+            </button>
           </aside>
         </div>
+
+        <section className="bg-card border border-border rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground">Recent Campaign Activity</h3>
+            <button onClick={() => router.push("/campaigns/results")} className="text-xs text-muted-foreground hover:text-foreground">
+              View all
+            </button>
+          </div>
+          {safe.recentCampaigns.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No campaign activity yet. Start your first campaign to populate this feed.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+              {safe.recentCampaigns.slice(0, 4).map((c) => (
+                <div key={c.id} className="border border-border rounded-xl px-3 py-2">
+                  <div className="text-sm font-medium text-foreground truncate">{c.clientName}</div>
+                  <div className="text-xs text-muted-foreground">{c.type} · {c.industry}</div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(c.date), { addSuffix: true })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-card border border-border rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Flame className="w-4 h-4 text-amber-500" />
+            <h3 className="text-sm font-semibold text-foreground">What Changed This Week</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="border border-border rounded-xl p-3">
+              <p className="text-muted-foreground mb-1">Client growth signal</p>
+              <p className="text-foreground font-medium">{safe.stats.trends.growth} vs total base</p>
+            </div>
+            <div className="border border-border rounded-xl p-3">
+              <p className="text-muted-foreground mb-1">Campaign momentum</p>
+              <p className="text-foreground font-medium">{campaignDelta >= 0 ? "Improving" : "Cooling"} ({campaignDelta >= 0 ? "+" : ""}{campaignDelta})</p>
+            </div>
+            <div className="border border-border rounded-xl p-3">
+              <p className="text-muted-foreground mb-1">Data quality pressure</p>
+              <p className="text-foreground font-medium">{safe.dataHealth.staleRecords} stale records need follow-up</p>
+            </div>
+          </div>
+        </section>
       </div>
-      
-      <footer className="h-20 shrink-0 flex items-center justify-center border-t border-slate-200 mt-10">
-        <div className="h-1 w-16 bg-slate-200 rounded-full" />
-      </footer>
     </div>
   );
 }
