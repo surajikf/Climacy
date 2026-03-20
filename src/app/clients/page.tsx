@@ -411,7 +411,7 @@ export default function ClientManager() {
                 setNewServiceData({ serviceName: "", category: "Digital", description: "" });
             } else {
                 const data = await res.json();
-                toast.error(data.error || "Failed to sync service record.");
+                toast.error(data.error?.message || data.error || "Failed to sync service record.");
             }
         } catch (err) {
             console.error(err);

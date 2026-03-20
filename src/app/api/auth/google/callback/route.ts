@@ -63,10 +63,27 @@ export async function GET(request: Request) {
             where: { isDefault: true }
         });
 
+        const existingAccount = await (prisma.gmailAccount as any).findUnique({
+            where: { email },
+        });
+
+        const refreshTokenEncrypted =
+            refresh_token
+                ? encrypt(refresh_token)
+                : existingAccount?.refreshTokenEncrypted || null;
+
+        // If Google did not return refresh_token and we don't already have one,
+        // this account cannot send mail with OAuth2.
+        if (!refreshTokenEncrypted) {
+            return NextResponse.redirect(
+                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings?auth=error&reason=no_refresh_token`
+            );
+        }
+
         const accountData: any = {
             email,
             accountName: state || email.split('@')[0], // Use state (label) OR email prefix
-            refreshTokenEncrypted: refresh_token ? encrypt(refresh_token) : undefined,
+            refreshTokenEncrypted,
             accessTokenEncrypted: encrypt(access_token),
             expiresAt,
             isDefault: !defaultAccount, // Make default if none exist

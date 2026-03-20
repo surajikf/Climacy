@@ -3,7 +3,9 @@ import { isRoleBasedEmail } from "@/lib/email-utils";
 import { XMLParser } from "fast-xml-parser";
 import { ok, error } from "@/lib/api-response";
 import { createClient } from "@/lib/supabase/server";
-import { getGlobalSettings } from "@/lib/settings";
+import { DEFAULT_INVOICE_API_URL, getGlobalSettings } from "@/lib/settings";
+import { extractInvoiceClientRows } from "@/lib/invoice-xml";
+import { after } from "next/server";
 
 export async function POST(req: Request) {
     try {
@@ -19,19 +21,37 @@ export async function POST(req: Request) {
         }
 
         const settings = await getGlobalSettings();
-        const INVOICE_BASE_URL = settings.invoiceApiUrl || "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients";
+        const INVOICE_BASE_URL =
+            settings.invoiceApiUrl?.trim() || DEFAULT_INVOICE_API_URL;
+        const invoiceApiKey = settings.invoiceApiKey?.trim() || "";
+        /** If set (e.g. apikey), send INVOICE_API_KEY as query param instead of X-API-Key header */
+        const invoiceKeyQueryName = process.env.INVOICE_API_KEY_QUERY_NAME?.trim() || "";
+
         const REQUEST_TIMEOUT_MS = 30000;
         const urlObj = new URL(req.url);
         const mode = (urlObj.searchParams.get("mode") || "fast").toLowerCase();
 
-        // 1. Fetch data in parallel
+        // 1. Fetch data from invoice service.
+        // Fast mode prioritizes a quick response path to avoid reverse-proxy timeouts.
         const fetchClientsByStatus = async (status: "Y" | "N") => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
             try {
-                const url = `${INVOICE_BASE_URL}?status=${encodeURIComponent(status)}`;
-                const response = await fetch(url, {
-                    headers: { "Accept": "application/xml" },
+                const endpoint = new URL(INVOICE_BASE_URL);
+                endpoint.searchParams.set("status", status);
+                if (invoiceApiKey && invoiceKeyQueryName) {
+                    endpoint.searchParams.set(invoiceKeyQueryName, invoiceApiKey);
+                }
+
+                const headers: Record<string, string> = {
+                    Accept: "application/xml",
+                };
+                if (invoiceApiKey && !invoiceKeyQueryName) {
+                    headers["X-API-Key"] = invoiceApiKey;
+                }
+
+                const response = await fetch(endpoint.toString(), {
+                    headers,
                     signal: controller.signal,
                     next: { revalidate: 0 },
                 });
@@ -48,43 +68,6 @@ export async function POST(req: Request) {
             }
         };
 
-        const [yResults, nResults] = await Promise.allSettled([
-            fetchClientsByStatus("Y"),
-            fetchClientsByStatus("N")
-        ]);
-
-        const ySync = yResults.status === "fulfilled" ? yResults.value : null;
-        const nSync = nResults.status === "fulfilled" ? nResults.value : null;
-
-        if (!ySync && !nSync) {
-            throw new Error(`Critical failure: Both nodes failed to fetch from ${INVOICE_BASE_URL}. Ensure this endpoint is publically accessible.`);
-        }
-
-        // Recursive helper to find the array of clients
-        const findClientsRecursive = (obj: any): any[] | null => {
-            if (!obj || typeof obj !== 'object') return null;
-            if (obj.ActiveClientDto) return Array.isArray(obj.ActiveClientDto) ? obj.ActiveClientDto : [obj.ActiveClientDto];
-            if (obj.ClientDto) return Array.isArray(obj.ClientDto) ? obj.ClientDto : [obj.ClientDto];
-            if (obj.Client) return Array.isArray(obj.Client) ? obj.Client : [obj.Client];
-            if (obj.ClientName || obj.Customerid) return [obj];
-
-            for (const key of Object.keys(obj)) {
-                if (typeof obj[key] !== 'object') continue;
-                const found = findClientsRecursive(obj[key]);
-                if (found) return found;
-            }
-            return null;
-        };
-
-        const activeArray = (findClientsRecursive(ySync?.jsonObj) || []).map(c => ({ ...c, invoiceStatus: "Y" }));
-        const inactiveArray = (findClientsRecursive(nSync?.jsonObj) || []).map(c => ({ ...c, invoiceStatus: "N" }));
-
-        // Deduplicate: If a client is in both, prefer Active ('Y')
-        const activeIds = new Set(activeArray.map(c => String(c.Customerid || c.customerid || "")));
-        const filteredInactive = inactiveArray.filter(c => !activeIds.has(String(c.Customerid || c.customerid || "")));
-
-        console.log(`[INVOICE_SYNC] Nodes found - Active: ${activeArray.length}, Inactive (unique): ${filteredInactive.length}`);
-
         // Helper to find value by key
         const findValue = (obj: any, targetKey: string) => {
             if (!obj || typeof obj !== 'object') return null;
@@ -100,10 +83,6 @@ export async function POST(req: Request) {
             const parsed = new Date(String(dateStr));
             return isNaN(parsed.getTime()) ? null : parsed;
         };
-
-        // Cache services to speed up upserts
-        const existingServices = await prisma.service.findMany({ select: { serviceName: true } });
-        const knownServices = new Set(existingServices.map(s => s.serviceName));
 
         const upsertOne = async (rawClient: any) => {
             const externalId = String(findValue(rawClient, 'customerid') || "");
@@ -163,34 +142,110 @@ export async function POST(req: Request) {
             await Promise.allSettled(executing);
         };
 
-        // Foreground Phase: Active Clients (Sync)
+        const buildClientArrays = async (includeInactive: boolean) => {
+            const ySync = await fetchClientsByStatus("Y");
+            const nSync = includeInactive ? await fetchClientsByStatus("N") : null;
+
+            const activeArray = extractInvoiceClientRows(ySync?.jsonObj).map((c) => ({
+                ...c,
+                invoiceStatus: "Y",
+            }));
+            const inactiveArray = extractInvoiceClientRows(nSync?.jsonObj).map((c) => ({
+                ...c,
+                invoiceStatus: "N",
+            }));
+
+            if (activeArray.length === 0) {
+                console.warn(
+                    "[INVOICE_SYNC] No active clients parsed from XML. Check ASMX response shape (SOAP/CDATA) and field names.",
+                );
+            }
+
+            const activeIds = new Set(activeArray.map(c => String(c.Customerid || c.customerid || "")));
+            const filteredInactive = inactiveArray.filter(c => !activeIds.has(String(c.Customerid || c.customerid || "")));
+            return { activeArray, filteredInactive };
+        };
+
+        // Fast mode must return quickly for IIS/ARR environments.
+        // Run fetch/parse/writes in background and acknowledge immediately.
+        if (mode === "fast") {
+            after(async () => {
+                try {
+                    console.log("[INVOICE_SYNC_BG] Starting background processing (fast mode)...");
+                    const { activeArray, filteredInactive } = await buildClientArrays(true);
+                    const totalBackground = activeArray.length + filteredInactive.length;
+                    let bgCount = 0;
+                    await runPool(activeArray, 6, async (c) => {
+                        try {
+                            await upsertOne(c);
+                            bgCount++;
+                        } catch (e) {
+                            console.error("Active upsert failed:", e);
+                        }
+                    });
+                    await runPool(filteredInactive, 5, async (c) => {
+                        try {
+                            await upsertOne(c);
+                            bgCount++;
+                        } catch (e) {
+                            console.error("Inactive upsert failed:", e);
+                        }
+                    });
+                    console.log(
+                        `[INVOICE_SYNC_BG] Completed. Processed ${bgCount}/${totalBackground} records (fast mode).`,
+                    );
+                } catch (e) {
+                    console.error("[INVOICE_SYNC_BG] Fatal background sync error:", e);
+                }
+            });
+
+            return ok({
+                count: 0,
+                message: "Sync started in background.",
+                partial: {
+                    backgroundSyncScheduled: true,
+                    backgroundActiveCount: null,
+                    inactiveCount: null,
+                    mode
+                }
+            });
+        }
+
+        // Full mode: process all active in foreground, then inactive in background.
+        const { activeArray, filteredInactive } = await buildClientArrays(true);
+        console.log(`[INVOICE_SYNC] Nodes found - Active: ${activeArray.length}, Inactive (unique): ${filteredInactive.length}`);
         let activeImported = 0;
-        console.log(`[INVOICE_SYNC] Processing ${activeArray.length} Active clients synchronously...`);
+        console.log(`[INVOICE_SYNC] Processing ${activeArray.length} Active clients synchronously (mode=full)...`);
         await runPool(activeArray, 10, async (c) => {
             try { await upsertOne(c); activeImported++; } catch (e) { console.error("Upsert failed:", e); }
         });
 
-        // Background Phase: Inactive Clients (Async)
         const totalInactive = filteredInactive.length;
         if (totalInactive > 0) {
             console.log(`[INVOICE_SYNC] Scheduling background sync for ${totalInactive} inactive clients.`);
-            setTimeout(async () => {
-                console.log("[INVOICE_SYNC_BG] Starting background processing...");
+            after(async () => {
+                console.log("[INVOICE_SYNC_BG] Starting background processing (full mode)...");
                 let bgCount = 0;
                 await runPool(filteredInactive, 5, async (c) => {
-                    try { await upsertOne(c); bgCount++; } catch (e) {}
+                    try {
+                        await upsertOne(c);
+                        bgCount++;
+                    } catch (e) {
+                        console.error("Inactive upsert failed:", e);
+                    }
                 });
                 console.log(`[INVOICE_SYNC_BG] Completed. Processed ${bgCount}/${totalInactive} inactive records.`);
-            }, 1000);
+            });
         }
 
         return ok({
             count: activeImported,
-            message: totalInactive > 0 
+            message: totalInactive > 0
                 ? `Active clients synced (${activeImported}). Inactive sync (${totalInactive}) running in background.`
                 : `Successfully synced ${activeImported} clients.`,
             partial: {
                 backgroundSyncScheduled: totalInactive > 0,
+                backgroundActiveCount: 0,
                 inactiveCount: totalInactive,
                 mode
             }

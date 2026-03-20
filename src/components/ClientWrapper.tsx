@@ -32,9 +32,17 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
                 )}
             </AnimatePresence>
 
-            <div className={`flex bg-background min-h-screen ${isAuthPage ? "items-center justify-center" : ""}`}>
+            <div className={`flex bg-background min-h-screen w-full ${isAuthPage ? "items-center justify-center" : ""}`}>
                 {!isAuthPage && <Sidebar />}
-                <main className={cn(isAuthPage ? "w-full" : isDashboard ? "flex-1 overflow-hidden" : "flex-1 p-8 mx-auto")}>
+                <main
+                    className={cn(
+                        isAuthPage
+                            ? "w-full"
+                            : isDashboard
+                                ? "flex-1 w-full overflow-hidden"
+                                : "flex-1 w-full overflow-x-hidden px-3 sm:px-4 lg:px-6 py-4",
+                    )}
+                >
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={pathname}

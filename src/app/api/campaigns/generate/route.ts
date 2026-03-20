@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import Groq from "groq-sdk";
 import { getGlobalSettings } from "@/lib/settings";
-import { wrapInPremiumTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
 import { getSmartGreeting, replaceVariables } from "@/lib/utils";
 import { z } from "zod";
 import { getTargetClients } from "@/domain/campaigns";
-import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { dedupeLeadingSalutation, normalizeEmailBodyHtml } from "@/lib/email-format";
+import { normalizeTemplateId, recommendTemplateId } from "@/lib/email-template";
+import { evaluateEmailQuality } from "@/lib/campaign-quality";
 
 const generateCampaignSchema = z.object({
     type: z.string().min(1, "Campaign type is required"),
@@ -21,9 +21,17 @@ const generateCampaignSchema = z.object({
         subject: z.string(),
         body: z.string()
     }).optional(),
+    styleMemory: z.object({
+        preferredTone: z.string().optional(),
+        preferredCtaStyle: z.string().optional(),
+        avgSentenceLength: z.number().optional(),
+        prefersConcise: z.boolean().optional(),
+        learnedPatterns: z.array(z.string()).optional(),
+    }).optional(),
     serviceFilters: z.array(z.string()).optional().default([]),
     serviceLogic: z.enum(["AND", "OR"]).optional().default("OR"),
     excludedClientIds: z.array(z.string()).optional().default([]),
+    templateId: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -38,14 +46,22 @@ export async function POST(request: Request) {
             });
         }
 
-        const { type, topic, coreMessage, tone, cta, sampleOnly, clientId, styleGuide, excludedClientIds, serviceFilters, serviceLogic } = parsed.data;
+        const { type, topic, coreMessage, tone, cta, sampleOnly, clientId, styleGuide, styleMemory, excludedClientIds, serviceFilters, serviceLogic } = parsed.data;
+        const templateId = parsed.data.templateId
+            ? normalizeTemplateId(parsed.data.templateId)
+            : recommendTemplateId({
+                campaignType: type,
+                tone,
+                coreMessage,
+                hasBullets: /<li\b|(^|\n)\s*[-*]\s+/i.test(coreMessage),
+            });
 
         // 1. Initial Matrix Calibration (Dynamic Settings)
         const settings = await getGlobalSettings();
 
         // --- Strategic Credential Retrieval ---
-        let aiProvider = settings.aiProvider || "Groq";
-        let apiKey = aiProvider === "Groq" ? settings.groqApiKey : settings.openaiApiKey;
+        const aiProvider = settings.aiProvider || "Groq";
+        const apiKey = aiProvider === "Groq" ? settings.groqApiKey : settings.openaiApiKey;
 
         // 2. Fetch Target Clients
         let targetClients: any[] = [];
@@ -85,7 +101,7 @@ export async function POST(request: Request) {
 
         const generatedCampaigns = await Promise.all((targetClients || []).map(async (client: any) => {
             const servicesList = client.invoiceServiceNames || "your business infrastructure";
-            const greeting = getSmartGreeting(client.contactPerson);
+            const greeting = getSmartGreeting(client.contactPerson || client.poc);
             
             // --- Institutional Intelligence Context ---
             const now = new Date();
@@ -95,6 +111,14 @@ export async function POST(request: Request) {
             
             const lastInvoice = client.lastInvoiceDate ? new Date(client.lastInvoiceDate) : null;
             const lastActivity = lastInvoice ? `Last significant engagement: ${lastInvoice.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : "Ongoing relationship";
+
+            const firstName =
+                (client.contactPerson || client.poc || "")
+                    .replace(/^(Mr\.?|Ms\.?|Mrs\.?|Dr\.?|Prof\.?)\s+/i, "")
+                    .split(/\s+/)
+                    .filter(Boolean)[0] || "";
+            const companyName = client.clientName || "your company";
+            const industry = client.industry || "your industry";
 
             // Enhanced default subject with personalization
             let subject = replaceVariables(topic || `Strategic Perspective for {{companyName}}`, client);
@@ -109,6 +133,7 @@ export async function POST(request: Request) {
                 if (!emailBody.toLowerCase().startsWith(greeting.toLowerCase().split(' ')[0])) {
                     emailBody = `<p>${greeting},</p>${emailBody}`;
                 }
+                emailBody = dedupeLeadingSalutation(emailBody);
 
                 if (styleGuide) {
                     emailBody = replaceVariables(styleGuide.body, client);
@@ -121,18 +146,20 @@ export async function POST(request: Request) {
                     contactPerson: client.contactPerson,
                     campaignType: type,
                     campaignTopic: topic,
-                    generatedOutput: JSON.stringify({ subject, body: emailBody, leadStrength: 70, spamRisk: 5 }),
+                    generatedOutput: JSON.stringify({ subject, body: emailBody, leadStrength: 70, spamRisk: 5, templateId }),
                 };
             } else {
                 try {
-                    const stylePrompt = styleGuide ? `
-                        IMPORTANT: The user has curated a specific VISUAL STYLE and HTML STRUCTURE they want you to follow.
-                        Here is the base style (HTML TEMPLATE):
-                        SUBJECT: ${styleGuide.subject}
-                        BODY: ${styleGuide.body}
-                        
-                        When generating for ${client.clientName}, you must adapt this template to their specific context (${client.industry}, ${servicesList}) while STRICTLY maintaining the HTML tags, inline styles (font-family, text-align, color), and structural formatting of the template.
-                    ` : "";
+                    const stylePrompt = styleGuide
+                        ? `
+                        STYLE BLUEPRINT (HIGHEST PRIORITY):
+                        - Use this edited sample as the reference style for voice, sentence rhythm, and section flow.
+                        - Preserve structure and formatting pattern from the sample while personalizing details.
+                        - Keep output concise and human-written (no AI-like phrasing).
+                        SAMPLE SUBJECT: ${styleGuide.subject}
+                        SAMPLE BODY: ${styleGuide.body}
+                    `
+                        : "";
 
                     const relationshipContext = `
                         INSTITUTIONAL INTELLIGENCE:
@@ -165,13 +192,23 @@ export async function POST(request: Request) {
                         
                         MASTER SUBJECT: "${topic}"
                         MASTER BODY: "${coreMessage}"
+                        REQUIRED CTA: "${cta}"
+                        LEARNED STYLE MEMORY: ${styleMemory ? JSON.stringify(styleMemory) : "None"}
                         
                         CRITICAL SMART LOGIC:
                         1. START WITH GREETING: The email MUST start with exactly this: "${greeting}"
                         2. HIGH-FIDELITY SYNC: Mirror the unique wording, specialized tone, and specific value proposition of the MASTER BODY draft provided above.
                         3. SMART VARIABLE INJECTION: Replace placeholders like {{firstName}}, {{lastName}}, {{fullName}}, {{companyName}}, {{industry}}, {{services}}, {{location}}, {{relationship}}, {{tenureYears}} with corresponding client data.
                         4. SEAMLESS FLOW: Weave in the client's sector (${client.industry}) context where it feels natural based on the draft's logic.
-                        5. HTML FORMAT: Return a valid HTML segment for the body. Preserve any formatting from the draft.
+                        5. CTA ENFORCEMENT: Include a clear closing action aligned with REQUIRED CTA.
+                        6. GLOBAL EMAIL STANDARDS:
+                           - Use short paragraphs (2-4 lines max), clean spacing, and professional business tone.
+                           - Keep message concise, value-first, and avoid hype/salesy language.
+                           - Include one clear CTA and polite professional close.
+                           - If contact name is unavailable, use "Dear Sir/Ma'am".
+                           - Respect style memory hints when available (directness, concise wording, CTA style).
+                        7. HTML FORMAT: Return a valid HTML segment for the body. Preserve any formatting from the draft.
+                        ${stylePrompt}
                         
                         OUTPUT: Return a PURE JSON object with "subject" and "body" fields.
                     `;
@@ -231,15 +268,87 @@ export async function POST(request: Request) {
                         resEmailBody = resEmailBody.replace(/```html\n?|```\n?/g, "").trim();
                     }
 
+                    // Ensure variable placeholders from sample are resolved for this client.
+                    resSubject = replaceVariables(resSubject, client);
+                    resEmailBody = replaceVariables(resEmailBody, client);
+                    // Never leak unresolved template variables in final output.
+                    resSubject = resSubject.replace(/\{\{[^}]+\}\}/g, companyName);
+                    resEmailBody = resEmailBody.replace(/\{\{[^}]+\}\}/g, "your team");
+
+                    // Enforce greeting at start for personalization quality.
+                    const lowerBody = resEmailBody.toLowerCase().trim();
+                    if (!lowerBody.startsWith(greeting.toLowerCase().split(" ")[0])) {
+                        resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
+                    }
+                    resEmailBody = dedupeLeadingSalutation(resEmailBody);
+
+                    // Enforce CTA presence if missing from body.
+                    const ctaNeedle = cta.toLowerCase().trim();
+                    if (ctaNeedle && !resEmailBody.toLowerCase().includes(ctaNeedle)) {
+                        resEmailBody = `${resEmailBody}<p>${cta}</p>`;
+                    }
+
+                    // Ensure at least one unique personalization marker exists.
+                    const lowerPersonal = resEmailBody.toLowerCase();
+                    const hasMarker =
+                        lowerPersonal.includes(companyName.toLowerCase()) ||
+                        lowerPersonal.includes(industry.toLowerCase()) ||
+                        (servicesList && lowerPersonal.includes(String(servicesList).split(",")[0].trim().toLowerCase()));
+                    if (!hasMarker) {
+                        resEmailBody = `${resEmailBody}<p>Given ${companyName}'s ${industry} context, this can create immediate practical value.</p>`;
+                    }
+
                     // Global-standard formatting normalization (paragraphs, spacing, lists)
                     resEmailBody = normalizeEmailBodyHtml(resEmailBody);
+
+                    // Subject fallback hardening: keep it specific and personalized.
+                    if (!resSubject || resSubject.trim().length < 6) {
+                        resSubject = firstName
+                            ? `${firstName}, quick idea for ${companyName}`
+                            : `Quick idea for ${companyName}`;
+                    }
+                    if (!/{{|}}/.test(resSubject) && !resSubject.toLowerCase().includes(companyName.toLowerCase())) {
+                        resSubject = `${resSubject} | ${companyName}`;
+                    }
                     
+                    // Quality guardrail + correction pass
+                    let quality = evaluateEmailQuality({
+                        subject: resSubject,
+                        bodyHtml: resEmailBody,
+                        greeting,
+                        cta,
+                        companyName,
+                        industry,
+                        services: servicesList,
+                    });
+
+                    if (quality.score < 70) {
+                        // Lightweight deterministic correction pass for weak drafts
+                        if (!resEmailBody.toLowerCase().startsWith(greeting.toLowerCase().split(" ")[0])) {
+                            resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
+                        }
+                        if (!resEmailBody.toLowerCase().includes(cta.toLowerCase())) {
+                            resEmailBody = `${resEmailBody}<p>${cta}</p>`;
+                        }
+                        resEmailBody = dedupeLeadingSalutation(resEmailBody);
+                        resEmailBody = normalizeEmailBodyHtml(resEmailBody);
+                        quality = evaluateEmailQuality({
+                            subject: resSubject,
+                            bodyHtml: resEmailBody,
+                            greeting,
+                            cta,
+                            companyName,
+                            industry,
+                            services: servicesList,
+                        });
+                    }
+
                     // Logic Boost: Relationship-weighted lead strength
-                    let leadStrength = normalizeMetric(content.leadStrength, 75);
+                    let leadStrength = normalizeMetric(content.leadStrength, Math.max(60, quality.score));
                     if (tenureYears > 2) leadStrength = Math.min(100, leadStrength + 10);
                     if (client.relationshipLevel === "Active") leadStrength = Math.min(100, leadStrength + 5);
                     
-                    const spamRisk = normalizeMetric(content.spamRisk, 10);
+                    const spamRisk = normalizeMetric(content.spamRisk, quality.spamRisk);
 
                     return {
                         clientId: client.id,
@@ -247,18 +356,62 @@ export async function POST(request: Request) {
                         contactPerson: client.contactPerson,
                         campaignType: type,
                         campaignTopic: topic,
-                        generatedOutput: JSON.stringify({ subject: resSubject, body: resEmailBody, leadStrength, spamRisk }),
+                        generatedOutput: JSON.stringify({
+                            subject: resSubject,
+                            body: resEmailBody,
+                            leadStrength,
+                            spamRisk,
+                            personalizationQuality: quality.score,
+                            qualityBreakdown: {
+                                personalization: quality.personalization,
+                                clarity: quality.clarity,
+                                tone: quality.tone,
+                                ctaStrength: quality.ctaStrength,
+                            },
+                            qualityFixes: quality.fixes,
+                            personalizationMarker: companyName,
+                            templateId,
+                        }),
                     };
                 } catch (err) {
                     console.error(`AI Generation failed for client ${client.id}, falling back to template:`, err);
-                    const fallbackBody = `<p>Dear ${client.contactPerson || client.clientName || "Partner"},</p><p>[AI Synthesis Failed - Template Fallback]</p><p>Regarding <strong>${topic}</strong>: ${coreMessage}</p><p>${cta}</p>`;
+                    const fallbackBody = normalizeEmailBodyHtml(
+                        dedupeLeadingSalutation(
+                            `<p>${greeting},</p><p>Regarding <strong>${topic}</strong> for ${companyName} (${industry}):</p><p>${replaceVariables(coreMessage, client)}</p><p>${cta}</p>`
+                        )
+                    );
+                    const fallbackQuality = evaluateEmailQuality({
+                        subject,
+                        bodyHtml: fallbackBody,
+                        greeting,
+                        cta,
+                        companyName,
+                        industry,
+                        services: servicesList,
+                    });
+
                     return {
                         clientId: client.id,
                         clientName: client.clientName,
                         contactPerson: client.contactPerson,
                         campaignType: type,
                         campaignTopic: topic,
-                        generatedOutput: JSON.stringify({ subject, body: fallbackBody, leadStrength: 50, spamRisk: 5 }),
+                        generatedOutput: JSON.stringify({
+                            subject,
+                            body: fallbackBody,
+                            leadStrength: Math.max(50, fallbackQuality.score),
+                            spamRisk: fallbackQuality.spamRisk,
+                            personalizationQuality: fallbackQuality.score,
+                            qualityBreakdown: {
+                                personalization: fallbackQuality.personalization,
+                                clarity: fallbackQuality.clarity,
+                                tone: fallbackQuality.tone,
+                                ctaStrength: fallbackQuality.ctaStrength,
+                            },
+                            qualityFixes: fallbackQuality.fixes,
+                            personalizationMarker: companyName,
+                            templateId,
+                        }),
                     };
                 }
             }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { sendStrategicEmail } from "@/lib/mail";
-import { wrapInPremiumTemplate } from "@/lib/email-template";
+import { normalizeTemplateId, wrapInEmailTemplate } from "@/lib/email-template";
 import { ok, error } from "@/lib/api-response";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
 import { sanitizeEmailHtml } from "@/lib/email-sanitize";
@@ -9,7 +9,8 @@ import { sanitizeEmailHtml } from "@/lib/email-sanitize";
 const testSendSchema = z.object({
     email: z.string().email(),
     subject: z.string().min(1),
-    body: z.string().min(1)
+    body: z.string().min(1),
+    templateId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -22,19 +23,22 @@ export async function POST(request: NextRequest) {
         }
 
         const { email, subject, body: html } = parser.data;
+        const templateId = normalizeTemplateId(parser.data.templateId);
         const safeHtml = sanitizeEmailHtml(normalizeEmailBodyHtml(html));
 
         const result = await sendStrategicEmail({
             to: email,
             subject: `[TEST] ${subject}`,
-            html: wrapInPremiumTemplate(safeHtml, "Valued Partner"),
+            html: wrapInEmailTemplate(templateId, safeHtml, "Valued Partner"),
             text: "This is a test email from Climacy Campaign Builder. Please view it in an HTML-compatible client."
         });
 
         if (result.success) {
             return ok({ message: "Test email sent successfully." });
         } else {
-            return error("INTERNAL_ERROR", result.error || "Failed to send test email.");
+            return error("BAD_REQUEST", result.error || "Failed to send test email.", {
+                status: 400
+            });
         }
     } catch (err) {
         console.error("Test send API error:", err);

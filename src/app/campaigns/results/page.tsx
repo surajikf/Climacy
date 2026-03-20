@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { EMAIL_TEMPLATE_OPTIONS, normalizeTemplateId } from "@/lib/email-template";
 
 const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: number, label: string, icon: any, color?: "blue" | "red" | "emerald" | "slate" }) => {
     const radius = 18;
@@ -134,6 +135,23 @@ export default function CampaignResults() {
     const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
     const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
 
+    const safeParseGeneratedOutput = (generatedOutput: string) => {
+        try {
+            const parsed = JSON.parse(generatedOutput);
+            const subject = typeof parsed?.subject === "string" ? parsed.subject : "";
+            const body = typeof parsed?.body === "string" ? normalizeEmailBodyHtml(parsed.body) : "";
+            if (!subject.trim() || !body.trim()) return null;
+            return {
+                ...parsed,
+                subject,
+                body,
+                templateId: normalizeTemplateId(parsed?.templateId),
+            };
+        } catch {
+            return null;
+        }
+    };
+
     useEffect(() => {
         fetchLatestResults();
     }, []);
@@ -196,14 +214,19 @@ export default function CampaignResults() {
             const res = await fetch("/api/campaigns/history?limit=20");
             const result = await res.json();
             if (result.success) {
-                const processed = result.data.map((c: any) => ({
-                    ...c,
-                    content: JSON.parse(c.generatedOutput)
-                }));
+                const processed = result.data
+                    .map((c: any) => {
+                        const content = safeParseGeneratedOutput(c.generatedOutput);
+                        if (!content) return null;
+                        return { ...c, content };
+                    })
+                    .filter(Boolean);
                 setCampaigns(processed);
                 if (processed.length > 0) {
                     setEditedBody(processed[0].content.body);
                     setEditedSubject(processed[0].content.subject);
+                } else {
+                    toast.error("Campaign payloads are invalid. Please regenerate campaigns.");
                 }
             }
         } catch (err) {
@@ -233,9 +256,25 @@ export default function CampaignResults() {
     };
 
     const handleBatchDispatch = async () => {
-        const idsToDispatch = selectedIds.size > 0
-            ? Array.from(selectedIds)
-            : [campaigns[activeIndex].id];
+        const selectedCampaigns = selectedIds.size > 0
+            ? campaigns.filter(c => selectedIds.has(c.id))
+            : [campaigns[activeIndex]];
+
+        const dispatchable = selectedCampaigns.filter((c: any) => {
+            if (!c?.id || !c?.content?.subject || !c?.content?.body) return false;
+            return true;
+        });
+
+        if (dispatchable.length === 0) {
+            toast.error("No valid campaigns selected for dispatch.");
+            return;
+        }
+
+        if (dispatchable.length < selectedCampaigns.length) {
+            toast.warning("Some selected campaigns were skipped due to invalid payload.");
+        }
+
+        const idsToDispatch = dispatchable.map((c: any) => c.id);
 
         setIsDispatching(true);
         setDispatchProgress(0);
@@ -256,7 +295,7 @@ export default function CampaignResults() {
                 if (res.ok) {
                     successCount++;
                 } else {
-                    toast.error(`Dispatch failed: ${data.error || "Neural Link Failure"}`);
+                    toast.error(`Dispatch failed: ${data.error?.message || data.error || "Neural Link Failure"}`);
                 }
             } catch (err) {
                 console.error(`Dispatch failed for ${idsToDispatch[i]}:`, err);
@@ -303,7 +342,7 @@ export default function CampaignResults() {
                 const newCampaigns = [...campaigns];
                 newCampaigns[activeIndex] = {
                     ...updated,
-                    content: JSON.parse(updated.generatedOutput)
+                    content: safeParseGeneratedOutput(updated.generatedOutput) || newCampaigns[activeIndex].content
                 };
                 setCampaigns(newCampaigns);
                 toast.success("Timeline evolved: Matrix resonance updated.");
@@ -322,13 +361,13 @@ export default function CampaignResults() {
     const charCount = editedBody.length;
 
     if (loading) return (
-        <div className="max-w-[1600px] mx-auto py-10 px-6">
+        <div className="w-full py-8 px-3 sm:px-4 lg:px-6">
             <StudioSkeleton />
         </div>
     );
 
     if (campaigns.length === 0) return (
-        <div className="max-w-[1600px] mx-auto min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-6">
+        <div className="w-full min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-sm">
                 <Zap className="w-6 h-6 text-slate-400" />
             </div>
@@ -348,7 +387,7 @@ export default function CampaignResults() {
     const activeCampaign = campaigns[activeIndex];
 
     return (
-        <div className="max-w-[1600px] mx-auto space-y-8 pb-20 px-6">
+        <div className="w-full space-y-8 pb-20 px-3 sm:px-4 lg:px-6">
             <header className="flex items-center justify-between px-2">
                 <div>
                     <h2 className="text-3xl font-semibold tracking-tight text-slate-900 flex items-center gap-3">
@@ -426,6 +465,11 @@ export default function CampaignResults() {
                                     )}>
                                         {c.content?.subject}
                                     </p>
+                                    <div className="pl-3.5">
+                                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500">
+                                            {EMAIL_TEMPLATE_OPTIONS.find(t => t.id === c.content?.templateId)?.name || "Luxury Editorial"}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         ))}

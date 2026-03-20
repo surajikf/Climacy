@@ -7,10 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getSmartGreeting(contactPerson?: string | null) {
     if (!contactPerson || !contactPerson.trim()) {
-        return "Hello Sir/Ma'am";
+        return "Dear Sir/Ma'am";
     }
     const firstName = getFirstName(contactPerson);
-    return `Hello ${firstName}`;
+    if (!firstName) return "Dear Sir/Ma'am";
+    return `Dear ${firstName}`;
 }
 
 export function getFirstName(contactPerson?: string | null) {

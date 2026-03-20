@@ -161,7 +161,7 @@ export default function HistoryPage() {
     };
 
     return (
-        <div className="space-y-10 max-w-7xl mx-auto px-4 md:px-6 pb-20 animate-in fade-in duration-700">
+        <div className="space-y-10 w-full px-3 sm:px-4 lg:px-6 pb-20 animate-in fade-in duration-700">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="space-y-1">
                     <h2 className="text-4xl font-bold tracking-tight text-slate-900">Interaction Archive</h2>

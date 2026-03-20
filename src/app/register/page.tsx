@@ -45,7 +45,7 @@ export default function RegisterPage() {
                     router.refresh();
                 }
             } else {
-                toast.error(data.error || "Profile initialization failed.");
+                toast.error(data.error?.message || data.error || "Profile initialization failed.");
                 setLoading(false);
             }
         } catch (error) {

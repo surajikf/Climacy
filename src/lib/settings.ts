@@ -1,6 +1,10 @@
 import prisma from "./prisma";
 import { decrypt } from "./encryption";
 
+/** Default when neither DB nor INVOICE_API_URL is set (must match your ASMX: ?op=GetClients + status=Y|N) */
+export const DEFAULT_INVOICE_API_URL =
+    "http://192.168.2.79/invoice/api/ApiService.asmx?op=GetClients";
+
 export interface GlobalSettings {
     aiProvider: string;
     aiModel: string;
@@ -42,6 +46,9 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
                 googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
                 googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || "",
                 googleEmail: process.env.EMAIL_USER || "",
+                invoiceApiKey: process.env.INVOICE_API_KEY?.trim() || "",
+                invoiceApiUrl:
+                    process.env.INVOICE_API_URL?.trim() || DEFAULT_INVOICE_API_URL,
             };
         }
 
@@ -64,8 +71,15 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
             googleClientSecret: safeDecrypt(settings.googleClientSecretEncrypted) || process.env.GOOGLE_CLIENT_SECRET || "",
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted) || process.env.GOOGLE_REFRESH_TOKEN || "",
             googleEmail: safeDecrypt(settings.googleEmailEncrypted) || process.env.EMAIL_USER || "",
-            invoiceApiKey: safeDecrypt(settings.invoiceApiKeyEncrypted) || process.env.INVOICE_API_KEY || "",
-            invoiceApiUrl: safeDecrypt(settings.invoiceApiUrlEncrypted) || process.env.INVOICE_API_URL || "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients",
+            invoiceApiKey: (
+                safeDecrypt(settings.invoiceApiKeyEncrypted) ||
+                process.env.INVOICE_API_KEY ||
+                ""
+            ).trim(),
+            invoiceApiUrl:
+                safeDecrypt(settings.invoiceApiUrlEncrypted)?.trim() ||
+                process.env.INVOICE_API_URL?.trim() ||
+                DEFAULT_INVOICE_API_URL,
         };
 
         // NEW: Multi-account lookup (highest priority) - wrapped in try/catch to avoid model-not-found errors
@@ -85,6 +99,17 @@ export async function getGlobalSettings(): Promise<GlobalSettings> {
         return baseSettings;
     } catch (error) {
         console.error("Failed to fetch global settings:", error);
-        return DEFAULT_SETTINGS;
+        return {
+            ...DEFAULT_SETTINGS,
+            groqApiKey: process.env.GROQ_API_KEY || "",
+            openaiApiKey: process.env.OPENAI_API_KEY || "",
+            googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+            googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+            googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || "",
+            googleEmail: process.env.EMAIL_USER || "",
+            invoiceApiKey: process.env.INVOICE_API_KEY?.trim() || "",
+            invoiceApiUrl:
+                process.env.INVOICE_API_URL?.trim() || DEFAULT_INVOICE_API_URL,
+        };
     }
 }

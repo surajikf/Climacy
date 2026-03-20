@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { isRoleBasedEmail } from "@/lib/email-utils";
 import { ok, error } from "@/lib/api-response";
+import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const gmailImportSchema = z.object({
@@ -10,6 +11,14 @@ const gmailImportSchema = z.object({
 
 export async function POST(request: Request) {
     try {
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || user.user_metadata?.role !== "ADMIN") {
+            return error("FORBIDDEN", "Unauthorized access. Level-5 Clearance Required.", {
+                status: 403,
+            });
+        }
+
         const json = await request.json();
         const parsed = gmailImportSchema.safeParse(json);
 
@@ -91,6 +100,11 @@ export async function POST(request: Request) {
                 headers: { Authorization: `Bearer ${accessToken}` },
             },
         );
+        if (!messagesRes.ok) {
+            return error("INTEGRATION_ERROR", "Failed to read Gmail messages.", {
+                status: 502,
+            });
+        }
         const { messages = [] } = await messagesRes.json();
 
         const contacts = new Map<string, { email: string; name: string }>();
@@ -103,6 +117,7 @@ export async function POST(request: Request) {
                     headers: { Authorization: `Bearer ${accessToken}` },
                 },
             );
+            if (!detailRes.ok) continue;
             const detail = await detailRes.json();
 
             const headers = detail.payload?.headers || [];

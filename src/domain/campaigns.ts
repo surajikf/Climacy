@@ -2,36 +2,65 @@ import prisma from "@/lib/prisma";
 
 export type CampaignType = "Broadcast" | "Targeted" | "Cross-Sell" | "Reactivation" | "Reactivate" | string;
 
-export async function estimateCampaignAudience(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = []) {
-  const normalizedType = type.toLowerCase();
+function getRelationshipFilterForType(type: CampaignType) {
+  const normalizedType = String(type || "").toLowerCase();
 
-  let where: any = {};
-
+  // Use case-insensitive equality to avoid brittle status matching.
   if (normalizedType === "broadcast" || normalizedType === "cross-sell") {
-    where = { relationshipLevel: { in: ["Active", "Warm Lead"] } };
-  } else if (normalizedType === "reactivation" || normalizedType === "reactivate") {
-    where = { relationshipLevel: "Past Client" };
-  } else if (normalizedType === "targeted") {
-    where = { relationshipLevel: "Active" };
+    return {
+      OR: [
+        { relationshipLevel: { equals: "Active", mode: "insensitive" as const } },
+        { relationshipLevel: { equals: "Warm Lead", mode: "insensitive" as const } },
+      ],
+    };
   }
 
-  // Inject Exclusions
-  if (excludedIds.length > 0) {
-    where.id = { notIn: excludedIds };
+  if (normalizedType === "reactivation" || normalizedType === "reactivate") {
+    return {
+      OR: [
+        { relationshipLevel: { equals: "Past Client", mode: "insensitive" as const } },
+        { relationshipLevel: { equals: "Not Active", mode: "insensitive" as const } },
+        { relationshipLevel: { equals: "Inactive", mode: "insensitive" as const } },
+      ],
+    };
+  }
+
+  if (normalizedType === "targeted") {
+    return { relationshipLevel: { equals: "Active", mode: "insensitive" as const } };
+  }
+
+  return {};
+}
+
+function buildAudienceWhere(
+  type: CampaignType,
+  serviceFilters: string[] = [],
+  serviceLogic: "AND" | "OR" = "OR",
+  excludedIds: string[] = [],
+  includeExclusions = false,
+) {
+  const clauses: any[] = [];
+  const relationshipFilter = getRelationshipFilterForType(type);
+  if (Object.keys(relationshipFilter).length > 0) clauses.push(relationshipFilter);
+
+  if (excludedIds.length > 0 && !includeExclusions) {
+    clauses.push({ id: { notIn: excludedIds } });
   }
 
   // Ultra-Smart Multi-Service Segmentation
   if (serviceFilters.length > 0 && !serviceFilters.includes("All")) {
-    const serviceQueries = serviceFilters.map(service => ({
-      invoiceServiceNames: { contains: service, mode: "insensitive" as const }
+    const serviceQueries = serviceFilters.map((service) => ({
+      invoiceServiceNames: { contains: service, mode: "insensitive" as const },
     }));
-    
-    if (serviceLogic === "AND") {
-      where.AND = serviceQueries;
-    } else {
-      where.OR = serviceQueries;
-    }
+
+    clauses.push(serviceLogic === "AND" ? { AND: serviceQueries } : { OR: serviceQueries });
   }
+
+  return clauses.length > 0 ? { AND: clauses } : {};
+}
+
+export async function estimateCampaignAudience(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = []) {
+  const where = buildAudienceWhere(type, serviceFilters, serviceLogic, excludedIds, false);
 
   // Sequentialize to avoid PgBouncer/Transaction mode concurrency hangs
   const count = await prisma.client.count({ where });
@@ -90,34 +119,7 @@ export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
 }
 
 export async function getTargetClients(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = [], includeExclusions: boolean = false) {
-  const normalizedType = type.toLowerCase();
-  let where: any = {};
-
-  if (normalizedType === "broadcast" || normalizedType === "cross-sell") {
-    where = { relationshipLevel: { in: ["Active", "Warm Lead"] } };
-  } else if (normalizedType === "reactivation" || normalizedType === "reactivate") {
-    where = { relationshipLevel: "Past Client" };
-  } else if (normalizedType === "targeted") {
-    where = { relationshipLevel: "Active" };
-  }
-
-  // Inject Exclusions (Skip if includeExclusions is true for UI persistence)
-  if (excludedIds.length > 0 && !includeExclusions) {
-    where.id = { notIn: excludedIds };
-  }
-
-  // Ultra-Smart Multi-Service Segmentation
-  if (serviceFilters.length > 0 && !serviceFilters.includes("All")) {
-    const serviceQueries = serviceFilters.map(service => ({
-      invoiceServiceNames: { contains: service, mode: "insensitive" as const }
-    }));
-    
-    if (serviceLogic === "AND") {
-      where.AND = serviceQueries;
-    } else {
-      where.OR = serviceQueries;
-    }
-  }
+  const where = buildAudienceWhere(type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
 
   return await prisma.client.findMany({
     where,

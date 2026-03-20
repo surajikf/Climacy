@@ -9,6 +9,7 @@ interface Client {
     clientName: string;
     industry: string;
     contactPerson?: string;
+    relationshipLevel?: string;
 }
 
 interface ClientPickerModalProps {
@@ -21,6 +22,7 @@ interface ClientPickerModalProps {
     mode?: 'single' | 'oversight';
     excludedIds?: string[];
     onToggleExclusion?: (clientId: string) => void;
+    onSetExcludedIds?: (ids: string[]) => void;
 }
 
 export function ClientPickerModal({ 
@@ -32,7 +34,8 @@ export function ClientPickerModal({
     loading,
     mode = 'single',
     excludedIds = [],
-    onToggleExclusion
+    onToggleExclusion,
+    onSetExcludedIds
 }: ClientPickerModalProps) {
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -45,6 +48,38 @@ export function ClientPickerModal({
             c.contactPerson?.toLowerCase().includes(query)
         );
     }, [clients, searchQuery]);
+
+    const activeClients = useMemo(
+        () => clients.filter((c) => (c.relationshipLevel || "").toLowerCase() === "active"),
+        [clients],
+    );
+    const notActiveClients = useMemo(
+        () => clients.filter((c) => (c.relationshipLevel || "").toLowerCase() !== "active"),
+        [clients],
+    );
+
+    const selectedCount = useMemo(
+        () => clients.filter((c) => !excludedIds.includes(c.id)).length,
+        [clients, excludedIds],
+    );
+    const selectedActiveCount = useMemo(
+        () => activeClients.filter((c) => !excludedIds.includes(c.id)).length,
+        [activeClients, excludedIds],
+    );
+    const selectedNotActiveCount = useMemo(
+        () => notActiveClients.filter((c) => !excludedIds.includes(c.id)).length,
+        [notActiveClients, excludedIds],
+    );
+
+    const applyBulkSelection = (targetIds: string[], include: boolean) => {
+        if (!onSetExcludedIds) return;
+        const current = new Set(excludedIds);
+        for (const id of targetIds) {
+            if (include) current.delete(id);
+            else current.add(id);
+        }
+        onSetExcludedIds(Array.from(current));
+    };
 
     if (!isOpen) return null;
 
@@ -67,7 +102,7 @@ export function ClientPickerModal({
                                 {mode === 'oversight' ? 'Review Target Audience' : 'Select Sample Client'}
                             </h3>
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mt-0.5">
-                                {mode === 'oversight' ? `${clients.filter(c => !excludedIds.includes(c.id)).length} Verified Recipients` : 'Anchoring Campaign Tone'}
+                                {mode === 'oversight' ? `${selectedCount} Verified Recipients` : 'Anchoring Campaign Tone'}
                             </p>
                         </div>
                     </div>
@@ -89,6 +124,43 @@ export function ClientPickerModal({
                             autoFocus
                         />
                     </div>
+                    {mode === "oversight" && (
+                        <div className="mt-3 space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onSetExcludedIds?.([])}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onSetExcludedIds?.(clients.map(c => c.id))}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
+                                >
+                                    Exclude All
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => applyBulkSelection(activeClients.map(c => c.id), true)}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                                >
+                                    Select All Active
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => applyBulkSelection(notActiveClients.map(c => c.id), true)}
+                                    className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                                >
+                                    Select All Not Active
+                                </button>
+                            </div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Active Selected: {selectedActiveCount}/{activeClients.length} · Not Active Selected: {selectedNotActiveCount}/{notActiveClients.length}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* List */}

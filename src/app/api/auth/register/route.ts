@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { isPrimaryAdminEmail } from "@/lib/auth-primary";
 
 export async function POST(req: Request) {
     try {
@@ -10,10 +11,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
+        if (!isPrimaryAdminEmail(email)) {
+            return NextResponse.json(
+                {
+                    error:
+                        "Registration is disabled. This application uses a single authorized account (Supabase Auth).",
+                },
+                { status: 403 },
+            );
+        }
+
         const supabase = await createClient();
 
-        // 1. Sign up user in Supabase Auth
-        const isSuperAdmin = email.toLowerCase() === "suraj.sonnar@ikf.co.in";
+        // 1. Sign up user in Supabase Auth (only primary email allowed above)
+        const isSuperAdmin = isPrimaryAdminEmail(email);
         const role = isSuperAdmin ? "ADMIN" : "USER";
         const status = isSuperAdmin ? "APPROVED" : "PENDING";
 

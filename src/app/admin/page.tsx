@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, ShieldCheck, Mail, User as UserIcon } from "lucide-react";
+import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, ShieldCheck, Mail, User as UserIcon, Trash2 } from "lucide-react";
+import { isPrimaryAdminEmail, PRIMARY_ADMIN_EMAIL } from "@/lib/auth-primary";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -46,23 +47,54 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleAction = async (userId: string, action: "APPROVE" | "BAN" | "MAKE_ADMIN" | "REVOKE_ADMIN") => {
+    const handleAction = async (
+        userId: string,
+        action: "APPROVE" | "BAN" | "MAKE_ADMIN" | "REVOKE_ADMIN" | "DELETE_USER",
+    ) => {
         try {
             const res = await fetch("/api/admin/users", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId, action })
+                body: JSON.stringify({ userId, action }),
             });
 
-            if (res.ok) {
-                toast.success(`Access policy updated for node.`);
-                fetchUsers(); // Refresh list
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                toast.success(action === "DELETE_USER" ? "User removed from Supabase Auth." : `Access policy updated for node.`);
+                fetchUsers();
             } else {
-                const data = await res.json();
-                toast.error(data.error || "Failed to update access policy.");
+                toast.error(data.error?.message || data.error || "Failed to update access policy.");
             }
         } catch (error) {
             toast.error("Network instability detected.");
+        }
+    };
+
+    const handlePurgeOthers = async () => {
+        const typed = window.prompt(
+            `This deletes every Supabase Auth user except ${PRIMARY_ADMIN_EMAIL} and matching database rows. Type PURGE to confirm:`,
+        );
+        if (typed !== "PURGE") {
+            if (typed !== null) toast.error("Confirmation text did not match.");
+            return;
+        }
+        try {
+            const res = await fetch("/api/admin/users", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "PURGE_ALL_EXCEPT_PRIMARY" }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                toast.success(
+                    `Removed ${data.data?.deletedAuthUsers ?? 0} other auth account(s); Prisma rows removed: ${data.data?.deletedPrismaUsers ?? 0}.`,
+                );
+                fetchUsers();
+            } else {
+                toast.error(data.error?.message || "Purge failed. Ensure SUPABASE_SERVICE_ROLE_KEY is set on the server.");
+            }
+        } catch {
+            toast.error("Network error during purge.");
         }
     };
 
@@ -71,14 +103,28 @@ export default function AdminDashboard() {
     }
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+        <div className="w-full space-y-8 animate-in fade-in duration-500 pb-20 px-3 sm:px-4 lg:px-6">
             <header className="px-2">
                 <div className="flex items-center gap-3 text-red-600 mb-2">
                     <ShieldAlert className="w-5 h-5" />
                     <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">Access Management</h2>
-                <p className="text-slate-500 font-medium text-sm mt-1">Approve or revoke access to the Neural Matrix.</p>
+                <p className="text-slate-500 font-medium text-sm mt-1">
+                    Users are loaded from <strong>Supabase Auth</strong> (admin API). Only{" "}
+                    <code className="text-xs bg-slate-100 px-1 rounded">{PRIMARY_ADMIN_EMAIL}</code> can register; all
+                    access checks use Supabase sessions.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        onClick={handlePurgeOthers}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-rose-700"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        Remove all other accounts
+                    </button>
+                </div>
             </header>
 
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
@@ -108,13 +154,13 @@ export default function AdminDashboard() {
                                             </div>
                                             <div className="text-xs font-medium text-slate-400 flex items-center gap-1.5 mt-0.5">
                                                 <Mail className="w-3 h-3" />
-                                                {user.email}
+                                                {userItem.email}
                                             </div>
                                         </div>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    {user.role === "ADMIN" ? (
+                                    {userItem.role === "ADMIN" ? (
                                         <span className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 w-fit px-2.5 py-1 rounded-md border border-red-100">
                                             <ShieldAlert className="w-3.5 h-3.5" />
                                             Admin
@@ -127,17 +173,17 @@ export default function AdminDashboard() {
                                     )}
                                 </td>
                                 <td className="px-6 py-4">
-                                    {user.status === "APPROVED" && (
+                                    {userItem.status === "APPROVED" && (
                                         <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600">
                                             <CheckCircle2 className="w-4 h-4" /> Approved
                                         </span>
                                     )}
-                                    {user.status === "PENDING" && (
+                                    {userItem.status === "PENDING" && (
                                         <span className="flex items-center gap-1.5 text-xs font-bold text-amber-500">
                                             <Clock className="w-4 h-4 animate-pulse" /> Pending
                                         </span>
                                     )}
-                                    {user.status === "BANNED" && (
+                                    {userItem.status === "BANNED" && (
                                         <span className="flex items-center gap-1.5 text-xs font-bold text-red-500">
                                             <Ban className="w-4 h-4" /> Revoked
                                         </span>
@@ -165,6 +211,23 @@ export default function AdminDashboard() {
                                                 {userItem.status === "APPROVED" && userItem.role === "ADMIN" && (
                                                     <button onClick={() => handleAction(userItem.id, "REVOKE_ADMIN")} className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Admin Rights">
                                                         <ShieldHalf className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {!isPrimaryAdminEmail(userItem.email) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            if (
+                                                                window.confirm(
+                                                                    `Permanently delete ${userItem.email} from Supabase Auth?`,
+                                                                )
+                                                            ) {
+                                                                handleAction(userItem.id, "DELETE_USER");
+                                                            }
+                                                        }}
+                                                        className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors tooltip-trigger"
+                                                        title="Delete user from Supabase Auth"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 )}
                                             </>
