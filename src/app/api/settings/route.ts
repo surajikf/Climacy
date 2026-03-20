@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { ok, error } from "@/lib/api-response";
+import { DEFAULT_INVOICE_API_URL } from "@/lib/settings";
 import { z } from "zod";
 
 const MASK = "••••••••••••••••";
@@ -63,7 +64,8 @@ export async function GET() {
             googleRefreshToken: safeDecrypt(settings.googleRefreshTokenEncrypted),
             googleEmail: safeDecrypt(settings.googleEmailEncrypted),
             invoiceApiKey: safeDecrypt(settings.invoiceApiKeyEncrypted),
-            invoiceApiUrl: safeDecrypt(settings.invoiceApiUrlEncrypted) || "http://192.168.2.79/invoice/api/ApiService.asmx/GetClients",
+            invoiceApiUrl:
+                safeDecrypt(settings.invoiceApiUrlEncrypted) || DEFAULT_INVOICE_API_URL,
             gmailAccounts: [] as any[]
         };
 

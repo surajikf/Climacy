@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { PRIMARY_ADMIN_EMAIL } from "@/lib/auth-primary";
 
 export async function GET() {
     try {
@@ -8,7 +9,7 @@ export async function GET() {
 
         // 2. Check for the primary admin user specifically
         const adminUser = await prisma.user.findUnique({
-            where: { email: "suraj.sonnar@ikf.co.in" }
+            where: { email: PRIMARY_ADMIN_EMAIL },
         });
 
         return NextResponse.json({
