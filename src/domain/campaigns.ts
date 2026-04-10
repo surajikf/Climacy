@@ -49,7 +49,10 @@ function buildAudienceWhere(
   excludedIds: string[] = [],
   includeExclusions = false,
 ) {
-  const clauses: any[] = [];
+  const clauses: any[] = [
+    { isBlocked: false },
+    { isRoleBased: false }
+  ];
   const relationshipFilter = getRelationshipFilterForType(type);
 
   // Smart default: if the user hasn't selected any service segmentation,

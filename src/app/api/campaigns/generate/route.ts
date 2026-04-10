@@ -12,7 +12,6 @@ const generateCampaignSchema = z.object({
     type: z.string().min(1, "Campaign type is required"),
     topic: z.string().min(1, "Topic is required"),
     coreMessage: z.string().min(1, "Core message is required"),
-    tone: z.string().optional(),
     cta: z.string().min(1, "Call to action is required"),
     sampleOnly: z.boolean().optional().default(false),
     clientId: z.string().optional(),
@@ -21,7 +20,6 @@ const generateCampaignSchema = z.object({
         body: z.string()
     }).optional(),
     styleMemory: z.object({
-        preferredTone: z.string().optional(),
         preferredCtaStyle: z.string().optional(),
         avgSentenceLength: z.number().optional(),
         prefersConcise: z.boolean().optional(),
@@ -60,7 +58,7 @@ export async function POST(request: Request) {
             return ok({ jobId: job.id }, { status: 202 });
         }
 
-        const { type, topic, coreMessage, tone, cta, sampleOnly, clientId, styleGuide, styleMemory, excludedClientIds, serviceFilters, serviceLogic } = payload;
+        const { type, topic, coreMessage, cta, sampleOnly, clientId, styleGuide, styleMemory, excludedClientIds, serviceFilters, serviceLogic } = payload;
 
         // 1. Initial Matrix Calibration (Dynamic Settings)
         const settings = await getGlobalSettings();

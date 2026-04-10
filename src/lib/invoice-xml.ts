@@ -60,6 +60,14 @@ function peelOneLayer(obj: unknown, parser: XMLParser): unknown {
     const o = obj as Record<string, unknown>;
 
     const wrapperKeys = [
+        "GetActiveClientsResult",
+        "GetInactiveClientsResult",
+        "GetActiveClientsResponse",
+        "GetInactiveClientsResponse",
+        "getActiveClientsResult",
+        "getInactiveClientsResult",
+        "getActiveClientsResponse",
+        "getInactiveClientsResponse",
         "GetClientsResult",
         "getClientsResult",
         "GetClientsResponse",

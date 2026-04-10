@@ -19,6 +19,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useBranding } from "@/hooks/useBranding";
+import { apiPath, appPath } from "@/lib/app-path";
 
 const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -35,6 +37,7 @@ export function Sidebar() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
     const [stats, setStats] = useState({ totalClients: 0, integrationReady: false });
+    const { projectName, projectLogo } = useBranding();
     const supabase = createClient();
 
     // 1. Fetch Auth Session (Supabase)
@@ -47,7 +50,7 @@ export function Sidebar() {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setUser(session?.user ?? null);
-            if (!session) router.push("/login");
+            if (!session) router.push(appPath("/login"));
         });
 
         return () => subscription.unsubscribe();
@@ -55,14 +58,14 @@ export function Sidebar() {
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        router.push("/login");
+        router.push(appPath("/login"));
     };
 
     // 2. Fetch Sidebar Stats (Fast/Smart)
     useEffect(() => {
         const fetchSidebarStats = async () => {
             try {
-                const res = await fetch("/api/dashboard-stats");
+                const res = await fetch(apiPath("/dashboard-stats"));
                 if (res.ok) setStats(await res.json());
             } catch (error) {
                 console.error("Sidebar stats failure", error);
@@ -76,13 +79,13 @@ export function Sidebar() {
         // Only trigger if no input is focused
         if (["INPUT", "TEXTAREA"].includes((document.activeElement as HTMLElement)?.tagName)) return;
 
-        if (e.key.toLowerCase() === "g") {
+        if (e.key?.toLowerCase() === "g") {
             const nextKeyHandler = (ne: KeyboardEvent) => {
-                const key = ne.key.toLowerCase();
-                if (key === "d") router.push("/");
-                if (key === "c") router.push("/clients");
-                if (key === "s") router.push("/settings");
-                if (key === "i") router.push("/import");
+                const key = ne.key?.toLowerCase();
+                if (key === "d") router.push(appPath("/"));
+                if (key === "c") router.push(appPath("/clients"));
+                if (key === "s") router.push(appPath("/settings"));
+                if (key === "i") router.push(appPath("/import"));
                 window.removeEventListener("keydown", nextKeyHandler);
             };
             window.addEventListener("keydown", nextKeyHandler, { once: true });
@@ -97,8 +100,19 @@ export function Sidebar() {
     return (
         <div className="w-64 h-screen border-r border-slate-200 bg-slate-50 flex flex-col z-50 sticky top-0 hidden md:flex">
             <div className="p-6 pt-8 pb-8 flex justify-start">
-                <div className="flex items-center gap-2 group">
-                    <img src="/logo.png" alt="I Knowledge Factory Pvt. Ltd." className="h-12 w-auto object-contain" />
+                <div className="flex items-center gap-3 group">
+                    {projectLogo ? (
+                        <div className="bg-slate-900 p-2 rounded-xl shadow-sm border border-slate-800 flex items-center justify-center min-w-[3rem]">
+                            <img src={projectLogo} alt={projectName} className="h-8 w-auto object-contain" />
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-lg shadow-sm">
+                                {projectName.charAt(0)}
+                            </div>
+                            <span className="font-bold text-slate-900 tracking-tight text-lg">{projectName}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 

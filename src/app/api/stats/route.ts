@@ -112,7 +112,7 @@ export async function GET() {
         ]);
 
         // Integration readiness (used for "Verify data health and integrations")
-        const [integrationConfig, totalAccounts] = await Promise.all([
+        const [integrationConfig, gmailAccounts] = await Promise.all([
             prisma.globalSettings.findUnique({
                 where: { id: "singleton" },
                 select: {
@@ -120,9 +120,11 @@ export async function GET() {
                     googleRefreshTokenEncrypted: true,
                 },
             }),
-            prisma.gmailAccount.count(),
+            prisma.gmailAccount.findMany({
+                select: { accountName: true, email: true }
+            }),
         ]);
-        const integrationReady = !!(integrationConfig?.zohoRefreshTokenEncrypted || integrationConfig?.googleRefreshTokenEncrypted || totalAccounts > 0);
+        const integrationReady = !!(integrationConfig?.zohoRefreshTokenEncrypted || integrationConfig?.googleRefreshTokenEncrypted || gmailAccounts.length > 0);
 
         const totalClients = dataIntegrityRaw[0];
         const completeProfiles = dataIntegrityRaw[1];
@@ -141,16 +143,57 @@ export async function GET() {
         const sourceStats = {
             zoho: 0,
             invoice: 0,
-            gmail: [] as { email: string, count: number }[]
+            gmail: [] as { email: string, nametext: string, count: number }[]
         };
+
+        const gmailAccountMap = new Map<string, number>();
+        let gmailUnassigned = 0;
 
         (sourceCountsRaw as SourceCount[]).forEach((sc) => {
             if (sc.source === 'ZOHO_BIGIN') sourceStats.zoho += sc._count;
             if (sc.source === 'INVOICE_SYSTEM') sourceStats.invoice += sc._count;
-            if (sc.source === 'GMAIL' && sc.gmailSourceAccount) {
-                sourceStats.gmail.push({ email: sc.gmailSourceAccount, count: sc._count });
+            if (sc.source === 'GMAIL') {
+                const source = sc.gmailSourceAccount?.trim();
+                if (!source) {
+                    gmailUnassigned += sc._count;
+                } else {
+                    // Try to resolve exactly or by name
+                    const account = gmailAccounts.find(a => 
+                        a.email.toLowerCase() === source.toLowerCase() || 
+                        a.accountName.toLowerCase() === source.toLowerCase()
+                    );
+                    
+                    if (account) {
+                        gmailAccountMap.set(account.email, (gmailAccountMap.get(account.email) || 0) + sc._count);
+                    } else if (gmailAccounts.length === 1) {
+                        // If only one account, and it's a generic source string, map it
+                        const soleAccount = gmailAccounts[0];
+                        gmailAccountMap.set(soleAccount.email, (gmailAccountMap.get(soleAccount.email) || 0) + sc._count);
+                    } else {
+                        // Truly legacy/unassigned string with multiple accounts connected
+                        gmailUnassigned += sc._count;
+                    }
+                }
             }
         });
+
+        // Convert Map to Array for SourceStats
+        sourceStats.gmail = Array.from(gmailAccountMap.entries()).map(([email, count]) => {
+            const acc = gmailAccounts.find(a => a.email === email);
+            return {
+                email,
+                nametext: acc?.accountName || "Connected Node",
+                count
+            };
+        });
+
+        if (gmailUnassigned > 0) {
+            sourceStats.gmail.push({
+                email: 'Unassigned',
+                nametext: 'Legacy Syncs',
+                count: gmailUnassigned
+            });
+        }
 
         // Process Level Counts
         const statsMap: Record<string, number> = { "Active": 0, "Warm Lead": 0, "Past Client": 0 };

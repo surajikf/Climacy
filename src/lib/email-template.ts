@@ -338,7 +338,7 @@ export function wrapInEmailTemplate(
     recipientName: string,
     options?: { isPreview?: boolean; templateSpec?: EmailTemplateSpec },
 ) {
-    const logoSrc = options?.isPreview ? "/logo.png" : "cid:logo";
+    const logoSrc = "http://ikf-outreach.ikf.in/logo.png";
     const sections = extractSectionsFromBody(content || "");
 
     const disclaimer = `This communication contains proprietary insights curated by I Knowledge Factory Pvt. Ltd.. It is intended solely for ${recipientName || "the designated recipient"} and may not be distributed without authorization.`;
@@ -509,7 +509,7 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
   </div>
 </div>`.trim();
 
-    const logoHtml = `<img src="${logoSrc}" alt="I Knowledge Factory Pvt. Ltd." class="logo" width="92">`;
+    const logoHtml = `<img src="http://ikf-outreach.ikf.in/logo.png" alt="I Knowledge Factory Pvt. Ltd." class="logo" width="92">`;
 
     const replacements: Record<string, string> = {
         // Wrap modules into table cells to improve email-client compatibility.

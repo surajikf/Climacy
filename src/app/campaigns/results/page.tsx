@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     Copy,
@@ -35,7 +35,7 @@ import { toast } from "sonner";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
 import { sanitizeEmailHtml } from "@/lib/email-sanitize";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { apiPath, appPath } from "@/lib/app-path";
 
 const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: number, label: string, icon: any, color?: "blue" | "red" | "emerald" | "slate" }) => {
     const radius = 18;
@@ -122,7 +122,7 @@ const StudioSkeleton = () => (
     </div>
 );
 
-export default function CampaignResults() {
+function CampaignResultsContent() {
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -183,7 +183,7 @@ export default function CampaignResults() {
             // so the results page shows fresh campaign payloads immediately.
             const poll = async () => {
                 try {
-                    const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+            const res = await fetch(apiPath(`/jobs/${encodeURIComponent(jobId)}`));
                     const json = await res.json();
                     const job = json?.data?.job;
 
@@ -223,7 +223,7 @@ export default function CampaignResults() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [jobId]);
 
-    const activeDraftContext = campaigns[activeIndex]?.id ? `campaigns:results:${campaigns[activeIndex].id}` : null;
+    const activeDraftContext = campaigns[activeIndex]?.id ? `campaigns__results__${campaigns[activeIndex].id}` : null;
 
     // Restore draft when active campaign changes
     useEffect(() => {
@@ -234,7 +234,7 @@ export default function CampaignResults() {
         setHasEditedSinceLoad(false);
         (async () => {
             try {
-                const res = await fetch(`/api/drafts/${encodeURIComponent(activeDraftContext)}`);
+            const res = await fetch(apiPath(`/drafts/${encodeURIComponent(activeDraftContext)}`));
                 const json = await res.json();
                 const draft = json?.data?.draft;
                 if (!cancelled && draft) {
@@ -260,7 +260,7 @@ export default function CampaignResults() {
         if (!activeDraftContext) return;
         if (pendingDraft && !hasEditedSinceLoad) return;
         const t = setTimeout(() => {
-            fetch(`/api/drafts/${encodeURIComponent(activeDraftContext)}`, {
+            fetch(apiPath(`/drafts/${encodeURIComponent(activeDraftContext)}`), {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -278,7 +278,7 @@ export default function CampaignResults() {
 
     const fetchLatestResults = async (sinceOverride?: string | null) => {
         try {
-            const res = await fetch("/api/campaigns/history?limit=20");
+            const res = await fetch(apiPath("/campaigns/history?limit=20"));
             const result = await res.json();
             if (result.success) {
                 const since = sinceOverride !== undefined ? sinceOverride : jobCreatedAt;
@@ -351,7 +351,7 @@ export default function CampaignResults() {
             setIsDispatching(true);
             setDispatchProgress(0);
 
-            const res = await fetch("/api/campaigns/dispatch/batch", {
+            const res = await fetch(apiPath("/campaigns/dispatch/batch"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ campaignIds: idsToDispatch })
@@ -369,7 +369,7 @@ export default function CampaignResults() {
 
             const poll = async () => {
                 try {
-                    const jr = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+                const jr = await fetch(apiPath(`/jobs/${encodeURIComponent(jobId)}`));
                     const jdata = await jr.json();
                     const job = jdata?.data?.job;
 
@@ -439,7 +439,7 @@ export default function CampaignResults() {
         if (!campaigns[activeIndex]) return;
         setIsSaving(true);
         try {
-            const res = await fetch(`/api/campaigns/${campaigns[activeIndex].id}`, {
+            const res = await fetch(apiPath(`/campaigns/${campaigns[activeIndex].id}`), {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ subject: editedSubject, body: editedBody })
@@ -483,7 +483,7 @@ export default function CampaignResults() {
                 <p className="text-sm font-medium text-slate-500">No synthesized campaigns found in the current matrix.</p>
             </div>
             <button
-                onClick={() => window.location.href = "/campaigns"}
+                                    onClick={() => { window.location.href = appPath("/campaigns"); }}
                 className="bg-blue-600 text-white px-6 py-2.5 rounded-md text-sm font-semibold shadow-sm hover:bg-blue-700 active:scale-[0.98] transition-all"
             >
                 Generate First Campaign
@@ -501,13 +501,10 @@ export default function CampaignResults() {
                         Neural Composer
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-600 uppercase tracking-widest animate-pulse">Sync Active</span>
                     </h2>
-                    <div className="mt-2">
-                        <Breadcrumbs />
-                    </div>
                     <p className="text-sm font-medium text-slate-500 mt-1">Refine the communication vector for maximum strategic resonance.</p>
                 </div>
                 <button
-                    onClick={() => window.location.href = "/campaigns"}
+                                    onClick={() => { window.location.href = appPath("/campaigns"); }}
                     className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 rounded-md hover:bg-slate-100 border border-transparent hover:border-slate-200"
                 >
                     <ArrowLeft className="w-4 h-4" />
@@ -632,7 +629,7 @@ export default function CampaignResults() {
                                                 type="button"
                                                 onClick={async () => {
                                                     try {
-                                                        await fetch(`/api/drafts/${encodeURIComponent(activeDraftContext!)}`, { method: "DELETE" });
+                await fetch(apiPath(`/drafts/${encodeURIComponent(activeDraftContext!)}`), { method: "DELETE" });
                                                     } catch {}
                                                     setPendingDraft(null);
                                                     toast.info("Draft discarded.");
@@ -778,5 +775,13 @@ export default function CampaignResults() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function CampaignResults() {
+    return (
+        <Suspense fallback={<div className="w-full py-8 px-3 sm:px-4 lg:px-6"><StudioSkeleton /></div>}>
+            <CampaignResultsContent />
+        </Suspense>
     );
 }

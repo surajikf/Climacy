@@ -33,7 +33,9 @@ import {
     UserCircle2,
     DownloadCloud,
     Phone,
-    Loader2
+    Loader2,
+    ShieldAlert,
+    Ban
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClientModal } from "@/components/ClientModal";
@@ -41,23 +43,38 @@ import { toast } from "sonner";
 import { categorizeEmail, CATEGORIES, CATEGORY_COLORS, EmailCategory } from "@/lib/emailCategorization";
 import { motion, AnimatePresence } from "framer-motion";
 import { SmartLoader } from "@/components/SmartLoader";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { apiPath, appPath } from "@/lib/app-path";
 
-const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete }: any) => {
+const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onToggleBlock }: any) => {
+    const isBlocked = contact.isBlocked;
+
     return (
         <motion.tr
             initial={pageSize > 50 ? false : { opacity: 0, y: 5 }}
             animate={pageSize > 50 ? false : { opacity: 1, y: 0 }}
             transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.2 }}
-            className="hover:bg-slate-50/50 transition-all border-l-[3px] border-l-transparent hover:border-l-blue-600 group/row"
+            className={cn(
+                "hover:bg-slate-50/50 transition-all border-l-[3px] border-l-transparent hover:border-l-blue-600 group/row",
+                isBlocked && "opacity-40 grayscale-[0.5]"
+            )}
         >
             <td className="px-4 py-5 w-12 text-center text-slate-400 text-xs font-bold align-top">
                 <span className="text-slate-500">{(page - 1) * pageSize + index + 1}</span>
             </td>
             <td className="px-6 py-5 align-top">
                 <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700 flex items-center justify-center font-bold text-base shrink-0 border border-blue-100/50 shadow-sm" title="Client Profile Picture">
+                    <div className={cn(
+                        "w-11 h-11 rounded-xl flex items-center justify-center font-bold text-base shrink-0 border shadow-sm relative",
+                        isBlocked 
+                            ? "bg-slate-100 text-slate-400 border-slate-200" 
+                            : "bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700 border-blue-100/50"
+                    )} title="Client Profile Picture">
                         {(contact.contactPerson || contact.email || "?")[0].toUpperCase()}
+                        {isBlocked && (
+                            <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-slate-200">
+                                <Ban className="w-2.5 h-2.5 text-rose-500" />
+                            </div>
+                        )}
                     </div>
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2 mb-0.5">
@@ -267,6 +284,16 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete }: an
             </td>
             <td className="px-6 py-5 align-top text-right">
                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity pt-0.5">
+                    <button 
+                        onClick={() => onToggleBlock(contact)} 
+                        className={cn(
+                            "w-8 h-8 flex items-center justify-center rounded-lg transition-all",
+                            isBlocked ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                        )}
+                        title={isBlocked ? "Unblock Client" : "Block Client (Exclude from Campaigns)"}
+                    >
+                        {isBlocked ? <Check className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+                    </button>
                     <button onClick={() => onEdit(contact)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
                         <Edit3 className="w-3.5 h-3.5" />
                     </button>
@@ -294,6 +321,11 @@ export default function ClientManager() {
     const [filterLevel, setFilterLevel] = useState<string[]>([]);
     const [filterService, setFilterService] = useState<string[]>([]);
     const [filterSource, setFilterSource] = useState<string[]>([]);
+    const [filterStats, setFilterStats] = useState<{
+        industries: Record<string, number>;
+        levels: Record<string, number>;
+        services: Record<string, number>;
+    }>({ industries: {}, levels: {}, services: {} });
     const [services, setServices] = useState<any[]>([]);
     const [sortField] = useState<"lastInvoiceDate" | "createdAt">("lastInvoiceDate");
     const [sortDir] = useState<"asc" | "desc">("desc");
@@ -328,7 +360,7 @@ export default function ClientManager() {
 
     const fetchServices = async () => {
         try {
-            const res = await fetch("/api/services");
+            const res = await fetch(apiPath("/services"));
             const result = await res.json();
             if (result.success) {
                 setServices(result.data);
@@ -356,14 +388,15 @@ export default function ClientManager() {
             query.append("sortField", sortField);
             query.append("sortDir", sortDir);
 
-            const res = await fetch(`/api/clients?${query.toString()}`, { signal: abortControllerRef.current.signal });
+            const res = await fetch(apiPath(`/clients?${query.toString()}`), { signal: abortControllerRef.current.signal });
             const result = await res.json();
             
             if (result.success) {
-                const { clients: fetchedClients, total: fetchedTotal, sourceStats: fetchedSourceStats } = result.data;
+                const { clients: fetchedClients, total: fetchedTotal, sourceStats: fetchedSourceStats, filterStats: fetchedFilterStats } = result.data;
                 setClients(fetchedClients || []);
                 setTotal(fetchedTotal || 0);
                 setSourceStats(fetchedSourceStats || {});
+                if (fetchedFilterStats) setFilterStats(fetchedFilterStats);
             } else {
                 console.error("API Error:", result.error);
                 setClients([]);
@@ -379,7 +412,7 @@ export default function ClientManager() {
     const confirmDelete = async () => {
         if (!clientToDelete) return;
         try {
-            const res = await fetch(`/api/clients/${clientToDelete}`, { method: "DELETE" });
+            const res = await fetch(apiPath(`/clients/${clientToDelete}`), { method: "DELETE" });
             const result = await res.json();
             if (result.success) {
                 toast.success("Entity removed from the database.");
@@ -423,7 +456,7 @@ export default function ClientManager() {
     const confirmServiceDelete = async () => {
         if (!serviceToDelete) return;
         try {
-            const res = await fetch(`/api/services/${serviceToDelete}`, { method: "DELETE" });
+            const res = await fetch(apiPath(`/services/${serviceToDelete}`), { method: "DELETE" });
             if (res.ok) {
                 toast.success("Service record purged.");
                 fetchServices();
@@ -439,6 +472,31 @@ export default function ClientManager() {
     const handleEdit = (client: any) => {
         setSelectedClient(client);
         setIsModalOpen(true);
+    };
+
+    const handleToggleBlock = async (client: any) => {
+        const newStatus = !client.isBlocked;
+        try {
+            const res = await fetch(apiPath(`/clients/${client.id}/block`), {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isBlocked: newStatus }),
+            });
+            const result = await res.json();
+            if (result.success) {
+                toast.success(newStatus ? "Client blocked from campaigns." : "Client reinstated.");
+                fetchClients();
+            } else {
+                toast.error(result.error?.message || "Failed to update status.");
+                console.error("BLOCK UPDATE CRITICAL ERROR:", result.error);
+                if (result.error?.details) {
+                    console.error("DETAILS:", JSON.stringify(result.error.details, null, 2));
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Transmission failure.");
+        }
     };
 
     const filteredClients = useMemo(() => clients, [clients]);
@@ -488,8 +546,9 @@ export default function ClientManager() {
         ];
     }, [clients]);
 
-    const FilterPopover = ({ label, options, selected, onToggle, icon: Icon }: any) => {
+    const FilterPopover = ({ label, options, selected, onToggle, icon: Icon, stats }: any) => {
         const [isOpen, setIsOpen] = useState(false);
+        const [optSearch, setOptSearch] = useState("");
         const popoverRef = useRef<HTMLDivElement>(null);
 
         useEffect(() => {
@@ -502,59 +561,115 @@ export default function ClientManager() {
             return () => document.removeEventListener("mousedown", handleClickOutside);
         }, []);
 
+        const filteredOptions = options.filter((opt: any) => {
+            const display = typeof opt === 'string' ? opt : opt.label;
+            return display.toLowerCase().includes(optSearch.toLowerCase());
+        });
+
         return (
             <div className="relative" ref={popoverRef}>
                 <button
                     onClick={() => setIsOpen(!isOpen)}
                     className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border",
+                        "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 border",
                         selected.length > 0
-                            ? "bg-blue-50 text-blue-700 border-blue-200 shadow-sm"
-                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                            ? "bg-blue-600 text-white border-blue-500 shadow-[0_4px_12px_rgba(37,99,235,0.2)]"
+                            : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm"
                     )}
                 >
-                    {Icon && <Icon className="w-3.5 h-3.5" />}
+                    {Icon && <Icon className={cn("w-3.5 h-3.5", selected.length > 0 ? "text-white" : "text-slate-400")} />}
                     <span>{label}</span>
                     {selected.length > 0 && (
-                        <span className="flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-blue-600 text-white rounded-full">
+                        <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[9px] font-black bg-white text-blue-600 rounded-lg shadow-sm">
                             {selected.length}
                         </span>
                     )}
-                    <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", isOpen && "rotate-180")} />
+                    <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", isOpen && "rotate-180")} />
                 </button>
 
                 <AnimatePresence>
                     {isOpen && (
                         <motion.div
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
                             transition={{ duration: 0.2, ease: "easeOut" }}
-                            className="absolute z-50 mt-2 w-64 bg-white/80 backdrop-blur-xl border border-slate-200 rounded-xl shadow-2xl p-2 top-full right-0 md:left-0"
+                            className="absolute z-50 mt-2 w-72 bg-white/95 backdrop-blur-2xl border border-slate-200 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-2 top-full right-0 md:left-0 origin-top-left"
                         >
-                            <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
-                                {options.map((opt: any) => {
-                                    const value = typeof opt === 'string' ? opt : opt.value;
-                                    const display = typeof opt === 'string' ? opt : opt.label;
-                                    const isSelected = selected.includes(value);
-
-                                    return (
-                                        <button
-                                            key={value}
-                                            onClick={() => onToggle(value)}
-                                            className={cn(
-                                                "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-0.5",
-                                                isSelected
-                                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                                                    : "text-slate-700 hover:bg-slate-100"
-                                            )}
-                                        >
-                                            <span className="truncate">{display}</span>
-                                            {isSelected && <Check className="w-4 h-4 shrink-0" />}
-                                        </button>
-                                    );
-                                })}
+                            {/* Option Search */}
+                            <div className="px-2 pb-2 pt-1 border-b border-slate-100/50 mb-2">
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 focus-within:border-blue-300 transition-all">
+                                    <Search className="w-3.5 h-3.5 text-slate-400" />
+                                    <input 
+                                        type="text" 
+                                        placeholder={`Find ${label.toLowerCase()}...`}
+                                        className="bg-transparent border-none outline-none text-xs font-bold text-slate-600 w-full placeholder:text-slate-300"
+                                        value={optSearch}
+                                        onChange={(e) => setOptSearch(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
                             </div>
+
+                            <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 pr-1">
+                                {filteredOptions.length === 0 ? (
+                                    <div className="py-8 text-center px-4">
+                                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-relaxed">No matching<br/>entries found</p>
+                                    </div>
+                                ) : (
+                                    filteredOptions.map((opt: any) => {
+                                        const value = typeof opt === 'string' ? opt : opt.value;
+                                        const display = typeof opt === 'string' ? opt : opt.label;
+                                        const isSelected = selected.includes(value);
+                                        const count = stats?.[value] || 0;
+
+                                        return (
+                                            <button
+                                                key={value}
+                                                onClick={() => onToggle(value)}
+                                                className={cn(
+                                                    "w-full flex items-center justify-between px-3 py-2 rounded-xl text-[11px] font-bold transition-all mb-1 group/item",
+                                                    isSelected
+                                                        ? "bg-blue-50 text-blue-700 shadow-sm"
+                                                        : "text-slate-600 hover:bg-slate-50"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className={cn(
+                                                        "w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                                        isSelected 
+                                                            ? "bg-blue-600 border-blue-600 shadow-[0_2px_8px_rgba(37,99,235,0.3)]" 
+                                                            : "bg-white border-slate-300 group-hover/item:border-blue-400"
+                                                    )}>
+                                                        {isSelected && <Check className="w-3 h-3 text-white stroke-[3px]" />}
+                                                    </div>
+                                                    <span className="truncate">{display}</span>
+                                                </div>
+                                                {count > 0 && (
+                                                    <span className={cn(
+                                                        "text-[9px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center transition-colors",
+                                                        isSelected ? "bg-white text-blue-600" : "bg-slate-100 text-slate-400 group-hover/item:bg-blue-50 group-hover/item:text-blue-500"
+                                                    )}>
+                                                        {count}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+                            
+                            {selected.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between px-2 pb-1">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{selected.length} Selected</p>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); selected.forEach((v: string) => onToggle(v)); }}
+                                        className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest p-1"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -569,9 +684,6 @@ export default function ClientManager() {
                     <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
                         {view === "clients" ? "Portfolio" : view === "services" ? "Capabilities" : "Role-Based Contacts"}
                     </h2>
-                    <div className="mt-2">
-                        <Breadcrumbs />
-                    </div>
                     <p className="text-sm font-medium text-slate-500">
                         {view === "clients" ? "Manage and segment your company records." :
                             view === "services" ? "Configure service offerings and categories." :
@@ -860,7 +972,7 @@ export default function ClientManager() {
                                                         Clear Filters
                                                     </button>
                                                     <button
-                                                        onClick={() => window.location.href = "/import"}
+                                                        onClick={() => { window.location.href = appPath("/import"); }}
                                                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 uppercase tracking-widest"
                                                     >
                                                         <Upload className="w-3.5 h-3.5" />
@@ -887,6 +999,7 @@ export default function ClientManager() {
                                             pageSize={pageSize}
                                             onEdit={handleEdit}
                                             onDelete={(id: string) => setClientToDelete(id)}
+                                            onToggleBlock={handleToggleBlock}
                                         />
                                     ))
                                 )}
@@ -1100,4 +1213,3 @@ export default function ClientManager() {
         </div>
     );
 }
-

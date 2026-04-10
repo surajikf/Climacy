@@ -34,25 +34,70 @@ export function getLastName(contactPerson?: string | null) {
 }
 
 export function replaceVariables(content: string, client: any) {
+    if (!content) return "";
+    if (!client) return content; // Safe fallback if no client data is provided
+
+    const now = new Date();
+    let onboardDate: Date | null = null;
+    try {
+        if (client.clientAddedOn) {
+            onboardDate = new Date(client.clientAddedOn);
+            if (isNaN(onboardDate.getTime())) onboardDate = null;
+        }
+    } catch {
+        onboardDate = null;
+    }
+
+    // Smart Company Name Derivation
+    let derivedCompany = client.clientName || "";
+    if (!derivedCompany && client.email && client.email.includes("@")) {
+        const domain = client.email.split("@")[1].split(".")[0];
+        // Only use domain if it's not a public provider
+        const publicProviders = ["gmail", "outlook", "hotmail", "yahoo", "icloud", "me"];
+        if (!publicProviders.includes(domain.toLowerCase())) {
+            derivedCompany = domain.charAt(0).toUpperCase() + domain.slice(1);
+        }
+    }
+    
+    // Final default fallback
+    derivedCompany = derivedCompany || "your organization";
+
+    const fullName = client.contactPerson || client.poc || "";
+    const firstName = getFirstName(fullName) || "there";
+    
+    // Core variable map with prioritized fallbacks
     const variables: Record<string, string> = {
-        greeting: getSmartGreeting(client.contactPerson || client.poc),
-        firstName: getFirstName(client.contactPerson || client.poc),
-        lastName: getLastName(client.contactPerson || client.poc),
-        fullName: client.contactPerson || client.poc || "Valued Partner",
-        // Use neutral corporate phrasing when the specific client details are missing.
-        // Avoid fake defaults like "Acme Corp" which can make emails feel templated/AI-generated.
-        companyName: client.clientName || "your organization",
+        greeting: getSmartGreeting(fullName),
+        firstName: firstName,
+        lastName: getLastName(fullName) || "",
+        fullName: fullName || "Valued Partner",
+        companyName: derivedCompany,
         industry: client.industry || "your industry",
         services: client.invoiceServiceNames || "your current offering",
         location: client.address || "your team",
-        relationship: client.relationshipLevel || "your current priorities",
-        tenureYears: client.clientAddedOn ? (new Date().getFullYear() - new Date(client.clientAddedOn).getFullYear()).toString() : "0"
+        relationship: client.relationshipLevel || "our partnership",
+        tenureYears: onboardDate ? (now.getFullYear() - onboardDate.getFullYear()).toString() : "0",
+        onboardDate: onboardDate ? onboardDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "the start of our journey",
+        currentDate: now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
     };
 
     let processed = content;
+
+    // 1. Replace defined variables (case-insensitive)
     Object.entries(variables).forEach(([key, val]) => {
         const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
         processed = processed.replace(regex, val);
+    });
+
+    // 2. Specialized cleaning: Remove common left-over placeholders if not matched
+    // This prevents sending emails with "{{Variable}}" still in them.
+    processed = processed.replace(/\{\{[^}]+\}\}/g, (match) => {
+        const inner = match.slice(2, -2).toLowerCase();
+        if (inner.includes("company")) return variables.companyName;
+        if (inner.includes("name") || inner.includes("person")) return variables.fullName;
+        if (inner.includes("date")) return variables.currentDate;
+        if (inner.includes("firstName")) return variables.firstName;
+        return ""; // Fallback to empty if unknown
     });
 
     return processed;

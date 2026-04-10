@@ -68,7 +68,7 @@ export type DashboardStatsResponse = {
     sourceStats: {
         zoho: number;
         invoice: number;
-        gmail: Array<{ email: string; count: number }>;
+        gmail: Array<{ email: string; nametext: string; count: number }>;
     };
     dataHealth: DashboardDataHealth;
     audienceState: DashboardAudienceState;

@@ -24,8 +24,8 @@ function plainTextToHtml(text: string) {
 
   const flushPara = () => {
     if (currentPara.length) {
-      const p = currentPara.join(" ").trim();
-      if (p) blocks.push(`<p>${escapeHtml(p)}</p>`);
+      const p = currentPara.map(line => escapeHtml(line)).join("<br>").trim();
+      if (p) blocks.push(`<p>${p}</p>`);
       currentPara = [];
     }
   };

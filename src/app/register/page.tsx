@@ -4,9 +4,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, User, ShieldAlert } from "lucide-react";
+import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { apiPath, appPath } from "@/lib/app-path";
 
 export default function RegisterPage() {
     const [name, setName] = useState("");
@@ -15,13 +16,14 @@ export default function RegisterPage() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const supabase = createClient();
+    const { projectName, projectLogo } = useBranding();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const res = await fetch("/api/auth/register", {
+            const res = await fetch(apiPath("/auth/register"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, email, password }),
@@ -40,9 +42,9 @@ export default function RegisterPage() {
 
                 if (signInError) {
                     toast.error(`Login Failed: ${signInError.message}`);
-                    router.push("/login");
+                    router.push(appPath("/login"));
                 } else {
-                    router.push("/"); 
+                    router.push(appPath("/")); 
                     router.refresh();
                 }
             } else {
@@ -65,14 +67,19 @@ export default function RegisterPage() {
                 <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50 relative overflow-hidden">
                     {/* Header */}
                     <div className="text-center mb-8">
-                        <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/30">
-                            <ShieldAlert className="w-7 h-7 text-white" />
-                        </div>
-                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">Request Access</h1>
-                        <div className="mt-3 flex justify-center">
-                            <Breadcrumbs />
-                        </div>
-                        <p className="text-sm font-medium text-slate-500 mt-2">Level-5 Clearance Required</p>
+                        {projectLogo ? (
+                            <div className="bg-slate-900 p-3 rounded-2xl shadow-lg border border-slate-800 flex items-center justify-center min-w-[4rem] w-fit mx-auto mb-6">
+                                <img src={projectLogo} alt={projectName} className="h-10 w-auto object-contain" />
+                            </div>
+                        ) : (
+                            <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/30">
+                                <span className="text-white text-2xl font-black">{projectName.charAt(0)}</span>
+                            </div>
+                        )}
+                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">
+                            {projectName}
+                        </h1>
+                        <p className="text-sm font-medium text-slate-500 mt-2">Request Access Clearance</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">

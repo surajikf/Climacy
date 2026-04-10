@@ -30,6 +30,7 @@ export async function middleware(request: NextRequest) {
 
     const { data: { user } } = await supabase.auth.getUser();
     const { pathname } = request.nextUrl;
+    const withBasePath = (path: string) => `${request.nextUrl.basePath || ""}${path === "/" ? "" : path}` || "/";
 
     // Allow public access to APIs (API routes handle auth/authorization themselves),
     // Next.js internal routes, and static files.
@@ -51,37 +52,37 @@ export async function middleware(request: NextRequest) {
     if (isAuthRoute) {
         if (user) {
             if (status === 'PENDING') {
-                return NextResponse.redirect(new URL('/pending', request.url));
+                return NextResponse.redirect(new URL(withBasePath('/pending'), request.url));
             }
-            return NextResponse.redirect(new URL('/', request.url));
+            return NextResponse.redirect(new URL(withBasePath('/'), request.url));
         }
         return response;
     }
 
     // Protected Routes logic
     if (!user) {
-        return NextResponse.redirect(new URL('/login', request.url));
+        return NextResponse.redirect(new URL(withBasePath('/login'), request.url));
     }
 
     // Check Approval Status
     const isUpdatePasswordRoute = pathname === '/update-password';
 
     if (status === 'PENDING' && pathname !== '/pending' && !isUpdatePasswordRoute) {
-        return NextResponse.redirect(new URL('/pending', request.url));
+        return NextResponse.redirect(new URL(withBasePath('/pending'), request.url));
     }
 
     if (status === 'BANNED' && pathname !== '/banned' && !isUpdatePasswordRoute) {
-        return NextResponse.redirect(new URL('/banned', request.url));
+        return NextResponse.redirect(new URL(withBasePath('/banned'), request.url));
     }
 
     // If approved, prevent access to pending/banned
     if (status === 'APPROVED' && (pathname === '/pending' || pathname === '/banned')) {
-        return NextResponse.redirect(new URL('/', request.url));
+        return NextResponse.redirect(new URL(withBasePath('/'), request.url));
     }
 
     // Admin Routes logic
     if (pathname.startsWith('/admin') && role !== 'ADMIN') {
-        return NextResponse.redirect(new URL('/', request.url));
+        return NextResponse.redirect(new URL(withBasePath('/'), request.url));
     }
 
     return response;

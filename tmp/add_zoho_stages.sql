@@ -1,0 +1,1 @@
+ALTER TABLE "GlobalSettings" ADD COLUMN IF NOT EXISTS "zohoStages" JSONB DEFAULT '[]';

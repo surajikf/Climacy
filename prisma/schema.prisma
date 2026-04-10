@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/client"
 }
 
 datasource db {
@@ -34,6 +33,7 @@ model Client {
   primaryEmail        String?
   clientAddedOn       DateTime?
   invoiceServiceNames String?
+  isBlocked           Boolean           @default(false)
   campaigns           CampaignHistory[]
   services            Service[]         @relation("ClientServices")
   metadata            Json?             @default("{}")
@@ -126,6 +126,17 @@ model GlobalSettings {
   zohoRefreshTokenEncrypted   String?
   zohoStageName               String?
   zohoFieldMapping            Json?    @default("[]")
+  zohoSyncAllToMetadata       Boolean  @default(false)
+  zohoExcludedFields          Json?    @default("[]")
+  zohoStages                  String[] @default([])
+  zohoGrantedScopes           String?
+  projectName                 String   @default("IKF Outreach")
+  projectLogo                 String?
+  emailProvider               String   @default("GMAIL")
+  brevoApiKeyEncrypted        String?
+  brevoSenderEmail            String?
+  brevoSenderName             String?
+  brevoReplyTo                String?
 }
 
 model User {

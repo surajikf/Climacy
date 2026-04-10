@@ -55,7 +55,12 @@ function computeClientQuality(client: {
 const createClientSchema = z.object({
     clientName: z.string().min(1, "Client name is required"),
     contactPerson: z.string().optional().nullable(),
-    email: z.string().email("A valid email is required"),
+    email: z.string()
+        .min(1, "At least one email is required")
+        .refine(
+            (val) => val.split(',').every(e => z.string().email().safeParse(e.trim()).success),
+            { message: "One or more email addresses are invalid" }
+        ),
     industry: z.string().optional().nullable(),
     relationshipLevel: z.custom<RelationshipLevel>().default("Active"),
     serviceIds: z.array(z.string().min(1)).default([]),
@@ -68,7 +73,8 @@ export async function GET(request: Request) {
         const levels = searchParams.getAll("level");
         const serviceIds = searchParams.getAll("service");
         const sources = searchParams.getAll("source");
-        const showRoleBased = searchParams.get("roleBased") === "true";
+        const showRoleBased = (searchParams.get("roleBased") === "true") || (searchParams.get("showRoleBased") === "true");
+        const isSmartView = searchParams.get("smart") === "true";
         const search = searchParams.get("search")?.trim() || "";
         const sortField = (searchParams.get("sortField") || "lastInvoiceDate") as any;
         const sortDir = (searchParams.get("sortDir") === "asc" ? "asc" : "desc") as "asc" | "desc";
@@ -77,16 +83,20 @@ export async function GET(request: Request) {
         const pageSizeRaw = parseInt(searchParams.get("pageSize") || "25", 10) || 25;
 
         // Fetch granular source stats for the mini dashboard
-        const sourceStatsRaw = await prisma.client.groupBy({
-            by: ['source', 'relationshipLevel'],
-            _count: { _all: true }
-        });
-
-        const gmailStatsRaw = await prisma.client.groupBy({
-            by: ['gmailSourceAccount'],
-            where: { source: 'GMAIL' },
-            _count: { _all: true }
-        });
+        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts] = await Promise.all([
+            prisma.client.groupBy({
+                by: ['source', 'relationshipLevel'],
+                _count: { _all: true }
+            }),
+            prisma.client.groupBy({
+                by: ['gmailSourceAccount'],
+                where: { source: 'GMAIL' },
+                _count: { _all: true }
+            }),
+            prisma.gmailAccount.findMany({
+                select: { accountName: true, email: true }
+            }),
+        ]);
 
         // Initialize structured stats
         const sourceStats: any = {};
@@ -104,12 +114,15 @@ export async function GET(request: Request) {
         // Add Gmail specifics
         if (sourceStats['GMAIL']) {
             sourceStats['GMAIL'].accounts = gmailStatsRaw.reduce((acc: any, curr: any) => {
-                acc[curr.gmailSourceAccount || 'Unknown'] = curr._count._all;
+                const key = curr.gmailSourceAccount || 'Unknown';
+                const account = gmailAccounts.find(a => a.accountName === key || a.email === key);
+                const resolvedKey = account ? account.email : key;
+                acc[resolvedKey] = (acc[resolvedKey] || 0) + curr._count._all;
                 return acc;
             }, {});
         }
 
-        // Add Zoho specifics (Tags breakdown)
+        // Add Zoho specifics (Tags breakdown for the mini-dashboard tooltips)
         if (sourceStats['ZOHO_BIGIN']) {
             const zohoClients = await prisma.client.findMany({
                 where: { source: 'ZOHO_BIGIN' },
@@ -122,8 +135,54 @@ export async function GET(request: Request) {
                     tagCounts[tag] = (tagCounts[tag] || 0) + 1;
                 });
             });
-            sourceStats['ZOHO_BIGIN'].accounts = tagCounts; // Reusing 'accounts' for tags in Zoho view
+            sourceStats['ZOHO_BIGIN'].accounts = tagCounts;
         }
+
+        // Fetch Filter Distribution Stats (Smart Targeting Data)
+        const statsWhere = {
+            isRoleBased: showRoleBased,
+            isBlocked: false
+        };
+
+        const [industryGroup, levelGroup, serviceGroup] = await Promise.all([
+            prisma.client.groupBy({
+                by: ['industry'],
+                _count: { _all: true },
+                where: statsWhere
+            }),
+            prisma.client.groupBy({
+                by: ['relationshipLevel'],
+                _count: { _all: true },
+                where: statsWhere
+            }),
+            prisma.service.findMany({
+                select: {
+                    id: true,
+                    serviceName: true,
+                    _count: { 
+                        select: { 
+                            clients: { where: statsWhere } 
+                        } 
+                    }
+                }
+            })
+        ]);
+
+
+        const filterStats = {
+            industries: (industryGroup as any[]).reduce((acc, curr) => {
+                if (curr.industry) acc[curr.industry] = curr._count._all;
+                return acc;
+            }, {} as Record<string, number>),
+            levels: (levelGroup as any[]).reduce((acc, curr) => {
+                if (curr.relationshipLevel) acc[curr.relationshipLevel] = curr._count._all;
+                return acc;
+            }, {} as Record<string, number>),
+            services: serviceGroup.reduce((acc, curr) => {
+                acc[curr.id] = (curr as any)._count.clients;
+                return acc;
+            }, {} as Record<string, number>)
+        };
 
         const { data: clients, total, page: resolvedPage, pageSize } = await listClients({
             industries,
@@ -199,10 +258,18 @@ export async function GET(request: Request) {
             page: resolvedPage,
             pageSize,
             sourceStats,
+            filterStats
         });
     } catch (err: any) {
-        console.error("Failed to fetch clients:", err);
-        return error("INTERNAL_ERROR", "Failed to fetch clients");
+        console.error("CRITICAL API ERROR:", err);
+        return error("INTERNAL_ERROR", `API Logic Failed: ${err.message || 'Unknown Error'}`, { 
+            details: { 
+                name: err.name,
+                stack: err.stack,
+                prismaCode: err.code,
+                prismaMeta: err.meta
+            }
+        });
     }
 }
 

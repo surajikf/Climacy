@@ -90,13 +90,21 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
 
   const targetPipeline = (settings.zohoPipelineName || "").toLowerCase().trim();
   const targetStage = (settings.zohoStageName || "").toLowerCase().trim();
+  const targetStages = ((settings as any).zohoStages || []) as string[];
+  const lowerTargetStages = targetStages.map(s => s.toLowerCase().trim());
 
   const filteredDeals = allDeals.filter((deal: any) => {
     const dealPipeline = (deal.Pipeline || "").toLowerCase().trim();
     const dealStage = (deal.Stage || "").toLowerCase().trim();
 
     const pipelineMatch = targetPipeline ? dealPipeline.startsWith(targetPipeline) : true;
-    const stageMatch = targetStage ? dealStage === targetStage : true;
+    
+    let stageMatch = true;
+    if (lowerTargetStages.length > 0) {
+      stageMatch = lowerTargetStages.includes(dealStage);
+    } else if (targetStage) {
+      stageMatch = dealStage === targetStage;
+    }
 
     return pipelineMatch && stageMatch;
   });
@@ -138,7 +146,6 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
         clientName,
         contactPerson,
         email,
-        primaryEmail: email.split(",")[0].trim(),
         zohoTags,
         isRoleBased: isRoleBasedEmail(email),
         metadata: (existing?.metadata as any) || {},
@@ -164,6 +171,34 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
           }
         }
       }
+
+      // Sync All Columns to Metadata Provision
+      if ((settings as any).zohoSyncAllToMetadata) {
+        const exclusions = new Set((settings as any).zohoExcludedFields || []);
+        const skipKeys = new Set([
+          "id", "Owner", "Created_By", "Modified_By", "Created_Time", "Modified_Time", 
+          "Tag", "Pipeline", "Stage", "Contact_Name", "Deal_Name", "Account_Name",
+          "First_Name", "Last_Name", "Email", "Phone", "Mobile", "Mailing_Street", 
+          "Mailing_City", "Mailing_State", "Mailing_Zip", "Mailing_Country",
+          ...fieldMapping.map(m => m.zohoField.split(".")[1])
+        ]);
+
+        // Add Deal fields
+        Object.keys(deal).forEach(key => {
+          const fieldId = `deal.${key}`;
+          if (!skipKeys.has(key) && !exclusions.has(fieldId) && deal[key] !== null && deal[key] !== undefined) {
+            metadata[`deal_${key}`] = deal[key];
+          }
+        });
+
+        // Add Contact fields
+        Object.keys(contact).forEach(key => {
+          const fieldId = `contact.${key}`;
+          if (!skipKeys.has(key) && !exclusions.has(fieldId) && contact[key] !== null && contact[key] !== undefined) {
+            metadata[`contact_${key}`] = contact[key];
+          }
+        });
+      }
       
       mappedData.metadata = metadata;
 
@@ -181,16 +216,15 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
       const upsertSql = `
         INSERT INTO "Client" (
           "id", "clientName", "contactPerson", "email", "industry", "relationshipLevel", 
-          "source", "externalId", "zohoTags", "isRoleBased", "primaryEmail", "metadata", 
+          "source", "externalId", "zohoTags", "isRoleBased", "metadata", 
           "updatedAt", "createdAt"
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7::"ClientSource", $8, $9::text[], $10, $11, $12::jsonb, NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7::"ClientSource", $8, $9::text[], $10, $11::jsonb, NOW(), NOW()
         )
         ON CONFLICT ("source", "externalId") DO UPDATE SET
           "clientName" = EXCLUDED."clientName",
           "contactPerson" = EXCLUDED."contactPerson",
           "email" = EXCLUDED."email",
-          "primaryEmail" = EXCLUDED."primaryEmail",
           "zohoTags" = EXCLUDED."zohoTags",
           "isRoleBased" = EXCLUDED."isRoleBased",
           "metadata" = EXCLUDED."metadata",
@@ -209,7 +243,6 @@ export async function syncZohoDeals(): Promise<ZohoSyncResult> {
         externalId,
         mappedData.zohoTags,
         mappedData.isRoleBased,
-        mappedData.primaryEmail,
         JSON.stringify(mappedData.metadata)
       );
 

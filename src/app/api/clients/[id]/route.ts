@@ -5,7 +5,12 @@ import { z } from "zod";
 const clientUpdateSchema = z.object({
     clientName: z.string().min(1, "Client name is required"),
     contactPerson: z.string().optional(),
-    email: z.string().email("Valid email is required"),
+    email: z.string()
+        .min(1, "Valid email is required")
+        .refine(
+            (val) => val.split(',').every(e => z.string().email().safeParse(e.trim()).success),
+            { message: "One or more email addresses are invalid" }
+        ),
     industry: z.string().optional(),
     relationshipLevel: z.string().optional(),
     serviceIds: z.array(z.string()).default([]),

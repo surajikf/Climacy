@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { isRoleBasedEmail } from "@/lib/email-utils";
 
-export type RelationshipLevel = "Active" | "Warm Lead" | "Past Client";
+export type RelationshipLevel = "Active" | "Warm Lead" | "Past Client" | "Not Active";
 
 export interface ListClientsParams {
   industries?: string[];
@@ -41,7 +41,7 @@ export async function listClients(params: ListClientsParams) {
     ...(industries.length > 0 && { industry: { in: industries } }),
     ...(levels.length > 0 && { relationshipLevel: { in: levels } }),
     ...(sources.length > 0 && { source: { in: sources as any } }),
-    ...(showRoleBased && { isRoleBased: true }),
+    isRoleBased: showRoleBased,
     ...(serviceIds.length > 0 && {
       services: {
         some: { id: { in: serviceIds } },
@@ -82,6 +82,7 @@ export async function listClients(params: ListClientsParams) {
         industry: true,
         relationshipLevel: true,
         source: true,
+        isBlocked: true,
         isRoleBased: true,
         zohoTags: true,
         gmailSourceAccount: true,

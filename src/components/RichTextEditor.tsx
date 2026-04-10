@@ -21,6 +21,7 @@ import { cn, getSmartGreeting, getFirstName, getLastName } from "@/lib/utils";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
+import { apiPath } from "@/lib/app-path";
 
 // Custom Font Size Extension
 const FontSize = Extension.create({
@@ -180,7 +181,7 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
         setIsRefining(true);
         setShowMagicMenu(false);
         try {
-            const res = await fetch("/api/campaigns/refine", {
+            const res = await fetch(apiPath("/campaigns/refine"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: textToRefine, command })
@@ -271,21 +272,26 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
     const getLiveContent = () => {
         if (!isLivePreview || !sampleData) return content;
         let processed = content;
+        
+        const now = new Date();
+        const onboardDate = sampleData.clientAddedOn ? new Date(sampleData.clientAddedOn) : null;
+
         const variables: Record<string, string> = {
-            greeting: getSmartGreeting(sampleData.contactPerson),
-            firstName: getFirstName(sampleData.contactPerson),
-            lastName: getLastName(sampleData.contactPerson),
-            fullName: sampleData.contactPerson || "Valued Partner",
-            companyName: sampleData.clientName || "Acme Corp",
-            industry: sampleData.industry || "SaaS",
-            services: sampleData.invoiceServiceNames || "your business infrastructure",
-            location: sampleData.address || "your headquarters",
-            relationship: sampleData.relationshipLevel || "Valued Partner",
-            tenureYears: ((new Date().getFullYear() - new Date(sampleData.clientAddedOn).getFullYear()) || "0").toString()
+            greeting: getSmartGreeting(sampleData.contactPerson || sampleData.poc),
+            firstName: getFirstName(sampleData.contactPerson || sampleData.poc) || "there",
+            lastName: getLastName(sampleData.contactPerson || sampleData.poc) || "",
+            fullName: sampleData.contactPerson || sampleData.poc || "Valued Partner",
+            companyName: sampleData.clientName || "your organization",
+            industry: sampleData.industry || "your industry",
+            services: sampleData.invoiceServiceNames || "your current offering",
+            location: sampleData.address || "your team",
+            relationship: sampleData.relationshipLevel || "our partnership",
+            tenureYears: onboardDate ? (now.getFullYear() - onboardDate.getFullYear()).toString() : "0",
+            onboardDate: onboardDate ? onboardDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "the start of our journey",
+            currentDate: now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
         };
 
         Object.entries(variables).forEach(([key, val]) => {
-            // Case-insensitive replacement
             const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
             processed = processed.replace(regex, `<span class="bg-blue-50 text-blue-700 px-1 rounded font-bold border border-blue-200">${val}</span>`);
         });

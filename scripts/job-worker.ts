@@ -117,7 +117,6 @@ async function runCampaignGenerate(job: JobRow) {
     type,
     topic,
     coreMessage,
-    tone,
     cta,
     clientId,
     styleGuide,
@@ -199,44 +198,8 @@ async function runCampaignGenerate(job: JobRow) {
     let subject = replaceVariables(topic || `Strategic Perspective for {{companyName}}`, client);
     let emailBodyHtml = "";
 
-    if (useMock) {
-      emailBodyHtml = replaceVariables(coreMessage, client);
-      if (!emailBodyHtml.toLowerCase().startsWith(greeting.toLowerCase().split(" ")[0])) {
-        emailBodyHtml = `<p>${greeting},</p>${emailBodyHtml}`;
-      }
-      emailBodyHtml = dedupeLeadingSalutation(emailBodyHtml);
-
-      if (styleGuide) {
-        emailBodyHtml = replaceVariables(styleGuide.body, client);
-        subject = replaceVariables(styleGuide.subject, client);
-      }
-
-      // Lightweight metrics for mock generation.
-      return {
-        clientId: client.id,
-        clientName: client.clientName,
-        contactPerson: client.contactPerson,
-        campaignType: type,
-        campaignTopic: topic,
-        generatedOutput: JSON.stringify({
-          subject,
-          body: emailBodyHtml,
-          leadStrength: 70,
-          spamRisk: 5,
-        }),
-      };
-    }
-
-    const stylePrompt = styleGuide
-      ? `
-                        STYLE BLUEPRINT (HIGHEST PRIORITY):
-                        - Use this edited sample as the reference style for voice, sentence rhythm, and section flow.
-                        - Preserve structure and formatting pattern from the sample while personalizing details.
-                        - Keep output concise and human-written (no AI-like phrasing).
-                        SAMPLE SUBJECT: ${styleGuide.subject}
-                        SAMPLE BODY: ${styleGuide.body}
-                    `
-      : "";
+    let resSubject = subject;
+    let resEmailBody = "";
 
     const relationshipContext = `
                         INSTITUTIONAL INTELLIGENCE:
@@ -258,69 +221,145 @@ async function runCampaignGenerate(job: JobRow) {
         "GOAL: Re-igniting a dormant partnership. Reference previous successes and acknowledge the 'new chapter' or capability shift that makes a dialogue relevant now. The tone should be nostalgic yet forward-looking.",
     };
 
-    const prompt = `
-                        ${relationshipContext}
+    if (styleGuide) {
+      // STRICT LOGIC: If user provided a style guide (edited sample), 
+      // we MUST NOT use AI for generation to ensure 100% structural matching.
+      resSubject = replaceVariables(styleGuide.subject, client);
+      resEmailBody = replaceVariables(styleGuide.body, client);
+    } else if (useMock) {
+      resEmailBody = replaceVariables(coreMessage, client);
+      if (!resEmailBody.toLowerCase().startsWith(greeting.toLowerCase().split(" ")[0])) {
+        resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
+      }
+      resEmailBody = dedupeLeadingSalutation(resEmailBody);
 
-                        CORE LOGIC:
-                        - SENDER: Senior Advisor.
-                        - RECIPIENT: ${client.clientName}.
-                        - SECTOR: ${client.industry}.
-                        - OBJECTIVE: ${type}.
-                        ${objectiveContexts[type] || ""}
-                        
-                        GOAL:
-                        You have been provided with a MASTER DRAFT (Subject and Body). Your task is to perform a HIGH-FIDELITY PERSONALIZATION of this draft for ${client.clientName}.
-                        
-                        MASTER SUBJECT: "${topic}"
-                        MASTER BODY: "${coreMessage}"
-                        REQUIRED CTA: "${cta}"
-                        LEARNED STYLE MEMORY: ${styleMemory ? JSON.stringify(styleMemory) : "None"}
-                        
-                        CRITICAL SMART LOGIC:
-                        1. START WITH GREETING: The email MUST start with exactly this: "${greeting}"
-                        2. HIGH-FIDELITY SYNC: Mirror the unique wording, specialized tone, and specific value proposition of the MASTER BODY draft provided above.
-                        3. SMART VARIABLE INJECTION: Replace placeholders like {{firstName}}, {{lastName}}, {{fullName}}, {{companyName}}, {{industry}}, {{services}}, {{location}}, {{relationship}}, {{tenureYears}} with corresponding client data.
-                        4. SEAMLESS FLOW: Weave in the client's sector (${client.industry}) context where it feels natural based on the draft's logic.
-                        5. CTA ENFORCEMENT: Include a clear closing action aligned with REQUIRED CTA.
-                        6. GLOBAL EMAIL STANDARDS:
-                           - Use short paragraphs (2-4 lines max), clean spacing, and professional business tone.
-                           - Keep message concise, value-first, and avoid hype/salesy language.
-                           - Include one clear CTA and polite professional close.
-                           - If contact name is unavailable, use "Dear Sir/Ma'am".
-                           - Respect style memory hints when available (directness, concise wording, CTA style).
-                           - NEVER mention or sign off with any specific company/brand name; use a generic sign-off (e.g., "Best regards,") only.
-                           - If client details are missing (name, industry, services, relationship history), do NOT reference them. Write a complete email using only the topic/coreMessage/CTA.
-                           - Do NOT use meta/instructional phrasing like "Your task is", "We have been provided", "In summary".
-                           - Write like a human advisor: avoid repeating the same sentence starters and avoid overly structured checklists.
-                        7. HTML FORMAT: Return a valid HTML segment for the body. Preserve any formatting from the draft.
-                        ${stylePrompt}
-                        
-                        OUTPUT: Return a PURE JSON object with "subject" and "body" fields.
-                    `;
-
-    let content: any = {};
-    if (aiProvider === "Groq") {
-      const chatCompletion = await groq.chat.completions.create({
-        messages: [
-          { role: "system", content: "You are a strategic marketing AI that outputs ONLY pure JSON. For metrics like leadStrength and spamRisk, ALWAYS use integers between 0 and 100." },
-          { role: "user", content: prompt },
-        ],
-        model: settings.aiModel,
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-      });
-      content = JSON.parse(chatCompletion.choices[0].message.content || "{}");
+      // Lightweight metrics for mock generation.
+      return {
+        clientId: client.id,
+        clientName: client.clientName,
+        contactPerson: client.contactPerson,
+        campaignType: type,
+        campaignTopic: topic,
+        generatedOutput: JSON.stringify({
+          subject: replaceVariables(resSubject, client),
+          body: resEmailBody,
+          leadStrength: 70,
+          spamRisk: 5,
+        }),
+      };
     } else {
-      const chatCompletion = await openai.chat.completions.create({
-        messages: [
-          { role: "system", content: "You are a strategic marketing AI that outputs ONLY pure JSON. For metrics like leadStrength and spamRisk, ALWAYS use integers between 0 and 100." },
-          { role: "user", content: prompt },
-        ],
-        model: settings.aiModel,
-        response_format: { type: "json_object" },
-      });
-      content = JSON.parse(chatCompletion.choices[0].message.content || "{}");
+      // AI Logic: ONLY if no styleGuide is provided
+      const prompt = `
+                          ${relationshipContext}
+  
+                          CORE LOGIC:
+                          - SENDER: Senior Advisor.
+                          - RECIPIENT: ${client.clientName}.
+                          - SECTOR: ${client.industry}.
+                          - OBJECTIVE: ${type}.
+                          ${objectiveContexts[type] || ""}
+                          
+                          GOAL:
+                          You have been provided with a MASTER DRAFT (Subject and Body). Your task is to perform a HIGH-FIDELITY PERSONALIZATION of this draft for ${client.clientName}.
+                          
+                          MASTER SUBJECT: "${topic}"
+                          MASTER BODY: "${coreMessage}"
+                          REQUIRED CTA: "${cta}"
+                          LEARNED STYLE MEMORY: ${styleMemory ? JSON.stringify(styleMemory) : "None"}
+                          
+                          CRITICAL SMART LOGIC:
+                          1. START WITH GREETING: The email MUST start with exactly this: "${greeting}"
+                          2. HIGH-FIDELITY SYNC: Mirror the unique wording, specialized tone, and specific value proposition of the MASTER BODY draft provided above.
+                          3. SMART VARIABLE INJECTION: Replace placeholders like {{firstName}}, {{lastName}}, {{fullName}}, {{companyName}}, {{industry}}, {{services}}, {{location}}, {{relationship}}, {{tenureYears}} with corresponding client data.
+                          4. SEAMLESS FLOW: Weave in the client's sector (${client.industry}) context where it feels natural based on the draft's logic.
+                          5. CTA ENFORCEMENT: Include a clear closing action aligned with REQUIRED CTA.
+                          6. GLOBAL EMAIL STANDARDS:
+                             - Use short paragraphs (2-4 lines max), clean spacing, and professional business tone.
+                             - Keep message concise, value-first, and avoid hype/salesy language.
+                             - Include one clear CTA and polite professional close.
+                             - If contact name is unavailable, use "Dear Sir/Ma'am".
+                             - Respect style memory hints when available (directness, concise wording, CTA style).
+                             - NEVER mention or sign off with any specific company/brand name; use a generic sign-off (e.g., "Best regards,") only.
+                             - If client details are missing (name, industry, services, relationship history), do NOT reference them. Write a complete email using only the topic/coreMessage/CTA.
+                             - Do NOT use meta/instructional phrasing like "Your task is", "We have been provided", "In summary".
+                             - Write like a human advisor: avoid repeating the same sentence starters and avoid overly structured checklists.
+                          7. HTML FORMAT: Return a valid HTML segment for the body. Preserve any formatting from the draft.
+                          
+                          OUTPUT: Return a PURE JSON object with "subject" and "body" fields.
+      `;
+      // ... (AI call continues)
+      
+      try {
+        const chatCompletion = await (aiProvider === "Groq" ? groq : openai).chat.completions.create({
+          messages: [
+            { role: "system", content: "You are a strategic marketing AI that outputs ONLY pure JSON. For metrics like leadStrength and spamRisk, ALWAYS use integers between 0 and 100." },
+            { role: "user", content: prompt },
+          ],
+          model: settings.aiModel,
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+        });
+        
+        const rawContent = chatCompletion.choices[0].message.content || "{}";
+        const content = JSON.parse(rawContent);
+        
+        resSubject = content.subject || subject;
+        resEmailBody = content.body || "";
+
+        // If AI returned empty body, trigger fallback
+        if (!resEmailBody || resEmailBody.length < 10) {
+            throw new Error("AI returned empty or insufficient content");
+        }
+      } catch (err) {
+        console.error(`[job-worker] AI generation failed for client ${client.id}:`, err);
+        // DETERMINISTIC FALLBACK: Use the master draft but still personalize variables
+        resSubject = replaceVariables(subject, client);
+        resEmailBody = replaceVariables(coreMessage, client);
+        
+        // Ensure greeting is at start even in fallback
+        if (!resEmailBody.toLowerCase().trim().startsWith(greeting.toLowerCase().split(" ")[0])) {
+            resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
+        }
+      }
     }
+
+    // Smart Sanitization: Strip markdown code fences if the AI (or user edit) ignored instructions
+    if (resEmailBody.includes("```")) {
+      resEmailBody = resEmailBody.replace(/```html\n?|```\n?/g, "").trim();
+    }
+
+    // Final variable resolution pass to catch any missed placeholders (Final Safety Net)
+    resSubject = replaceVariables(resSubject, client);
+    resEmailBody = replaceVariables(resEmailBody, client);
+
+    // Enforce greeting at start for personalization quality (if missing).
+    const lowerBody = resEmailBody.toLowerCase().trim();
+    if (!lowerBody.startsWith(greeting.toLowerCase().split(" ")[0]) && !lowerBody.startsWith("<p>" + greeting.toLowerCase().split(" ")[0])) {
+      resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
+    }
+    resEmailBody = dedupeLeadingSalutation(resEmailBody);
+
+    // Global-standard formatting normalization (paragraphs, spacing, lists)
+    resEmailBody = normalizeEmailBodyHtml(resEmailBody);
+
+    // Subject fallback hardening: keep it specific and personalized.
+    if (!resSubject || resSubject.trim().length < 6) {
+      resSubject = firstName ? `${firstName}, quick idea for ${companyName}` : `Quick idea for ${companyName}`;
+    }
+    if (!/{{|}}/.test(resSubject) && !resSubject.toLowerCase().includes(companyName.toLowerCase())) {
+      resSubject = `${resSubject} | ${companyName}`;
+    }
+
+    // Quality guardrail + metrics logic
+    const quality = evaluateEmailQuality({
+      subject: resSubject,
+      bodyHtml: resEmailBody,
+      greeting,
+      cta,
+      companyName,
+      industry,
+      services: servicesList,
+    });
 
     const normalizeMetric = (val: any, fallback: number) => {
       if (typeof val === "number") return Math.min(100, Math.max(0, Math.floor(val)));
@@ -340,84 +379,9 @@ async function runCampaignGenerate(job: JobRow) {
       return fallback;
     };
 
-    let resSubject = content.subject || subject;
-    let resEmailBody = content.body || "";
-
-    // Smart Sanitization: Strip markdown code fences if the AI ignored instructions
-    if (resEmailBody.includes("```")) {
-      resEmailBody = resEmailBody.replace(/```html\n?|```\n?/g, "").trim();
-    }
-
-    // Ensure variable placeholders from sample are resolved for this client.
-    resSubject = replaceVariables(resSubject, client);
-    resEmailBody = replaceVariables(resEmailBody, client);
-
-    // Never leak unresolved template variables in final output.
-    resSubject = resSubject.replace(/\{\{[^}]+\}\}/g, companyName);
-    resEmailBody = resEmailBody.replace(/\{\{[^}]+\}\}/g, "your team");
-
-    // Enforce greeting at start for personalization quality.
-    const lowerBody = resEmailBody.toLowerCase().trim();
-    if (!lowerBody.startsWith(greeting.toLowerCase().split(" ")[0])) {
-      resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
-    }
-    resEmailBody = dedupeLeadingSalutation(resEmailBody);
-
-    // Enforce CTA presence if missing from body.
-    const ctaNeedle = cta.toLowerCase().trim();
-    if (ctaNeedle && !resEmailBody.toLowerCase().includes(ctaNeedle)) {
-      resEmailBody = `${resEmailBody}<p>${cta}</p>`;
-    }
-
-    // Global-standard formatting normalization (paragraphs, spacing, lists)
-    resEmailBody = normalizeEmailBodyHtml(resEmailBody);
-
-    // Subject fallback hardening: keep it specific and personalized.
-    if (!resSubject || resSubject.trim().length < 6) {
-      resSubject = firstName ? `${firstName}, quick idea for ${companyName}` : `Quick idea for ${companyName}`;
-    }
-    if (!/{{|}}/.test(resSubject) && !resSubject.toLowerCase().includes(companyName.toLowerCase())) {
-      resSubject = `${resSubject} | ${companyName}`;
-    }
-
-    // Quality guardrail + correction pass
-    let quality = evaluateEmailQuality({
-      subject: resSubject,
-      bodyHtml: resEmailBody,
-      greeting,
-      cta,
-      companyName,
-      industry,
-      services: servicesList,
-    });
-
-    if (quality.score < 70) {
-      // Lightweight deterministic correction pass for weak drafts
-      if (!resEmailBody.toLowerCase().startsWith(greeting.toLowerCase().split(" ")[0])) {
-        resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
-      }
-      if (!resEmailBody.toLowerCase().includes(cta.toLowerCase())) {
-        resEmailBody = `${resEmailBody}<p>${cta}</p>`;
-      }
-      resEmailBody = dedupeLeadingSalutation(resEmailBody);
-      resEmailBody = normalizeEmailBodyHtml(resEmailBody);
-      quality = evaluateEmailQuality({
-        subject: resSubject,
-        bodyHtml: resEmailBody,
-        greeting,
-        cta,
-        companyName,
-        industry,
-        services: servicesList,
-      });
-    }
-
-    // Logic Boost: Relationship-weighted lead strength
-    let leadStrength = normalizeMetric(content.leadStrength, Math.max(60, quality.score));
+    let leadStrength = normalizeMetric(60, Math.max(60, quality.score));
     if (tenureYears > 2) leadStrength = Math.min(100, leadStrength + 10);
     if (client.relationshipLevel === "Active") leadStrength = Math.min(100, leadStrength + 5);
-
-    const spamRisk = normalizeMetric(content.spamRisk, quality.spamRisk);
 
     return {
       clientId: client.id,
@@ -429,7 +393,7 @@ async function runCampaignGenerate(job: JobRow) {
         subject: resSubject,
         body: resEmailBody,
         leadStrength,
-        spamRisk,
+        spamRisk: quality.spamRisk,
         personalizationQuality: quality.score,
         qualityBreakdown: {
           personalization: quality.personalization,
@@ -509,6 +473,9 @@ async function runDispatchBatch(job: JobRow) {
       if (!result.success) {
         throw new Error(result.error || "Email dispatch failed.");
       }
+
+      // Smart Rate Limiting: 150ms delay to prevent burst issues
+      await sleep(150);
 
       successCount++;
     } catch (e: any) {
@@ -679,7 +646,7 @@ async function runGmailImport(job: JobRow) {
       update: {
         clientName: info.name || String(email).split("@")[0].replace(/[._]/g, " "),
         contactPerson: info.name || null,
-        gmailSourceAccount: account.accountName,
+        gmailSourceAccount: account.email,
         isRoleBased: isRoleBasedEmail(email),
       },
       create: {
@@ -690,7 +657,7 @@ async function runGmailImport(job: JobRow) {
         relationshipLevel: "Warm Lead",
         source: "GMAIL",
         externalId: `${account.id}:${email}`,
-        gmailSourceAccount: account.accountName,
+        gmailSourceAccount: account.email,
         isRoleBased: isRoleBasedEmail(email),
       },
     });

@@ -1,6 +1,5 @@
 import nodemailer from "nodemailer";
-import { getGlobalSettings } from "./settings";
-import path from "path";
+import { getGlobalSettings, GlobalSettings } from "./settings";
 import prisma from "./prisma";
 import { decrypt } from "./encryption";
 
@@ -12,13 +11,81 @@ interface MailOptions {
 }
 
 export async function sendStrategicEmail({ to, subject, text, html }: MailOptions) {
-    // --- Tactical Credential Retrieval (Dynamic) ---
     const settings = await getGlobalSettings();
+    const provider = settings.emailProvider || "GMAIL";
+
+    console.log(`[MAIL] Dispatch Protocol Engaged: ${provider}`);
+
+    if (provider === "BREVO") {
+        return sendViaBrevo({ to, subject, text, html }, settings);
+    }
+
+    // Default to Gmail (legacy path)
+    return sendViaGmail({ to, subject, text, html }, settings);
+}
+
+async function sendViaBrevo({ to, subject, text, html }: MailOptions, settings: GlobalSettings) {
+    try {
+        const apiKey = settings.brevoApiKey;
+        const replyTo = settings.brevoReplyTo;
+        const senderEmail = settings.brevoSenderEmail;
+        const senderName = settings.brevoSenderName || "IKF Outreach";
+
+        if (!apiKey || !senderEmail) {
+            return { success: false, error: "Brevo SMTP is not configured. (Key or Sender missing)" };
+        }
+
+        // Diagnostic Marker for strict switching verification
+        const diagnosticHtml = (html || "") + `<!-- Provider: BREVO | Sender: ${senderEmail} -->`;
+
+        const body: any = {
+            sender: { name: senderName, email: senderEmail },
+            to: (to || "").split(',')
+                .map(email => email.trim())
+                .filter(email => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+                .map(email => ({ email })),
+            subject: subject,
+            htmlContent: diagnosticHtml,
+            textContent: text,
+        };
+
+        if (body.to.length === 0) {
+            return { success: false, error: "No valid recipients found after sanitization." };
+        }
+
+        if (replyTo) {
+            body.replyTo = { email: replyTo };
+        }
+
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+                "accept": "application/json",
+                "content-type": "application/json",
+                "api-key": apiKey
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({ message: "Internal Brevo Error" }));
+            console.error("[MAIL] Brevo API failure:", errData);
+            return { success: false, error: errData.message || "Brevo dispatch failed" };
+        }
+
+        const result = await response.json();
+        console.log("[MAIL] Brevo communication dispatched:", result.messageId);
+        return { success: true, messageId: result.messageId };
+    } catch (error: any) {
+        console.error("[MAIL] Brevo dispatch failed with catch:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function sendViaGmail({ to, subject, text, html }: MailOptions, settings: GlobalSettings) {
     const clientId = settings.googleClientId;
     const clientSecret = settings.googleClientSecret;
 
-    // Prefer the currently connected default Gmail identity (single source of truth).
-    // This avoids stale legacy singleton values causing OAuth mismatch (535).
     let user = settings.googleEmail;
     let refreshToken = settings.googleRefreshToken;
     try {
@@ -34,21 +101,19 @@ export async function sendStrategicEmail({ to, subject, text, html }: MailOption
                 : refreshToken;
         }
     } catch {
-        // Keep existing fallback path (settings table / env).
+        // Keep fallback
     }
 
     const isConfigurationValid = user && clientId && clientSecret && refreshToken;
 
     if (!isConfigurationValid) {
-        console.warn("Google Cloud OAuth2 credentials not fully configured in settings.");
         return {
             success: false,
-            error: "Email configuration incomplete. Please finalize Google OAuth settings in the console."
+            error: "Gmail configuration incomplete. Please reconnect identity in Settings."
         };
     }
 
     try {
-        // Preflight refresh-token exchange so we can fail with precise guidance.
         const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -61,21 +126,16 @@ export async function sendStrategicEmail({ to, subject, text, html }: MailOption
         });
 
         if (!tokenResponse.ok) {
-            const tokenErr = await tokenResponse.text();
-            console.error("[MAIL] OAuth refresh preflight failed:", tokenErr);
             return {
                 success: false,
-                error: "Google OAuth refresh failed. Reconnect Gmail identity in Settings (Connect New Identity) and set it as Default.",
+                error: "Google OAuth refresh failed. Reconnect Gmail identity.",
             };
         }
 
-        console.log(`[MAIL] Attempting dispatch to ${to} using ${user}`);
-        console.log(`[MAIL] Config: ClientID: ${clientId?.substring(0, 5)}... ClientSecret: ${clientSecret?.substring(0, 5)}... RefreshToken: ${refreshToken?.substring(0, 5)}...`);
+        const diagnosticHtml = (html || "") + `<!-- Provider: GMAIL | Sender: ${user} -->`;
 
         const transporter = nodemailer.createTransport({
             service: "gmail",
-            debug: true,
-            logger: true,
             auth: {
                 type: "OAuth2",
                 user: user,
@@ -85,30 +145,27 @@ export async function sendStrategicEmail({ to, subject, text, html }: MailOption
             } as any,
         });
 
+        const sanitizedTo = (to || "").split(',')
+            .map(email => email.trim())
+            .filter(email => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+            .join(', ');
+
+        if (!sanitizedTo) {
+            return { success: false, error: "No valid recipients found after sanitization." };
+        }
+
         const info = await transporter.sendMail({
-            from: `"I Knowledge Factory Pvt. Ltd." <${user}>`,
-            to,
+            from: `"IKF Outreach" <${user}>`,
+            to: sanitizedTo,
             subject,
             text,
-            html,
-            attachments: [
-                {
-                    filename: 'logo.png',
-                    path: path.join(process.cwd(), 'public', 'logo.png'),
-                    cid: 'logo' // same cid value as in the html img src
-                }
-            ]
+            html: diagnosticHtml,
         });
 
-        console.log("[MAIL] Strategic communication dispatched:", info.messageId);
+        console.log("[MAIL] Gmail communication dispatched:", info.messageId);
         return { success: true, messageId: info.messageId };
     } catch (error: any) {
-        console.error("[MAIL] Email dispatch failed:", error);
-        // Provide more descriptive error if possible
-        let errorMsg = error.message;
-        if (error.message.includes("535")) {
-            errorMsg = "Authentication failed (535). This usually means your Refresh Token or Client ID/Secret are invalid, or the email doesn't match. Please re-authorize in Settings.";
-        }
-        return { success: false, error: errorMsg };
+        console.error("[MAIL] Gmail dispatch failed:", error);
+        return { success: false, error: error.message };
     }
 }

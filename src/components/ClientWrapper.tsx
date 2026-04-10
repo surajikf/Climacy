@@ -4,12 +4,23 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
+import { useBranding } from "@/hooks/useBranding";
 
 export function ClientWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const { projectName } = useBranding();
     const isAuthPage = ["/login", "/register", "/forgot-password", "/update-password", "/pending", "/banned"].includes(pathname);
     const isDashboard = pathname === "/";
     const [isNavigating, setIsNavigating] = useState(false);
+
+    useEffect(() => {
+        const titleSuffix = pathname === "/" ? "Dashboard" : 
+                           pathname === "/login" ? "" :
+                           pathname.split("/").filter(Boolean).slice(-1)[0] || "Home";
+        
+        const brand = projectName || "IKF Outreach";
+        document.title = titleSuffix ? `${brand} | ${titleSuffix.charAt(0).toUpperCase() + titleSuffix.slice(1)}` : brand;
+    }, [projectName, pathname]);
 
     useEffect(() => {
         setIsNavigating(true);

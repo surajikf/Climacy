@@ -4,20 +4,39 @@ vi.mock("next/server", () => ({
   NextResponse: {
     json: vi.fn((body, init) => ({ body, init })),
   },
+  after: vi.fn(),
 }));
 
 const upsertMock = vi.fn();
+
+vi.mock("@/lib/settings", () => ({
+  getGlobalSettings: vi.fn().mockResolvedValue({
+    invoiceApiUrl: "http://test-api.com",
+    invoiceApiKey: "test-key",
+  }),
+  DEFAULT_INVOICE_API_URL: "http://test-api.com",
+}));
 
 vi.mock("@/lib/prisma", () => ({
   default: {
     client: {
       upsert: upsertMock,
     },
+    globalSettings: {
+        findUnique: vi.fn().mockResolvedValue({ id: "singleton", invoiceApiKeyEncrypted: "enc" }),
+    }
   },
 }));
 
-vi.mock("next-auth/jwt", () => ({
-  getToken: vi.fn().mockResolvedValue({ role: "ADMIN" }),
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn().mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: { user_metadata: { role: "ADMIN" } } },
+        error: null,
+      }),
+    },
+  }),
 }));
 
 vi.mock("fast-xml-parser", () => {

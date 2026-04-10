@@ -70,17 +70,19 @@ export async function GET(req: Request) {
 
         if (tokenData.error) {
             console.error("Zoho Token Error:", tokenData);
-            return NextResponse.redirect(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/import?error=zoho_invalid_code`);
+            return NextResponse.redirect(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/import?error=zoho_invalid_code&details=${tokenData.error}`);
         }
+
+        console.log("[ZOHO_CALLBACK] Granted Scopes:", tokenData.scope);
 
         // We specifically care about the refresh_token so we can keep the session alive indefinitely
         if (tokenData.refresh_token) {
-            await prisma.globalSettings.update({
-                where: { id: settings.id },
-                data: {
-                    zohoRefreshTokenEncrypted: encrypt(tokenData.refresh_token)
-                }
-            });
+            await prisma.$executeRawUnsafe(
+                `UPDATE "GlobalSettings" SET "zohoRefreshTokenEncrypted" = $1, "zohoGrantedScopes" = $2 WHERE id = $3`,
+                encrypt(tokenData.refresh_token),
+                tokenData.scope || null,
+                settings.id
+            );
         }
 
         // Redirect back to the import page on success

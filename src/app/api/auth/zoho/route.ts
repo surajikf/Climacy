@@ -39,7 +39,7 @@ export async function GET(req: Request) {
         const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/zoho/callback`;
 
         // The exact scopes required to read Bigin Deals (Pipelines) and Contacts
-        const scopes = "ZohoBigin.modules.deals.READ,ZohoBigin.modules.contacts.READ";
+        const scopes = "ZohoBigin.modules.ALL,ZohoBigin.settings.ALL,ZohoBigin.settings.pipelines.ALL,ZohoBigin.settings.fields.ALL,ZohoBigin.users.ALL";
 
         // Construct Zoho OAuth URL (access_type=offline guarantees we get a refresh token)
         const zohoAuthUrl = `https://accounts.zoho.in/oauth/v2/auth?client_id=${clientId}&response_type=code&scope=${scopes}&redirect_uri=${redirectUri}&access_type=offline&prompt=consent`;

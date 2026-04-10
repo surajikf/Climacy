@@ -34,20 +34,25 @@ export async function GET(req: Request) {
       return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
     }
 
-    const settings = await prisma.globalSettings.findFirst();
+    const settingsList = await prisma.$queryRawUnsafe(`SELECT * FROM "GlobalSettings" LIMIT 1`) as any[];
+    const settings = settingsList?.[0];
+
     if (!settings || !settings.zohoRefreshTokenEncrypted) {
       return error("BAD_REQUEST", "Zoho is not connected.");
     }
 
+    console.log("[ZOHO_FIELDS] Decrypting credentials...");
     const clientId = decrypt(settings.zohoClientIdEncrypted);
     const clientSecret = decrypt(settings.zohoClientSecretEncrypted);
     const refreshToken = decrypt(settings.zohoRefreshTokenEncrypted);
 
     if (!clientId || !clientSecret || !refreshToken) {
+      console.error("[ZOHO_FIELDS] Decryption failed or empty credentials.");
       return error("INTERNAL_ERROR", "Failed to decrypt Zoho credentials.");
     }
 
     // Refresh token
+    console.log("[ZOHO_FIELDS_V2] Refreshing access token...");
     const tokenRes = await fetch(`https://accounts.zoho.in/oauth/v2/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -61,26 +66,43 @@ export async function GET(req: Request) {
 
     const tokenData = await tokenRes.json();
     if (tokenData.error || !tokenData.access_token) {
-      return error("INTEGRATION_ERROR", "Zoho Token Refresh failed.");
+      console.error("[ZOHO_FIELDS_V2] Token refresh failed:", tokenData);
+      return error("INTEGRATION_ERROR", `Zoho Token Refresh failed: ${tokenData.error || 'Unknown error'}`);
     }
 
     const accessToken = tokenData.access_token;
 
-    // Fetch fields for Deals and Contacts
-    const [dealsFieldsRes, contactsFieldsRes] = await Promise.all([
-      fetch(`https://www.zohoapis.in/bigin/v1/settings/fields?module=Deals`, {
+    // Fetch fields for Pipelines (Deals in v1) and Contacts
+    console.log("[ZOHO_FIELDS] Fetching fields from Zoho (v2 with v1 fallback)...");
+    let pipelinesFieldsRes = await fetch(`https://www.zohoapis.in/bigin/v2/settings/fields?module=Pipelines`, {
         headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
-      }),
-      fetch(`https://www.zohoapis.in/bigin/v1/settings/fields?module=Contacts`, {
-        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
-      }),
-    ]);
+    });
 
-    const dealsFieldsData = await dealsFieldsRes.json();
+    if (pipelinesFieldsRes.status === 401 || pipelinesFieldsRes.status === 403) {
+        console.warn("[ZOHO_FIELDS] v2 failed, trying v1 fallback for Deals...");
+        pipelinesFieldsRes = await fetch(`https://www.zohoapis.in/bigin/v1/settings/fields?module=Deals`, {
+            headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+        });
+    }
+
+    const contactsFieldsRes = await fetch(`https://www.zohoapis.in/bigin/v1/settings/fields?module=Contacts`, {
+        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+    });
+
+    if (!pipelinesFieldsRes.ok || !contactsFieldsRes.ok) {
+        const failedModule = !pipelinesFieldsRes.ok ? (pipelinesFieldsRes.status === 401 ? "Deals (Auth)" : "Deals") : "Contacts";
+        const status = !pipelinesFieldsRes.ok ? pipelinesFieldsRes.status : contactsFieldsRes.status;
+        console.error(`[ZOHO_FIELDS] Metadata fetch failed for ${failedModule}`);
+        return error("ZOHO_API_ERROR", `Failed to fetch ${failedModule} metadata (${status}).`, {
+            details: { grantedScopes: (settings as any).zohoGrantedScopes }
+        });
+    }
+
+    const pipelinesFieldsData = await pipelinesFieldsRes.json();
     const contactsFieldsData = await contactsFieldsRes.json();
 
     return ok({
-      deals: dealsFieldsData.fields || [],
+      deals: pipelinesFieldsData.fields || [],
       contacts: contactsFieldsData.fields || [],
     });
 

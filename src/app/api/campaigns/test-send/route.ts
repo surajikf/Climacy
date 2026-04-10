@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
             to: email,
             subject: `[TEST] ${subject}`,
             html: wrapInEmailTemplate("standard", safeHtml, "Valued Partner"),
-            text: "This is a test email from Climacy Campaign Builder. Please view it in an HTML-compatible client."
+            text: "This is a test email from IKF Outreach Campaign Builder. Please view it in an HTML-compatible client."
         });
 
         if (result.success) {

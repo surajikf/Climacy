@@ -5,7 +5,7 @@ import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, ShieldCheck, Mail, U
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { apiPath, appPath } from "@/lib/app-path";
 
 export default function AdminDashboard() {
     const [user, setUser] = useState<any>(null);
@@ -20,13 +20,13 @@ export default function AdminDashboard() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 if (user.user_metadata?.role !== "ADMIN") {
-                    router.push("/");
+                    router.push(appPath("/"));
                 } else {
                     setUser(user);
                     fetchUsers();
                 }
             } else {
-                router.push("/login");
+                router.push(appPath("/login"));
             }
             setAuthLoading(false);
         };
@@ -35,7 +35,7 @@ export default function AdminDashboard() {
 
     const fetchUsers = async () => {
         try {
-            const res = await fetch("/api/admin/users");
+            const res = await fetch(apiPath("/admin/users"));
             if (res.ok) {
                 setUsers(await res.json());
             }
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
 
     const handleAction = async (userId: string, action: "APPROVE" | "BAN" | "MAKE_ADMIN" | "REVOKE_ADMIN") => {
         try {
-            const res = await fetch("/api/admin/users", {
+            const res = await fetch(apiPath("/admin/users"), {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ userId, action })
@@ -79,9 +79,6 @@ export default function AdminDashboard() {
                     <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">Access Management</h2>
-                <div className="mt-2">
-                    <Breadcrumbs />
-                </div>
                 <p className="text-slate-500 font-medium text-sm mt-1">Approve or revoke access to the Neural Matrix.</p>
             </header>
 

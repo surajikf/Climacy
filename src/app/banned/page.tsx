@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { Ban, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { appPath } from "@/lib/app-path";
 
 export default function BannedPage() {
     const router = useRouter();
@@ -11,7 +11,7 @@ export default function BannedPage() {
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        router.push("/login");
+        router.push(appPath("/login"));
     };
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-900">
@@ -26,9 +26,6 @@ export default function BannedPage() {
                     </div>
 
                     <h1 className="text-2xl font-bold text-white tracking-tight mb-2">Access Revoked</h1>
-                    <div className="mt-2 flex justify-center">
-                        <Breadcrumbs variant="dark" />
-                    </div>
 
                     <p className="text-sm font-medium text-slate-400 leading-relaxed mb-8">
                         Your neural profile has been permanently severed from the matrix by an Administrator.

@@ -35,7 +35,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { wrapInEmailTemplate } from "@/lib/email-template";
 import { normalizeEmailBodyHtml } from "@/lib/email-format";
 import { sanitizeEmailHtml } from "@/lib/email-sanitize";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { apiPath } from "@/lib/app-path";
 
 const campaignTypes = [
     { id: "Broadcast", name: "Broadcast", desc: "Wide-angle communication for large-scale synchronization.", icon: Radio, target: "Active & Warm Leads", bestFor: "Strategic pivots or major infrastructure news." },
@@ -44,18 +44,12 @@ const campaignTypes = [
     { id: "Reactivation", name: "Reactivate", desc: "Re-establishing dialogue with previous partners.", icon: RefreshCw, target: "Past Clients Only", bestFor: "Opening new chapters based on previous success." },
 ];
 
-const tones = [
-    { name: "Professional", desc: "Formal, respectful, and standard business communication." },
-    { name: "Advisory", desc: "Helpful, expert advice focused on partnership." },
-    { name: "Premium", desc: "Elite, high-end, and exclusive communication." },
-    { name: "Trust-building", desc: "Warm, reliable, and focused on the relationship." },
-];
+// Resonance tuning removed; tone is now inferred from the master draft.
 
 export default function CampaignGenerator() {
     const [selectedType, setSelectedType] = useState<string | null>(null);
     const [topic, setTopic] = useState("");
     const [coreMessage, setCoreMessage] = useState("");
-    const [tone, setTone] = useState("Advisory");
     const [cta, setCta] = useState("Let's discuss how this aligns with your goals.");
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -92,7 +86,6 @@ export default function CampaignGenerator() {
     const [sampleQualityFixes, setSampleQualityFixes] = useState<string[]>([]);
     const [isAutoRefining, setIsAutoRefining] = useState(false);
     const [styleMemory, setStyleMemory] = useState<{
-        preferredTone?: string;
         preferredCtaStyle?: string;
         avgSentenceLength?: number;
         prefersConcise?: boolean;
@@ -114,7 +107,7 @@ export default function CampaignGenerator() {
     const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
     const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
     const draftContext = isReviewing && sampleData
-        ? `campaigns:sample:${sampleData.clientId || sampleData.id || "auto"}`
+        ? `campaigns__sample__${sampleData.clientId || sampleData.id || "auto"}`
         : null;
 
     // Restore draft when entering review for this sample
@@ -126,7 +119,7 @@ export default function CampaignGenerator() {
         setHasEditedSinceLoad(false);
         (async () => {
             try {
-                const res = await fetch(`/api/drafts/${encodeURIComponent(draftContext)}`);
+            const res = await fetch(apiPath(`/drafts/${encodeURIComponent(draftContext)}`));
                 const json = await res.json();
                 const draft = json?.data?.draft;
                 if (!cancelled && draft) {
@@ -153,7 +146,7 @@ export default function CampaignGenerator() {
         // If there is a pending draft and the user hasn't edited, don't overwrite anything.
         if (pendingDraft && !hasEditedSinceLoad) return;
         const t = setTimeout(() => {
-            fetch(`/api/drafts/${encodeURIComponent(draftContext)}`, {
+            fetch(apiPath(`/drafts/${encodeURIComponent(draftContext)}`), {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -162,7 +155,6 @@ export default function CampaignGenerator() {
                     metadata: {
                         type: selectedType,
                         topic,
-                        tone,
                         cta,
                         clientId: sampleData?.clientId || sampleData?.id,
                     },
@@ -170,10 +162,10 @@ export default function CampaignGenerator() {
             }).catch(() => {});
         }, 700);
         return () => clearTimeout(t);
-    }, [draftContext, editedSubject, editedBody, selectedType, topic, tone, cta, sampleData, pendingDraft, hasEditedSinceLoad]);
+    }, [draftContext, editedSubject, editedBody, selectedType, topic, cta, sampleData, pendingDraft, hasEditedSinceLoad]);
 
     useEffect(() => {
-        fetch("/api/services")
+        fetch(apiPath("/services"))
             .then(res => res.json())
             .then(data => {
                 if (data.success) setServices(data.data);
@@ -194,7 +186,7 @@ export default function CampaignGenerator() {
         if (!selectedType) return;
         setLoadingAudience(true);
 
-        fetch("/api/campaigns/estimate", {
+            fetch(apiPath("/campaigns/estimate"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -255,14 +247,13 @@ export default function CampaignGenerator() {
             await new Promise(r => setTimeout(r, 800));
             setTerminalStep(3);
 
-            const res = await fetch("/api/campaigns/generate", {
+            const res = await fetch(apiPath("/campaigns/generate"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
                     type: selectedType, 
                     topic, 
                     coreMessage, 
-                    tone, 
                     cta, 
                     serviceFilters: selectedServices,
                     serviceLogic: serviceLogic,
@@ -299,7 +290,7 @@ export default function CampaignGenerator() {
     const fetchTargetClients = async () => {
         setLoadingTargetClients(true);
         try {
-            const res = await fetch("/api/campaigns/target-clients", {
+            const res = await fetch(apiPath("/campaigns/target-clients"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -332,7 +323,7 @@ export default function CampaignGenerator() {
 
         setIsGeneratingSuggestions(true);
         try {
-            const res = await fetch("/api/campaigns/suggest-subjects", {
+            const res = await fetch(apiPath("/campaigns/suggest-subjects"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
@@ -371,7 +362,6 @@ export default function CampaignGenerator() {
             ? Math.round(sentences.reduce((acc, s) => acc + s.split(/\s+/).filter(Boolean).length, 0) / sentences.length)
             : undefined;
         const nextStyleMemory = {
-            preferredTone: tone,
             preferredCtaStyle: cta.length > 80 ? "detailed" : "direct",
             avgSentenceLength,
             prefersConcise: plain.split(/\s+/).filter(Boolean).length < 180,
@@ -402,14 +392,13 @@ export default function CampaignGenerator() {
             await new Promise(r => setTimeout(r, 1000));
             setTerminalStep(4);
 
-            const res = await fetch("/api/campaigns/generate", {
+            const res = await fetch(apiPath("/campaigns/generate"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
                     type: selectedType, 
                     topic, 
                     coreMessage, 
-                    tone, 
                     cta, 
                     styleGuide: { subject: editedSubject, body: editedBody },
                     styleMemory: nextStyleMemory,
@@ -443,7 +432,7 @@ export default function CampaignGenerator() {
 
         setIsSendingTest(true);
         try {
-            const res = await fetch("/api/campaigns/test-send", {
+            const res = await fetch(apiPath("/campaigns/test-send"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -472,7 +461,7 @@ export default function CampaignGenerator() {
         if (!editedBody?.trim()) return;
         setIsAutoRefining(true);
         try {
-            const res = await fetch("/api/campaigns/refine", {
+            const res = await fetch(apiPath("/campaigns/refine"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -642,7 +631,7 @@ export default function CampaignGenerator() {
                                                         type="button"
                                                         onClick={async () => {
                                                             try {
-                                                                await fetch(`/api/drafts/${encodeURIComponent(draftContext!)}`, { method: "DELETE" });
+                await fetch(apiPath(`/drafts/${encodeURIComponent(draftContext!)}`), { method: "DELETE" });
                                                             } catch {}
                                                             setPendingDraft(null);
                                                             toast.info("Draft discarded.");
@@ -780,7 +769,7 @@ export default function CampaignGenerator() {
         );
     }
 
-    const isReady = selectedType && topic && coreMessage && tone && cta;
+    const isReady = selectedType && topic && coreMessage && cta;
 
     const toggleService = (serviceName: string) => {
         setSelectedServices(prev => 
@@ -794,9 +783,6 @@ export default function CampaignGenerator() {
         <div className="w-full pb-20 px-3 sm:px-4 lg:px-6">
             <div className="mb-8 px-2 md:px-0">
                 <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Campaign Builder</h2>
-                  <div className="mt-2">
-                    <Breadcrumbs />
-                  </div>
                 <p className="text-sm font-medium text-slate-500 mt-1">Configure and deploy intelligent multi-node communications.</p>
             </div>
 
@@ -841,7 +827,7 @@ export default function CampaignGenerator() {
                         </div>
 
                         {/* Ultra-Smart Segmentation */}
-                        {selectedType && (
+                        {selectedType === "Cross-Sell" && (
                             <div className="px-6 pb-6 pt-2 border-t border-slate-100">
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -941,12 +927,16 @@ export default function CampaignGenerator() {
                                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">{"{{industry}}"}</span>
                                     </div>
                                 </div>
-                                <textarea
-                                    rows={8}
+                                <RichTextEditor
+                                    content={coreMessage}
+                                    onChange={setCoreMessage}
                                     placeholder="Paste your sample emailer here. Use variables like {{greeting}}, {{firstName}}, or {{companyName}} for personalization..."
-                                    value={coreMessage}
-                                    onChange={(e) => setCoreMessage(e.target.value)}
-                                    className="w-full bg-white border border-slate-300 rounded-md px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium resize-y"
+                                    sampleData={{
+                                        clientName: "Example Corp",
+                                        contactPerson: "John Smith",
+                                        industry: "Technology",
+                                        clientAddedOn: new Date().toISOString()
+                                    }}
                                 />
                             </div>
                             <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
@@ -958,32 +948,7 @@ export default function CampaignGenerator() {
                         </div>
                     </div>
 
-                    {/* Section 3: Resonance Tuning */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h3 className="text-base font-semibold text-slate-900">3. Resonance Tuning</h3>
-                        </div>
-                        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {tones.map((t) => (
-                                <div
-                                    key={t.name}
-                                    onClick={() => setTone(t.name)}
-                                    className={cn(
-                                        "p-4 rounded-lg border cursor-pointer transition-all",
-                                        tone === t.name
-                                            ? "bg-blue-50/50 border-blue-500 ring-1 ring-blue-500"
-                                            : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                                    )}
-                                >
-                                    <div className="flex items-center justify-between mb-1">
-                                        <h4 className="text-sm font-semibold text-slate-900">{t.name}</h4>
-                                        {tone === t.name && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-                                    </div>
-                                    <p className="text-xs text-slate-500">{t.desc}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+
 
                 </div>
 
@@ -1014,7 +979,7 @@ export default function CampaignGenerator() {
                                             setLoadingTargetClients(true);
                                             setShowOversightModal(true);
                                             try {
-                                                const res = await fetch("/api/campaigns/target-clients", {
+            const res = await fetch(apiPath("/campaigns/target-clients"), {
                                                     method: "POST",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({
@@ -1058,10 +1023,6 @@ export default function CampaignGenerator() {
                                     <div className="flex justify-between items-start">
                                         <span className="text-sm text-slate-500">Subject</span>
                                         <span className="text-sm font-medium text-slate-900 text-right max-w-[150px] truncate">{topic || "-"}</span>
-                                    </div>
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-sm text-slate-500">Tone</span>
-                                        <span className="text-sm font-medium text-blue-600">{tone}</span>
                                     </div>
                                     <div className="flex justify-between items-start">
                                         <span className="text-sm text-slate-500">Logic Core</span>

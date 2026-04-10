@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_INVOICE_API_URL, getGlobalSettings } from "@/lib/settings";
 import { extractInvoiceClientRows } from "@/lib/invoice-xml";
 import { after } from "next/server";
+import { RelationshipLevel } from "@/domain/clients";
 
 export async function POST(req: Request) {
     try {
@@ -27,36 +28,47 @@ export async function POST(req: Request) {
         /** If set (e.g. apikey), send INVOICE_API_KEY as query param instead of X-API-Key header */
         const invoiceKeyQueryName = process.env.INVOICE_API_KEY_QUERY_NAME?.trim() || "";
 
-        const REQUEST_TIMEOUT_MS = 30000;
+        const REQUEST_TIMEOUT_MS = 60000; // Increased timeout for heavy ERP responses
         const urlObj = new URL(req.url);
         const mode = (urlObj.searchParams.get("mode") || "fast").toLowerCase();
 
         // 1. Fetch data from invoice service.
-        // Fast mode prioritizes a quick response path to avoid reverse-proxy timeouts.
         const fetchClientsByStatus = async (status: "Y" | "N") => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
             try {
-                const endpoint = new URL(INVOICE_BASE_URL);
-                endpoint.searchParams.set("status", status);
+                const suffix = status === "Y" ? "/GetActiveClients" : "/GetInactiveClients";
+                let baseUrl = INVOICE_BASE_URL.replace(/\/$/, "");
+                if (baseUrl.includes("?")) {
+                    baseUrl = baseUrl.split("?")[0];
+                }
+
+                const endpoint = new URL(baseUrl + suffix);
                 if (invoiceApiKey && invoiceKeyQueryName) {
                     endpoint.searchParams.set(invoiceKeyQueryName, invoiceApiKey);
                 }
 
                 const headers: Record<string, string> = {
-                    Accept: "application/xml",
+                    "Accept": "application/xml",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                 };
                 if (invoiceApiKey && !invoiceKeyQueryName) {
                     headers["X-API-Key"] = invoiceApiKey;
                 }
 
-                const response = await fetch(endpoint.toString(), {
+                const endpointStr = endpoint.toString();
+                const response = await fetch(endpointStr, {
                     headers,
                     signal: controller.signal,
                     next: { revalidate: 0 },
                 });
 
-                if (!response.ok) throw new Error(`Status ${status} fetch failed: ${response.status}`);
+                if (!response.ok) {
+                    const errorBody = await response.text().catch(() => "No error body");
+                    console.error(`[INVOICE_SYNC] Fetch ${status} failed with status ${response.status}. Body: ${errorBody.substring(0, 200)}`);
+                    throw new Error(`ERP Server returned ${response.status}`);
+                }
+
                 const xmlData = await response.text();
                 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
                 return { status, jsonObj: parser.parse(xmlData) };
@@ -91,7 +103,7 @@ export async function POST(req: Request) {
 
             const isRoleBased = isRoleBasedEmail(email);
             const statusFlag = String(rawClient.invoiceStatus || "Y").toUpperCase();
-            const relationshipLevel = statusFlag === "Y" ? "Active" : "Past Client";
+            const relationshipLevel: RelationshipLevel = statusFlag === "Y" ? "Active" : "Not Active";
             const serviceStr = findValue(rawClient, 'ServiceNames') || findValue(rawClient, 'serviceNames');
             const lastContact = parseDateStr(findValue(rawClient, 'LastContacted'));
 
@@ -99,7 +111,6 @@ export async function POST(req: Request) {
                 clientName: String(findValue(rawClient, 'ClientName') || "Unknown Client"),
                 contactPerson: findValue(rawClient, 'ContactPerson') ? String(findValue(rawClient, 'ContactPerson')) : null,
                 email,
-                primaryEmail: email.split(',')[0].trim(),
                 isRoleBased,
                 relationshipLevel,
                 phone: findValue(rawClient, 'Client_TPhone') ? String(findValue(rawClient, 'Client_TPhone')).substring(0, 100) : null,
@@ -204,6 +215,7 @@ export async function POST(req: Request) {
                 message: "Sync started in background.",
                 partial: {
                     backgroundSyncScheduled: true,
+                    backgroundNotActiveScheduled: true,
                     backgroundActiveCount: null,
                     inactiveCount: null,
                     mode
@@ -245,6 +257,7 @@ export async function POST(req: Request) {
                 : `Successfully synced ${activeImported} clients.`,
             partial: {
                 backgroundSyncScheduled: totalInactive > 0,
+            backgroundNotActiveScheduled: totalInactive > 0,
                 backgroundActiveCount: 0,
                 inactiveCount: totalInactive,
                 mode

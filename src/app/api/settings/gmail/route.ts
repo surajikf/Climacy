@@ -4,16 +4,34 @@ import { ok, error } from "@/lib/api-response";
 
 export async function GET() {
     try {
-        const accounts = await prisma.gmailAccount.findMany({
-            select: {
-                id: true,
-                accountName: true,
-                email: true,
-                updatedAt: true,
-            },
-            orderBy: { updatedAt: "desc" },
+        const [accounts, clientCounts] = await Promise.all([
+            prisma.gmailAccount.findMany({
+                select: {
+                    id: true,
+                    accountName: true,
+                    email: true,
+                    updatedAt: true,
+                },
+                orderBy: { updatedAt: "desc" },
+            }),
+            prisma.client.groupBy({
+                by: ['gmailSourceAccount'],
+                _count: { _all: true },
+                where: { source: 'GMAIL' }
+            })
+        ]);
+
+        const accountList = accounts.map((acc: any) => {
+            const countObj = clientCounts.find(c => 
+                (c.gmailSourceAccount as string)?.toLowerCase() === acc.email?.toLowerCase()
+            );
+            return {
+                ...acc,
+                count: countObj ? countObj._count._all : 0
+            };
         });
-        return ok({ accounts });
+
+        return ok({ accounts: accountList });
     } catch (err) {
         console.error("Failed to fetch Gmail accounts:", err);
         return error("INTERNAL_ERROR", "Internal Server Error");

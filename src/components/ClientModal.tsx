@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, User, Mail, Building2, Save, Loader2, Check, Shield, Hash, Phone, MapPin, Calendar, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { apiPath } from "@/lib/app-path";
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -28,7 +29,6 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
         clientName: "",
         contactPerson: "",
         email: "",
-        primaryEmail: "",
         industry: "",
         relationshipLevel: "Active",
         serviceIds: [] as string[]
@@ -44,7 +44,6 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                     clientName: client.clientName || "",
                     contactPerson: client.contactPerson || "",
                     email: client.email || "",
-                    primaryEmail: client.primaryEmail || client.email?.split(',')[0].trim() || "",
                     industry: client.industry || "",
                     relationshipLevel: client.relationshipLevel || "Active",
                     serviceIds: client.services?.map((s: any) => s.id) || []
@@ -54,7 +53,6 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                     clientName: "",
                     contactPerson: "",
                     email: "",
-                    primaryEmail: "",
                     industry: "",
                     relationshipLevel: "Active",
                     serviceIds: []
@@ -65,7 +63,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
 
     const fetchServices = async () => {
         try {
-            const res = await fetch("/api/services");
+            const res = await fetch(apiPath("/services"));
             const result = await res.json();
             if (result.success) setServices(result.data);
         } catch (err) {
@@ -78,7 +76,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
 
         setLoading(true);
         try {
-            const url = client ? `/api/clients/${client.id}` : "/api/clients";
+            const url = client ? apiPath(`/clients/${client.id}`) : apiPath("/clients");
             const method = client ? "PUT" : "POST";
             const res = await fetch(url, {
                 method,
@@ -105,142 +103,137 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-all" onClick={onClose} />
 
-            <div className="bg-white w-full max-w-lg rounded-xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+            <div className="bg-white w-full max-w-2xl rounded-2xl border border-slate-200 shadow-2xl relative flex flex-col max-h-[95vh] animate-in fade-in zoom-in-95 duration-200">
+                <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-sm border border-blue-100">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-100">
                             <Building2 className="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 className="text-xl font-semibold text-slate-900 tracking-tight">
-                                {client ? "Edit Client" : "Add Client"}
+                            <h3 className="text-lg font-bold text-slate-900 uppercase tracking-widest">
+                                {client ? "Recalibrate Profile" : "Onboard New Partner"}
                             </h3>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Client Portfolio Node</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-400 hover:text-slate-900">
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-900">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                    <div className="space-y-5">
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700">Client Name</label>
-                            <input
-                                required
-                                type="text"
-                                placeholder="e.g., Tata Consultancy Services"
-                                value={formData.clientName}
-                                onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
-                            />
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 pt-6 space-y-8 custom-scrollbar">
+                    {/* Identity Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <User className="w-3.5 h-3.5 text-blue-600" />
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Institutional Identity</h4>
+                            <div className="h-px flex-1 bg-slate-100" />
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4">
+                        
+                        <div className="grid sm:grid-cols-2 gap-5">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Contact Person</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Company / Client Name</label>
                                 <input
+                                    required
                                     type="text"
-                                    placeholder="John Doe"
-                                    value={formData.contactPerson}
-                                    onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                    placeholder="e.g., Tata Consultancy Services"
+                                    value={formData.clientName}
+                                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all font-medium"
                                 />
                             </div>
-                            <div className="space-y-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-slate-700">Email Addresses</label>
-                                    <textarea
-                                        required
-                                        placeholder="email1@company.com, email2@company.com"
-                                        value={formData.email}
-                                        onChange={(e) => {
-                                            const newVal = e.target.value;
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                email: newVal,
-                                                // If primary email is no longer in the list, or none is set, set first one
-                                                primaryEmail: prev.primaryEmail && newVal.includes(prev.primaryEmail) ? prev.primaryEmail : newVal.split(',')[0].trim()
-                                            }));
-                                        }}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium h-20 resize-none"
-                                    />
-                                    <p className="text-[10px] text-slate-400 font-medium italic">Separate multiple emails with commas.</p>
-                                </div>
-
-                                {(() => {
-                                    const emails = formData.email?.split(',').map(e => e.trim()).filter(Boolean) || [];
-                                    if (emails.length <= 1) return null;
-                                    return (
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Designate Primary Email</label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {emails.map((email, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        onClick={() => setFormData({ ...formData, primaryEmail: email })}
-                                                        className={cn(
-                                                            "px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all flex items-center gap-2",
-                                                            formData.primaryEmail === email
-                                                                ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100"
-                                                                : "bg-white border-slate-200 text-slate-500 hover:border-blue-500"
-                                                        )}
-                                                    >
-                                                        {formData.primaryEmail === email && <Check className="w-3 h-3" />}
-                                                        {email}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Point of Contact</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g., John Doe"
+                                    value={formData.contactPerson}
+                                    onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all font-medium"
+                                />
                             </div>
                         </div>
+                    </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                    {/* Communication Architecture */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Mail className="w-3.5 h-3.5 text-blue-600" />
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Communication Hub</h4>
+                            <div className="h-px flex-1 bg-slate-100" />
+                        </div>
+
+                        <div className="space-y-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Industry</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Authorized Email List</label>
+                                <textarea
+                                    required
+                                    placeholder="primary@company.com, secondary@company.com"
+                                    value={formData.email}
+                                    onChange={(e) => {
+                                        const newVal = e.target.value;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            email: newVal
+                                        }));
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all font-medium h-24 resize-none leading-relaxed"
+                                />
+                                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">
+                                    <Hash className="w-3 h-3" />
+                                    Comma-separated for multiple routing
+                                </div>
+                            </div>
+
+
+                        </div>
+                    </div>
+
+                    {/* Segmentation & Intelligence */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Tag className="w-3.5 h-3.5 text-blue-600" />
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Project Alignment</h4>
+                            <div className="h-px flex-1 bg-slate-100" />
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-5">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Industry Sector</label>
                                 <select
                                     required
                                     value={formData.industry}
                                     onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium appearance-none"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium appearance-none cursor-pointer"
                                 >
-                                    <option value="">Select Industry</option>
-                                    {["Engineering", "Industrial", "Technology", "Retail", "Corporate", "Digital"].map(i => (
+                                    <option value="">Select Sector</option>
+                                    {["Engineering", "Industrial", "Technology", "Retail", "Corporate", "Digital", "Other"].map(i => (
                                         <option key={i} value={i}>{i}</option>
                                     ))}
                                 </select>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Status</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Relationship Status</label>
                                 <select
                                     value={formData.relationshipLevel}
                                     onChange={(e) => setFormData({ ...formData, relationshipLevel: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium appearance-none"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium appearance-none cursor-pointer"
                                 >
-                                    {["Active", "Warm Lead", "Past Client"].map(lvl => (
+                                    {["Active", "Warm Lead", "Past Client", "Inactive", "Not Active"].map(lvl => (
                                         <option key={lvl} value={lvl}>{lvl}</option>
                                     ))}
                                 </select>
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Services</label>
-                                {services.length === 0 ? (
-                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-wider border border-blue-100">
-                                        None Configured
-                                    </span>
-                                ) : (
-                                    <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-wider border border-blue-100">
-                                        Select Linked Services
-                                    </div>
-                                )}
+                        <div className="space-y-3">
+                             <div className="flex items-center justify-between px-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technological Footprint</label>
+                                <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 animate-pulse uppercase tracking-wider">
+                                    {formData.serviceIds.length} Linked Services
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 bg-slate-50/50 border border-slate-200 p-4 rounded-xl max-h-48 overflow-y-auto custom-scrollbar group">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-50 border border-slate-100 p-5 rounded-2xl max-h-56 overflow-y-auto custom-scrollbar shadow-inner">
                                 {services.map((service) => {
                                     const isSelected = formData.serviceIds.includes(service.id);
                                     return (
@@ -249,113 +242,135 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                                             type="button"
                                             onClick={(e) => toggleService(service.id, e)}
                                             className={cn(
-                                                "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all shadow-sm",
+                                                "flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] font-bold transition-all group/btn uppercase tracking-wider",
                                                 isSelected
-                                                    ? "bg-blue-600 border-blue-600 text-white shadow-blue-100"
-                                                    : "bg-white border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600"
+                                                    ? "bg-white border-blue-600 text-blue-700 shadow-md ring-2 ring-blue-50"
+                                                    : "bg-white border-slate-200 text-slate-400 hover:border-blue-300 hover:text-slate-600"
                                             )}
                                         >
                                             <div className={cn(
-                                                "w-3 h-3 rounded border flex items-center justify-center transition-colors",
-                                                isSelected ? "bg-white border-white text-blue-600" : "bg-slate-50 border-slate-200"
+                                                "w-4 h-4 rounded-md border flex items-center justify-center transition-all flex-shrink-0 shadow-sm",
+                                                isSelected ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 group-hover/btn:border-blue-300"
                                             )}>
                                                 {isSelected && <Check className="w-2.5 h-2.5 stroke-[4px]" />}
                                             </div>
-                                            {service.serviceName}
+                                            <span className="truncate">{service.serviceName}</span>
                                         </button>
                                     );
                                 })}
                                 {services.length === 0 && (
-                                    <div className="col-span-2 py-4 text-center">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialize services in the catalog first</p>
+                                    <div className="col-span-full py-8 text-center bg-white/50 rounded-xl border border-dashed border-slate-200">
+                                        <Loader2 className="w-5 h-5 animate-spin text-slate-300 mx-auto mb-2" />
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Synchronizing Service Matrix</p>
                                     </div>
                                 )}
                             </div>
                         </div>
+                    </div>
 
-                        {client && (client.source === "INVOICE_SYSTEM" || client.gstin || client.poc || client.address) && (
-                            <div className="space-y-3 pt-4 border-t border-slate-100">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synced Details (from Invoice System)</label>
-                                <div className="grid grid-cols-2 gap-4 bg-slate-50/80 rounded-xl p-4 border border-slate-100">
-                                    {client.poc && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Point of Contact</span>
-                                            <p className="text-xs font-semibold text-slate-700">{client.poc}</p>
-                                        </div>
-                                    )}
-                                    {client.clientSize && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Client Size</span>
-                                            <p className="text-xs font-semibold text-slate-700">{client.clientSize}</p>
-                                        </div>
-                                    )}
-                                    {client.gstin && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">GSTIN</span>
-                                            <p className="text-xs font-semibold text-emerald-700">{client.gstin}</p>
-                                        </div>
-                                    )}
-                                    {client.externalId && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Customer ID</span>
-                                            <p className="text-xs font-mono font-bold text-slate-600">#{client.externalId}</p>
-                                        </div>
-                                    )}
-                                    {(client.phone || client.mobile) && (
-                                        <div className="space-y-1 col-span-2">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Phone Numbers</span>
-                                            <p className="text-xs font-semibold text-slate-700">
-                                                {[client.phone, client.mobile].filter(Boolean).join(" / ")}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {client.address && (
-                                        <div className="space-y-1 col-span-2">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Registered Address</span>
-                                            <p className="text-xs font-medium text-slate-600 leading-relaxed italic">
-                                                {client.address}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {client.clientAddedOn && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Account Created</span>
-                                            <p className="text-xs font-semibold text-slate-700">
-                                                {new Date(client.clientAddedOn).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {client.lastInvoiceDate && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Last Invoice</span>
-                                            <p className="text-xs font-semibold text-blue-700">
-                                                {new Date(client.lastInvoiceDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
+                    {/* Integrated Metadata Section (Read-only / Synced) */}
+                    {client && (client.source === "INVOICE_SYSTEM" || client.gstin || client.poc || client.address) && (
+                        <div className="space-y-4 pt-4 border-t border-slate-100">
+                             <div className="flex items-center gap-2 mb-2">
+                                <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verified System Metadata</h4>
+                                <div className="h-px flex-1 bg-slate-100" />
                             </div>
-                        )}
-                    </div>
-
-                    <div className="flex gap-3 pt-6 border-t border-slate-100 mt-8">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 py-3 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex-[2] py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-70"
-                        >
-                            {loading && <Loader2 className="w-3 h-3 animate-spin" />}
-                            {client ? "Save Changes" : "Add Client"}
-                        </button>
-                    </div>
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-emerald-50/30 rounded-2xl p-6 border border-emerald-100/50">
+                                {client.poc && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
+                                            <User className="w-2.5 h-2.5" />
+                                            Primary POC
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-700 truncate pl-4 border-l border-emerald-100 ml-1">{client.poc}</p>
+                                    </div>
+                                )}
+                                {client.gstin && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
+                                            <Shield className="w-2.5 h-2.5" />
+                                            Tax ID / GSTIN
+                                        </div>
+                                        <p className="text-[11px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded ml-1 w-fit">{client.gstin}</p>
+                                    </div>
+                                )}
+                                {client.externalId && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
+                                            <Hash className="w-2.5 h-2.5" />
+                                            External ID
+                                        </div>
+                                        <p className="text-xs font-mono font-bold text-slate-600 pl-4 border-l border-emerald-100 ml-1">#{client.externalId}</p>
+                                    </div>
+                                )}
+                                {(client.phone || client.mobile) && (
+                                    <div className="space-y-1 col-span-full">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
+                                            <Phone className="w-2.5 h-2.5" />
+                                            Authorized Telemetry
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-700 pl-4 border-l border-emerald-100 ml-1">
+                                            {[client.phone, client.mobile].filter(Boolean).join(" • ")}
+                                        </p>
+                                    </div>
+                                )}
+                                {client.address && (
+                                    <div className="space-y-1 col-span-full">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
+                                            <MapPin className="w-2.5 h-2.5" />
+                                            Geospatial Node
+                                        </div>
+                                        <p className="text-[11px] font-medium text-slate-600 leading-relaxed italic pl-4 border-l border-emerald-100 ml-1">
+                                            {client.address}
+                                        </p>
+                                    </div>
+                                )}
+                                {client.clientAddedOn && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
+                                            <Calendar className="w-2.5 h-2.5" />
+                                            Partnership Since
+                                        </div>
+                                        <p className="text-xs font-bold text-slate-700 pl-4 border-l border-emerald-100 ml-1">
+                                            {new Date(client.clientAddedOn).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                        </p>
+                                    </div>
+                                )}
+                                {client.lastInvoiceDate && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-blue-600 font-black uppercase tracking-widest leading-none">
+                                            <Calendar className="w-2.5 h-2.5" />
+                                            Last Invoice
+                                        </div>
+                                        <p className="text-xs font-bold text-blue-800 pl-4 border-l border-blue-100 ml-1">
+                                            {new Date(client.lastInvoiceDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </form>
+
+                <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row gap-4 flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 transition-all"
+                    >
+                        Abort Modification
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        onClick={handleSubmit}
+                        className="flex-[1.5] py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 shadow-xl shadow-slate-200 disabled:opacity-70 group"
+                    >
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 group-hover:scale-110 transition-transform" />}
+                        {client ? "Initialize Version" : "Commit New Member"}
+                    </button>
+                </div>
             </div>
         </div>
     );

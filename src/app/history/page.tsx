@@ -23,7 +23,7 @@ import { SmartLoader } from "@/components/SmartLoader";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { apiPath, appPath } from "@/lib/app-path";
 
 export default function HistoryPage() {
     const [history, setHistory] = useState<any[]>([]);
@@ -51,7 +51,7 @@ export default function HistoryPage() {
             if (filterType !== "All") query.append("type", filterType);
             if (search) query.append("search", search);
 
-            const res = await fetch(`/api/campaigns/history?${query.toString()}`, {
+            const res = await fetch(apiPath(`/campaigns/history?${query.toString()}`), {
                 signal: abortControllerRef.current.signal
             });
             const result = await res.json();
@@ -166,14 +166,11 @@ export default function HistoryPage() {
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="space-y-1">
                     <h2 className="text-4xl font-bold tracking-tight text-slate-900">Interaction Archive</h2>
-                    <div className="mt-2">
-                        <Breadcrumbs />
-                    </div>
                     <p className="text-slate-500 font-medium text-lg">Historical record of synthesized client communications.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => window.location.href = "/campaigns/results"}
+                                        onClick={() => { window.location.href = appPath("/campaigns/results"); }}
                         className="flex items-center gap-2 bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all active:scale-[0.98]"
                     >
                         <Zap className="w-4 h-4" />

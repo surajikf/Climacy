@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Climacy | AI Client Communication Engine",
+  title: "IKF Outreach | AI Client Communication Engine",
   description: "Intelligent CRM and automated campaign generation for modern business.",
 };
 

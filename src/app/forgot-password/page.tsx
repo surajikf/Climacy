@@ -4,9 +4,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Mail, Server, ArrowLeft } from "lucide-react";
+import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { appPath } from "@/lib/app-path";
 
 export default function ForgotPasswordPage() {
     const [mounted, setMounted] = useState(false);
@@ -15,6 +16,7 @@ export default function ForgotPasswordPage() {
     const [success, setSuccess] = useState(false);
     const router = useRouter();
     const supabase = createClient();
+    const { projectName, projectLogo } = useBranding();
 
     useEffect(() => {
         setMounted(true);
@@ -25,7 +27,7 @@ export default function ForgotPasswordPage() {
         setLoading(true);
 
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/api/auth/callback?next=/update-password`,
+            redirectTo: `${window.location.origin}${appPath("/api/auth/callback")}?next=${encodeURIComponent(appPath("/update-password"))}`,
         });
 
         if (error) {
@@ -49,14 +51,19 @@ export default function ForgotPasswordPage() {
                 <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50 relative overflow-hidden">
                     {/* Header */}
                     <div className="text-center mb-8">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-5 shadow-lg shadow-blue-500/30">
-                            <Server className="w-7 h-7 text-white" />
-                        </div>
-                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">System Recovery</h1>
-                        <div className="mt-3 flex justify-center">
-                            <Breadcrumbs />
-                        </div>
-                        <p className="text-sm font-medium text-slate-500 mt-2">I Knowledge Factory Neural Matrix</p>
+                        {projectLogo ? (
+                            <div className="bg-slate-900 p-3 rounded-2xl shadow-lg border border-slate-800 flex items-center justify-center min-w-[4rem] w-fit mx-auto mb-6">
+                                <img src={projectLogo} alt={projectName} className="h-10 w-auto object-contain" />
+                            </div>
+                        ) : (
+                            <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-5 shadow-lg shadow-blue-500/30">
+                                <span className="text-white text-2xl font-black">{projectName.charAt(0)}</span>
+                            </div>
+                        )}
+                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">
+                            {projectName}
+                        </h1>
+                        <p className="text-sm font-medium text-slate-500 mt-2">Security Recovery Portal</p>
                     </div>
 
                     {!success ? (
