@@ -9,32 +9,50 @@ jobs:
   deploy:
     runs-on: [self-hosted, linux, x64]
 
-    defaults:
-      run:
-        working-directory: /var/www/apps/outreach
-
     steps:
+      # Fix git permission
       - name: Fix Git safe directory
         run: git config --global --add safe.directory /var/www/apps/outreach
 
+      # Pull latest code
       - name: Pull latest code (force clean)
         run: |
+          cd /var/www/apps/outreach
           git fetch origin
           git reset --hard origin/Main
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Prisma setup
+      # ======================
+      # BACKEND SETUP
+      # ======================
+      - name: Install backend dependencies
         run: |
+          cd /var/www/apps/outreach/backend
+          npm ci
+
+      - name: Backend Prisma setup
+        run: |
+          cd /var/www/apps/outreach/backend
           npx prisma generate
           npx prisma migrate deploy || true
 
-      - name: Build app
-        run: npm run build
+      # ======================
+      # FRONTEND SETUP
+      # ======================
+      - name: Install frontend dependencies
+        run: |
+          cd /var/www/apps/outreach/frontend
+          npm ci
 
+      - name: Build frontend
+        run: |
+          cd /var/www/apps/outreach/frontend
+          npm run build
+
+      # ======================
+      # PM2 RELOAD
+      # ======================
       - name: Reload PM2 (zero downtime)
-        run: sudo pm2 reload outreach || sudo pm2 start ecosystem.config.cjs
+        run: sudo pm2 reload outreach || sudo pm2 start /var/www/apps/outreach/frontend/ecosystem.config.cjs
 
       - name: Save PM2 state
         run: sudo pm2 save
