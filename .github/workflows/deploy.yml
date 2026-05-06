@@ -34,7 +34,7 @@ jobs:
         run: npm run build
 
       - name: Reload PM2 (zero downtime)
-        run: pm2 reload outreach || pm2 start ecosystem.config.js
+        sudo pm2 reload outreach || sudo pm2 start ecosystem.config.cjs
 
       - name: Save PM2 state
         run: pm2 save
