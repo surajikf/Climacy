@@ -16,7 +16,8 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { nodeType, accountId } = body;
 
-        console.log(`[TEST_DISPATCH] Initiating diagnostic for Node: ${nodeType} | Triggered by: ${session.email}`);
+        const sessionEmail = session.user?.email || "unknown";
+        console.log(`[TEST_DISPATCH] Initiating diagnostic for Node: ${nodeType} | Triggered by: ${sessionEmail}`);
 
         // Custom Logic: If a specific accountId is provided, we temporarily force it as default for the test
         if (nodeType === "GMAIL" && accountId) {
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
         }
 
         const testOptions = {
-            to: session.email,
+            to: sessionEmail,
             subject: `[SYSTEM] Neural Connection Verified - ${new Date().toLocaleTimeString()}`,
             html: `
                 <div style="font-family: sans-serif; padding: 40px; background: #f8fafc; color: #1e293b; border-radius: 12px; border: 1px solid #e2e8f0;">
@@ -45,13 +46,18 @@ export async function POST(request: Request) {
                     <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8;">
                         Dispatch Protocol: ${nodeType} <br/>
                         Timestamp: ${new Date().toISOString()} <br/>
-                        Authorized by: ${session.email}
+                        Authorized by: ${sessionEmail}
                     </div>
                 </div>
             `
         };
 
-        const result: any = await sendStrategicEmail(testOptions);
+        const forcedProvider = nodeType === "SMTP" ? "SMTP" : "GMAIL";
+        const result: any = await sendStrategicEmail(testOptions, {
+            forceProvider: forcedProvider,
+            disableFailover: true,
+            overrideGmailAccountId: forcedProvider === "GMAIL" ? accountId : undefined,
+        });
 
         if (result.success) {
             return ok({ 

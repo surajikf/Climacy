@@ -2,26 +2,57 @@ import { NextResponse } from "next/server";
 import prisma from "@/backend/lib/prisma";
 import { decrypt, encrypt } from "@/backend/lib/encryption";
 
+type GmailConnectIntent = "send" | "sync" | "both";
+
+function parseState(rawState: string | null): { label: string; intent: GmailConnectIntent; returnTo: string } {
+    if (!rawState) return { label: "", intent: "both", returnTo: "/settings" };
+    try {
+        const parsed = JSON.parse(rawState);
+        const label = typeof parsed?.label === "string" ? parsed.label.trim() : "";
+        const intent: GmailConnectIntent =
+            parsed?.intent === "send" || parsed?.intent === "sync" || parsed?.intent === "both"
+                ? parsed.intent
+                : "both";
+        const returnTo = typeof parsed?.returnTo === "string" && parsed.returnTo.startsWith("/")
+            ? parsed.returnTo
+            : "/settings";
+        return { label, intent, returnTo };
+    } catch {
+        // Legacy support: old flow sent plain label in `state`.
+        return { label: rawState.trim(), intent: "both", returnTo: "/settings" };
+    }
+}
+
+async function resolveGoogleClientConfig() {
+    const envClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+    const envClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+    if (envClientId && envClientSecret) {
+        return { clientId: envClientId, clientSecret: envClientSecret };
+    }
+
+    const settings = (await prisma.globalSettings.findUnique({
+        where: { id: "singleton" }
+    })) as any;
+    const dbClientId = settings?.googleClientIdEncrypted ? decrypt(settings.googleClientIdEncrypted).trim() : "";
+    const dbClientSecret = settings?.googleClientSecretEncrypted ? decrypt(settings.googleClientSecretEncrypted).trim() : "";
+    return { clientId: dbClientId, clientSecret: dbClientSecret };
+}
+
 export async function GET(request: Request) {
     try {
         const url = new URL(request.url);
         const code = url.searchParams.get("code");
-        const state = url.searchParams.get("state"); // Contains the account label (e.g., "Sales Team", "Accounts", "Boss")
+        const state = url.searchParams.get("state");
+        const { label, intent, returnTo } = parseState(state);
 
         if (!code) {
             return NextResponse.json({ error: "No authorization code received from the matrix." }, { status: 400 });
         }
 
-        const settings = (await prisma.globalSettings.findUnique({
-            where: { id: "singleton" }
-        })) as any;
-
-        if (!settings) {
-            return NextResponse.json({ error: "Global Configuration not found." }, { status: 404 });
+        const { clientId, clientSecret } = await resolveGoogleClientConfig();
+        if (!clientId || !clientSecret) {
+            return NextResponse.json({ error: "Google OAuth client configuration missing." }, { status: 400 });
         }
-
-        const clientId = decrypt(settings.googleClientIdEncrypted!);
-        const clientSecret = decrypt(settings.googleClientSecretEncrypted!);
         const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
 
         // 1. Exchange Code for Tokens
@@ -44,7 +75,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: tokens.error_description || "Neural Handshake Failed." }, { status: 500 });
         }
 
-        const { refresh_token, access_token, expires_in } = tokens;
+        const { refresh_token, access_token, expires_in, scope } = tokens;
 
         // 2. Fetch User Email for Identification
         const userResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
@@ -76,17 +107,34 @@ export async function GET(request: Request) {
         // this account cannot send mail with OAuth2.
         if (!refreshTokenEncrypted) {
             return NextResponse.redirect(
-                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings?auth=error&reason=no_refresh_token`
+                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${returnTo}?auth=error&reason=no_refresh_token`
             );
         }
 
+        const hasSendScope = typeof scope === "string"
+            ? (scope.includes("gmail.send") || scope.includes("mail.google.com"))
+            : true;
+        const hasReadScope = typeof scope === "string"
+            ? scope.includes("gmail.readonly")
+            : true;
+
         const accountData: any = {
             email,
-            accountName: state || email.split('@')[0], // Use state (label) OR email prefix
+            accountName: label || email.split("@")[0],
             refreshTokenEncrypted,
             accessTokenEncrypted: encrypt(access_token),
             expiresAt,
             isDefault: !defaultAccount, // Make default if none exist
+            scopeGranted: hasSendScope,
+            lastStatus:
+                intent === "send" && !hasSendScope
+                    ? "SEND_SCOPE_MISSING"
+                    : intent === "sync" && !hasReadScope
+                        ? "SYNC_SCOPE_MISSING"
+                        : intent === "both" && (!hasSendScope || !hasReadScope)
+                            ? "PARTIAL_SCOPE"
+                            : "HEALTHY",
+            lastUsed: new Date(),
         };
 
         await (prisma.gmailAccount as any).upsert({
@@ -96,12 +144,15 @@ export async function GET(request: Request) {
                 refreshTokenEncrypted: accountData.refreshTokenEncrypted,
                 accessTokenEncrypted: accountData.accessTokenEncrypted,
                 expiresAt: accountData.expiresAt,
+                scopeGranted: accountData.scopeGranted,
+                lastStatus: accountData.lastStatus,
+                lastUsed: accountData.lastUsed,
             },
             create: accountData,
         });
 
         // Redirect back to Settings with success
-        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/settings?auth=success`);
+        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${returnTo}?auth=success`);
 
     } catch (error: any) {
         console.error("Neural Link Callback Error:", error);

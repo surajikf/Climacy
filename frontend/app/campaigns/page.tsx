@@ -166,7 +166,14 @@ export default function CampaignGenerator() {
 
     useEffect(() => {
         fetch(apiPath("/services"))
-            .then(res => res.json())
+            .then(async (res) => {
+                const contentType = res.headers.get("content-type") || "";
+                if (!res.ok || !contentType.includes("application/json")) {
+                    const text = await res.text().catch(() => "");
+                    throw new Error(text || `Services request failed (${res.status})`);
+                }
+                return res.json();
+            })
             .then(data => {
                 if (data.success) setServices(data.data);
             })
@@ -220,6 +227,16 @@ export default function CampaignGenerator() {
             })
             .finally(() => setLoadingAudience(false));
     }, [selectedType, selectedServices, serviceLogic, excludedClientIds]);
+
+    // Segmentation is Cross-Sell-only.
+    // Clear service filters whenever the objective changes away from Cross-Sell
+    // so other tabs remain functionally isolated.
+    useEffect(() => {
+        if (selectedType !== "Cross-Sell") {
+            setSelectedServices([]);
+            setServiceLogic("OR");
+        }
+    }, [selectedType]);
 
     const handleGenerateSample = async (clientId?: string) => {
         if (!selectedType || !topic || !coreMessage) {
@@ -522,7 +539,7 @@ export default function CampaignGenerator() {
                             <Sparkles className="w-6 h-6 text-amber-500 animate-pulse" />
                         </h2>
                         <p className="text-sm font-medium text-slate-500 mt-1">
-                            Review the AI-generated sample for <span className="text-blue-600 font-bold">{sampleData.clientName}</span>. Any changes you make here will guide the style for the entire batch.
+                            Review the AI-generated sample for <span className="text-blue-600 font-bold">{sampleData.clientName || sampleData.email || "Selected Client"}</span>. Any changes you make here will guide the style for the entire batch.
                         </p>
                     </div>
                     <div className="hidden md:block">
@@ -577,7 +594,7 @@ export default function CampaignGenerator() {
                                                     className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded transition-all"
                                                 >
                                                     {isGeneratingSuggestions ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 text-amber-500" />}
-                                                    Smart Suggestions
+                                                    Suggestions
                                                 </button>
                                             </div>
                                             <input
@@ -697,11 +714,24 @@ export default function CampaignGenerator() {
                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
                             <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold shrink-0">
-                                    {sampleData.clientName[0]}
+                                    {(sampleData.clientName || sampleData.email || "C")[0]}
                                 </div>
-                                <div>
+                                <div className="min-w-0 flex-1">
                                     <p className="text-xs font-black text-slate-400 uppercase tracking-tighter">Current Sample</p>
-                                    <p className="text-sm font-bold text-slate-900 truncate max-w-[180px]">{sampleData.clientName}</p>
+                                    <p
+                                        className="text-sm font-bold text-slate-900 truncate max-w-[180px]"
+                                        title={`${sampleData.clientName || sampleData.email || "Selected Client"}${sampleData.email ? `\n${sampleData.email}` : ""}`}
+                                    >
+                                        {sampleData.clientName || sampleData.email || "Selected Client"}
+                                    </p>
+                                    {sampleData.email && (
+                                        <p
+                                            className="text-[10px] font-medium text-slate-400 truncate max-w-[180px]"
+                                            title={sampleData.email}
+                                        >
+                                            {sampleData.email}
+                                        </p>
+                                    )}
                                 </div>
                                 <button
                                     onClick={fetchTargetClients}
@@ -723,7 +753,7 @@ export default function CampaignGenerator() {
 
                             
                             <div className="pt-6 border-t border-slate-100 space-y-4">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Test Dispatch</h4>
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Send Test Email</h4>
                                 <div className="space-y-2">
                                     <input
                                         type="email"
@@ -738,7 +768,7 @@ export default function CampaignGenerator() {
                                         className="w-full py-2.5 bg-white border-2 border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                                     >
                                         {isSendingTest ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                                        Run Test Dispatch
+                                        Send Test Email
                                     </button>
                                 </div>
                             </div>
@@ -748,7 +778,7 @@ export default function CampaignGenerator() {
                                     onClick={handleGenerateAll}
                                     className="w-full bg-slate-900 text-white py-4 px-4 rounded-xl text-sm font-black hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group"
                                 >
-                                    Proceed & Generate All
+                                    Generate All
                                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </button>
                                 <p className="text-[10px] text-center text-slate-400 mt-4 font-bold uppercase tracking-widest">
@@ -890,6 +920,11 @@ export default function CampaignGenerator() {
                                             </div>
                                         ))}
                                     </div>
+                                    {services.length === 0 && (
+                                        <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-medium">
+                                            No services available yet. Add services in Clients/Imports or Service settings to enable Cross-Sell filtering.
+                                        </div>
+                                    )}
 
                                     <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100/50">
                                         <p className="text-[10px] text-blue-700 font-medium leading-relaxed">
@@ -1040,7 +1075,7 @@ export default function CampaignGenerator() {
                             >
                                 {isGenerating ? <RefreshCcw className="w-5 h-5 animate-spin" /> : (
                                     <>
-                                        Generate Strategized Draft
+                                        Generate Draft
                                         <Zap className="w-4 h-4 text-blue-300 group-hover:text-amber-400 group-hover:rotate-12 transition-all" />
                                     </>
                                 )}
@@ -1055,7 +1090,7 @@ export default function CampaignGenerator() {
                                 </p>
                             ) : (
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-center text-blue-500 mt-4 leading-relaxed tracking-[0.2em]">
-                                    Systems Ready for Neural Synthesis
+                                    Ready to Generate
                                 </p>
                             )}
                         </div>

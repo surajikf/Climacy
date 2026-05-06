@@ -177,7 +177,7 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-slate-900 mb-2">{safe.recommendedAction.actionType.replace(/_/g, " ")}</h2>
             <p className="text-sm font-medium text-slate-500 mb-3">{safe.recommendedAction.reason}</p>
             <div className="bg-slate-50 rounded-xl p-3 mb-6">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">Strategic Impact</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">Expected Impact</p>
               <p className="text-xs font-bold text-blue-700">
                 {safe.recommendedAction.impactEstimate} · Targeting {safe.recommendedAction.targetCount} Clients
               </p>
@@ -186,7 +186,7 @@ export default function Dashboard() {
               onClick={() => router.push(appPath(safe.recommendedAction.ctaRoute))}
               className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-black transition-all shadow-md active:scale-[0.98]"
             >
-              Initialize Strategy
+              Start Now
               <ChevronRight className="w-4 h-4" />
             </button>
           </section>
@@ -230,7 +230,7 @@ export default function Dashboard() {
               ))}
               {(safe.processChecklist || []).length === 0 && (
                 <div className="text-xs font-bold text-slate-400 border-2 border-dashed border-slate-100 rounded-2xl p-6 text-center italic">
-                  Neural queue empty. Initialize synchronization from settings.
+                  No pending tasks. You can set up data sync in Settings.
                 </div>
               )}
             </div>
@@ -339,7 +339,7 @@ export default function Dashboard() {
 
         <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 border-l-4 border-blue-600 pl-4">Recent Strategic Activity</h3>
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 border-l-4 border-blue-600 pl-4">Recent Activity</h3>
             <button 
               onClick={() => router.push(appPath("/campaigns/results"))} 
               className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 transition-colors"
@@ -349,7 +349,7 @@ export default function Dashboard() {
           </div>
           {safe.recentCampaigns.length === 0 ? (
             <div className="text-sm font-bold text-slate-400 border-2 border-dashed border-slate-100 rounded-2xl p-8 text-center bg-slate-50/50">
-              No tactical engagement detected. Deploy your first campaign to initialize the activity feed.
+              No activity yet. Send your first campaign to see updates here.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

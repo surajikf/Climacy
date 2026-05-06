@@ -8,6 +8,7 @@ import { sanitizeEmailHtml } from "../shared/lib/email-sanitize.ts";
 import { evaluateEmailQuality } from "../shared/lib/campaign-quality.ts";
 import { sendStrategicEmail } from "../lib/mail.ts";
 import { parseCampaignGeneratedOutput } from "../shared/lib/campaign-output.ts";
+import { runGmailSync } from "../lib/workers/gmail-sync.ts";
 
 import Groq from "groq-sdk";
 
@@ -175,7 +176,10 @@ async function runCampaignGenerate(job: JobRow) {
 
   const generatedCampaigns = await mapLimit(clients, MAX_GENERATE_CLIENT_CONCURRENCY, async (client, idx) => {
     const servicesList = client.invoiceServiceNames || "your business infrastructure";
-    const greeting = getSmartGreeting(client.contactPerson || client.poc);
+    const greeting = getSmartGreeting(client.contactPerson || client.poc, {
+      email: client.email,
+      signature: client.emailSignature || client.signature || client.signatureName,
+    });
 
     const now = new Date();
     const addedOn = client.clientAddedOn ? new Date(client.clientAddedOn) : null;
@@ -277,7 +281,7 @@ async function runCampaignGenerate(job: JobRow) {
                              - Use short paragraphs (2-4 lines max), clean spacing, and professional business tone.
                              - Keep message concise, value-first, and avoid hype/salesy language.
                              - Include one clear CTA and polite professional close.
-                             - If contact name is unavailable, use "Dear Sir/Ma'am".
+                             - Greeting fallback order: contact name -> email local-part -> signature name -> "Dear Sir/Ma'am".
                              - Respect style memory hints when available (directness, concise wording, CTA style).
                              - NEVER mention or sign off with any specific company/brand name; use a generic sign-off (e.g., "Best regards,") only.
                              - If client details are missing (name, industry, services, relationship history), do NOT reference them. Write a complete email using only the topic/coreMessage/CTA.
@@ -502,173 +506,8 @@ async function runDispatchBatch(job: JobRow) {
 async function runGmailImport(job: JobRow) {
   const payload = job.payload as any;
   const accountId: string = String(payload?.accountId || "");
-
-  // 1) Fetch Gmail account and ensure access token.
-  const account = await prisma.gmailAccount.findUnique({
-    where: { id: accountId },
-  });
-
-  if (!account) {
-    throw new Error("Gmail account not found.");
-  }
-
-  // Use the same logic as the route handler: refresh if needed.
-  // Note: we keep this worker logic self-contained (no auth).
-  const { decrypt, encrypt } = await import("../lib/encryption.ts");
-  const accessTokenDecrypted = decrypt(account.accessTokenEncrypted || "");
-
-  let accessToken = accessTokenDecrypted;
-
-  if (!accessToken || !account.expiresAt || account.expiresAt < new Date()) {
-    const settings = await prisma.globalSettings.findUnique({
-      where: { id: "singleton" },
-    });
-
-    if (!settings?.googleClientIdEncrypted || !settings?.googleClientSecretEncrypted) {
-      throw new Error("Google OAuth credentials missing in Global Settings.");
-    }
-
-    const clientId = decrypt(settings.googleClientIdEncrypted);
-    const clientSecret = decrypt(settings.googleClientSecretEncrypted);
-    const refreshToken = decrypt(account.refreshTokenEncrypted);
-
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-    });
-
-    const tokens = await tokenResponse.json();
-    if (!tokenResponse.ok) {
-      throw new Error(`Gmail token refresh failed: ${tokens?.error_description || tokens?.error || "Unknown error"}`);
-    }
-
-    accessToken = tokens.access_token;
-    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
-
-    await prisma.gmailAccount.update({
-      where: { id: accountId },
-      data: {
-        accessTokenEncrypted: encrypt(accessToken),
-        expiresAt,
-      },
-    });
-  }
-
-  // 2) Fetch recent messages
-  const messagesRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=after:2024/01/01`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-
-  if (!messagesRes.ok) {
-    throw new Error("Failed to read Gmail messages.");
-  }
-
-  const { messages = [] } = await messagesRes.json();
-
-  // 3) Extract headers (From/To) with concurrency limit for speed.
-  const contacts = new Map<string, { email: string; name: string }>();
-
-  const parseEmailHeader = (headerValue: string): { email: string; name: string }[] => {
-    const parts = headerValue.split(",");
-    const out: { email: string; name: string }[] = [];
-    parts.forEach((part) => {
-      const emailMatch = part.match(/<(.+@.+)>/);
-      const email = emailMatch ? emailMatch[1].trim() : part.trim();
-
-      if (email.includes("@")) {
-        let name = "";
-        if (emailMatch) {
-          name = part.replace(emailMatch[0], "").replace(/["']/g, "").trim();
-        }
-        out.push({ email, name });
-      }
-    });
-    return out;
-  };
-
-  const detailItems = await mapLimit(messages, 5, async (msg: any) => {
-    const detailRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    if (!detailRes.ok) return null;
-    return await detailRes.json();
-  });
-
-  for (const detail of detailItems) {
-    const headers = detail?.payload?.headers || [];
-    headers.forEach((h: any) => {
-      const results = parseEmailHeader(h.value);
-      results.forEach((res: any) => {
-        const emailLower = String(res.email || "").toLowerCase();
-        if (
-          emailLower &&
-          emailLower !== String(account.email || "").toLowerCase() &&
-          !emailLower.includes("@noreply") &&
-          !emailLower.includes("google.com")
-        ) {
-          contacts.set(emailLower, { email: emailLower, name: res.name });
-        }
-      });
-    });
-  }
-
-  // 4) Upsert Clients (bulk conflict detection to reduce DB roundtrips)
-  const emailList = Array.from(contacts.keys());
-  const existing = await prisma.client.findMany({
-    where: { email: { in: emailList } },
-    select: { email: true, source: true },
-  });
-  const existingMap = new Map(existing.map((c) => [String(c.email).toLowerCase(), c.source]));
-
-  // isRoleBased helper
-  const { isRoleBasedEmail } = await import("../lib/email-utils.ts");
-
-  const contactEntries = Array.from(contacts.entries());
-  const upsertResults = await mapLimit(contactEntries, 5, async ([email, info]: any) => {
-    const existingSource = existingMap.get(String(email).toLowerCase());
-    const isConflict = !!(existingSource && existingSource !== "GMAIL");
-
-    await prisma.client.upsert({
-      where: {
-        source_externalId: {
-          source: "GMAIL",
-          externalId: `${account.id}:${email}`,
-        },
-      },
-      update: {
-        clientName: info.name || String(email).split("@")[0].replace(/[._]/g, " "),
-        contactPerson: info.name || null,
-        gmailSourceAccount: account.email,
-        isRoleBased: isRoleBasedEmail(email),
-      },
-      create: {
-        clientName: info.name || String(email).split("@")[0].replace(/[._]/g, " "),
-        contactPerson: info.name || null,
-        email: email,
-        industry: "Corporate",
-        relationshipLevel: "Warm Lead",
-        source: "GMAIL",
-        externalId: `${account.id}:${email}`,
-        gmailSourceAccount: account.email,
-        isRoleBased: isRoleBasedEmail(email),
-      },
-    });
-
-    return { isConflict };
-  });
-
-  const importedCount = upsertResults.length;
-  const conflictCount = upsertResults.filter((r) => r.isConflict).length;
-
-  return { count: importedCount, conflicts: conflictCount };
+  const options = payload?.options || undefined;
+  return await runGmailSync(accountId, options);
 }
 
 async function main() {
@@ -718,4 +557,3 @@ main().catch((e) => {
   console.error("[job-worker] fatal error:", e);
   process.exit(1);
 });
-

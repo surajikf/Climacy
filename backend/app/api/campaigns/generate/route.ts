@@ -77,6 +77,7 @@ export async function POST(request: Request) {
                 select: {
                     id: true,
                     clientName: true,
+                    email: true,
                     industry: true,
                     contactPerson: true,
                     relationshipLevel: true,
@@ -105,7 +106,10 @@ export async function POST(request: Request) {
 
         const generatedCampaigns = await Promise.all((targetClients || []).map(async (client: any) => {
             const servicesList = client.invoiceServiceNames || "your business infrastructure";
-            const greeting = getSmartGreeting(client.contactPerson || client.poc);
+            const greeting = getSmartGreeting(client.contactPerson || client.poc, {
+                email: client.email,
+                signature: client.emailSignature || client.signature || client.signatureName,
+            });
             
             // --- Institutional Intelligence Context ---
             const now = new Date();
@@ -147,6 +151,7 @@ export async function POST(request: Request) {
                 return {
                     clientId: client.id,
                     clientName: client.clientName,
+                    email: client.email || null,
                     contactPerson: client.contactPerson,
                     campaignType: type,
                     campaignTopic: topic,
@@ -209,7 +214,7 @@ export async function POST(request: Request) {
                            - Use short paragraphs (2-4 lines max), clean spacing, and professional business tone.
                            - Keep message concise, value-first, and avoid hype/salesy language.
                            - Include one clear CTA and polite professional close.
-                           - If contact name is unavailable, use "Dear Sir/Ma'am".
+                           - Greeting fallback order: contact name -> email local-part -> signature name -> "Dear Sir/Ma'am".
                            - Respect style memory hints when available (directness, concise wording, CTA style).
                            - NEVER mention or sign off with any specific company/brand name; use a generic sign-off (e.g., "Best regards,") only.
                            - If client details are missing (name, industry, services, relationship history), do NOT reference them. Write a complete email using only the topic/coreMessage/CTA.
@@ -361,6 +366,7 @@ export async function POST(request: Request) {
                     return {
                         clientId: client.id,
                         clientName: client.clientName,
+                        email: client.email || null,
                         contactPerson: client.contactPerson,
                         campaignType: type,
                         campaignTopic: topic,
@@ -400,6 +406,7 @@ export async function POST(request: Request) {
                     return {
                         clientId: client.id,
                         clientName: client.clientName,
+                        email: client.email || null,
                         contactPerson: client.contactPerson,
                         campaignType: type,
                         campaignTopic: topic,

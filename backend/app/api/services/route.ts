@@ -10,8 +10,44 @@ export async function GET() {
                 serviceName: "asc",
             },
         });
+        if (services.length > 0) {
+            console.timeEnd("fetchServicesAPI");
+            return ok(services);
+        }
+
+        // Fallback: derive service list from imported client invoice services when Service table is empty.
+        const clients = await prisma.client.findMany({
+            select: { invoiceServiceNames: true },
+            where: { invoiceServiceNames: { not: null } },
+        });
+
+        const seen = new Set<string>();
+        const inferred = [] as Array<{ id: string; serviceName: string; category: string | null; description: string | null }>;
+        let idx = 0;
+
+        for (const c of clients) {
+            const raw = c.invoiceServiceNames || "";
+            if (!raw) continue;
+
+            for (const part of raw.split(/[,\n;|]+/)) {
+                const name = part.trim();
+                if (!name) continue;
+                const key = name.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                idx += 1;
+                inferred.push({
+                    id: `inferred-${idx}`,
+                    serviceName: name,
+                    category: "Imported",
+                    description: null,
+                });
+            }
+        }
+
+        inferred.sort((a, b) => a.serviceName.localeCompare(b.serviceName));
         console.timeEnd("fetchServicesAPI");
-        return ok(services);
+        return ok(inferred);
     } catch (err) {
         console.error("Failed to fetch services:", err);
         return error("INTERNAL_ERROR", "Failed to fetch services");

@@ -81,7 +81,10 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
 
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            StarterKit.configure({
+                link: false,
+                underline: false,
+            }),
             Underline,
             Link.configure({
                 openOnClick: false,
@@ -213,7 +216,7 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
                 toast.error("AI couldn't process the refinement.");
             }
         } catch (err) {
-            toast.error("Neural link interrupted.");
+            toast.error("Connection interrupted.");
         } finally {
             setIsRefining(false);
         }
@@ -277,7 +280,10 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
         const onboardDate = sampleData.clientAddedOn ? new Date(sampleData.clientAddedOn) : null;
 
         const variables: Record<string, string> = {
-            greeting: getSmartGreeting(sampleData.contactPerson || sampleData.poc),
+            greeting: getSmartGreeting(sampleData.contactPerson || sampleData.poc, {
+                email: sampleData.email,
+                signature: sampleData.emailSignature || sampleData.signature || sampleData.signatureName,
+            }),
             firstName: getFirstName(sampleData.contactPerson || sampleData.poc) || "there",
             lastName: getLastName(sampleData.contactPerson || sampleData.poc) || "",
             fullName: sampleData.contactPerson || sampleData.poc || "Valued Partner",
@@ -373,7 +379,7 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
                             )}
                         >
                             {isRefining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            <span className="text-[10px] font-black uppercase tracking-widest">Magic Pen</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">Improve</span>
                         </button>
                         
                         {showMagicMenu && (

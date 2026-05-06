@@ -10,4 +10,7 @@ out/
 .env.production
 .env.development
 tmp/
+.DS_Store
+Thumbs.db
+
 

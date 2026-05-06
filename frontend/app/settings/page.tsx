@@ -15,7 +15,6 @@ import {
     Eye,
     EyeOff,
     Zap,
-    Globe,
     Cpu,
     ArrowLeft,
     Network,
@@ -225,24 +224,17 @@ export default function SettingsPage() {
                 actions={
                     <>
                         <button
-                            type="button"
-                            onClick={() => setResetModalOpen(true)}
-                            className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-2 px-4 py-2 rounded-md hover:bg-slate-100 border border-transparent hover:border-slate-200 font-mono text-[10px] uppercase tracking-wider"
-                        >
-                            baselining
-                        </button>
-                        <button
                             type="submit"
                             disabled={saving}
                             className="bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm active:scale-[0.98] flex items-center gap-2"
                         >
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            {saving ? "Saving..." : "Commit Changes"}
+                            {saving ? "Saving..." : "Save"}
                         </button>
                         {saved && (
                             <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 animate-in fade-in slide-in-from-left-2 transition-all">
                                 <CheckCircle2 className="w-3 h-3" />
-                                Synchronized
+                                Saved
                             </span>
                         )}
                     </>
@@ -303,7 +295,7 @@ export default function SettingsPage() {
                                     )}
                                 >
                                     <Zap className={cn("w-3.5 h-3.5", testStatus.status === 'testing' && "animate-pulse")} />
-                                    {testStatus.status === 'testing' ? "Pinging Node..." : "Verify Pipeline"}
+                                    {testStatus.status === 'testing' ? "Testing..." : "Test Connection"}
                                 </button>
                             </div>
                         </div>
@@ -424,7 +416,7 @@ export default function SettingsPage() {
                                                 className="text-xs font-bold text-slate-600 hover:text-blue-600 px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-200 transition-all flex items-center gap-2 disabled:opacity-50"
                                             >
                                                 {nodeTestLoading === "GMAIL" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                                Test Dispatch
+                                                Send Test Email
                                             </button>
                                         </div>
                                     </div>
@@ -528,7 +520,7 @@ export default function SettingsPage() {
                                             className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold transition-all flex items-center gap-2"
                                         >
                                             {nodeTestLoading === "SMTP" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-slate-400" />}
-                                            Test SMTP
+                                            Test Email
                                         </button>
                                         {formData.emailProvider !== "SMTP" && (
                                             <button
@@ -536,7 +528,7 @@ export default function SettingsPage() {
                                                 onClick={() => setFormData({ ...formData, emailProvider: "SMTP" })}
                                                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
                                             >
-                                                Use SMTP
+                                                Switch to SMTP
                                             </button>
                                         )}
                                     </div>
@@ -587,63 +579,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                {/* 3. Operational Integrity (Branding) */}
-                <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm space-y-8">
-                    <div className="flex items-center gap-3 pb-4 border-b border-slate-50">
-                        <div className="p-2 rounded-lg bg-blue-50 border border-blue-100 text-blue-600">
-                            <Globe className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Branding & Identity</h3>
-                            <p className="text-xs font-medium text-slate-400">Customize the project appearance and public vectors.</p>
-                        </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Project Name</label>
-                                <input
-                                    type="text"
-                                    value={formData.projectName}
-                                    onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 outline-none focus:bg-white focus:border-blue-500 transition-all font-semibold text-slate-900 text-sm"
-                                    placeholder="e.g. IKF Outreach"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Logo URL (Optional)</label>
-                                <input
-                                    type="text"
-                                    value={formData.projectLogo}
-                                    onChange={(e) => setFormData({ ...formData, projectLogo: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 outline-none focus:bg-white focus:border-blue-500 transition-all font-semibold text-slate-900 text-sm"
-                                    placeholder="https://example.com/logo.png"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="bg-slate-50 p-6 rounded-lg border border-slate-100 flex items-center justify-center min-h-[140px]">
-                            <div className="text-center space-y-3">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Live Preview</p>
-                                <div className="flex items-center gap-3 px-6 py-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                    {formData.projectLogo ? (
-                                        <div className="bg-slate-900 p-2 rounded-lg flex items-center justify-center min-w-[3rem]">
-                                            <img src={formData.projectLogo} alt="Preview" className="h-6 w-auto object-contain" />
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-lg">
-                                                {(formData.projectName || "I").charAt(0)}
-                                            </div>
-                                            <span className="font-bold text-slate-900 tracking-tight">{(formData.projectName || "IKF Outreach")}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Reset Modal Support */}
@@ -657,8 +592,8 @@ export default function SettingsPage() {
                         <h3 className="text-lg font-black text-slate-900 mb-2 uppercase tracking-tight leading-none">Flush System Configuration?</h3>
                         <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8">This action will revert all system nodes to their factory baseline. All strategic keys and dispatch identities will be detached.</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setResetModalOpen(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest transition-all">Abort</button>
-                            <button onClick={() => { setFormData(defaultSettings); setResetModalOpen(false); toast.info("Baselining complete."); }} className="flex-1 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 transition-all active:scale-95">Purge Settings</button>
+                            <button onClick={() => setResetModalOpen(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest transition-all">Cancel</button>
+                            <button onClick={() => { setFormData(defaultSettings); setResetModalOpen(false); toast.info("Settings reset."); }} className="flex-1 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 transition-all active:scale-95">Reset Settings</button>
                         </div>
                     </div>
                 </div>
@@ -666,4 +601,3 @@ export default function SettingsPage() {
         </form>
     );
 }
-

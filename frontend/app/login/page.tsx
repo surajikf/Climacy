@@ -59,7 +59,7 @@ export default function LoginPage() {
                         <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">
                             {projectName}
                         </h1>
-                        <p className="text-sm font-medium text-slate-500 mt-2">Welcome Back Neural Operator</p>
+                        <p className="text-sm font-medium text-slate-500 mt-2">Welcome back</p>
                     </div>
 
                     <button
@@ -89,7 +89,7 @@ export default function LoginPage() {
                                 />
                             </svg>
                         )}
-                        {loading ? "Establishing Link..." : "Sign in with Google"}
+                        {loading ? "Signing in..." : "Sign in with Google"}
                     </button>
 
                     <div className="mt-10 text-center border-t border-slate-100 pt-8">

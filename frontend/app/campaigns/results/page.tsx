@@ -396,9 +396,9 @@ function CampaignResultsContent() {
                         const total = r.total ?? idsToDispatch.length;
                         const successCount = r.successCount ?? r.successes ?? 0;
                         if (successCount === total) {
-                            toast.success(`Strategic Success: ${total} nodes dispatched.`);
+                            toast.success(`${total} emails sent.`);
                         } else {
-                            toast.warning(`Partial Success: ${successCount}/${total} nodes dispatched. Check neural logs.`);
+                            toast.warning(`${successCount}/${total} emails sent. Please check errors.`);
                         }
 
                         setIsDispatching(false);
@@ -457,7 +457,7 @@ function CampaignResultsContent() {
             }
         } catch (err) {
             console.error(err);
-            toast.error("Temporal synchronization failed. Check node stability.");
+            toast.error("Could not save changes. Please try again.");
         } finally {
             setIsSaving(false);
         }
@@ -479,8 +479,8 @@ function CampaignResultsContent() {
                 <Zap className="w-6 h-6 text-slate-400" />
             </div>
             <div className="text-center space-y-1.5">
-                <h3 className="text-xl font-semibold text-slate-900 tracking-tight">Studio Empty</h3>
-                <p className="text-sm font-medium text-slate-500">No synthesized campaigns found in the current matrix.</p>
+                <h3 className="text-xl font-semibold text-slate-900 tracking-tight">No Campaigns Yet</h3>
+                <p className="text-sm font-medium text-slate-500">No campaigns found right now.</p>
             </div>
             <button
                                     onClick={() => { window.location.href = appPath("/campaigns"); }}
@@ -498,7 +498,7 @@ function CampaignResultsContent() {
             <header className="flex items-center justify-between px-2">
                 <div>
                     <h2 className="text-3xl font-semibold tracking-tight text-slate-900 flex items-center gap-3">
-                        Neural Composer
+                        Campaign Editor
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-600 uppercase tracking-widest animate-pulse">Sync Active</span>
                     </h2>
                     <p className="text-sm font-medium text-slate-500 mt-1">Refine the communication vector for maximum strategic resonance.</p>
@@ -508,7 +508,7 @@ function CampaignResultsContent() {
                     className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 rounded-md hover:bg-slate-100 border border-transparent hover:border-slate-200"
                 >
                     <ArrowLeft className="w-4 h-4" />
-                    New Synthesis
+                    New Campaign
                 </button>
             </header>
 
@@ -590,7 +590,7 @@ function CampaignResultsContent() {
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 group">
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Strategic Subject</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Subject</label>
                                 </div>
                                 <input
                                     type="text"
@@ -606,7 +606,7 @@ function CampaignResultsContent() {
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 group">
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Narrative Surface</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Message</label>
                                 </div>
                                 {pendingDraft && (
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg uppercase tracking-widest">
@@ -675,7 +675,7 @@ function CampaignResultsContent() {
                                 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-all px-3 py-1.5 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
                             >
                                 {isSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                {isSaving ? "Saving..." : "Save Evolution"}
+                                {isSaving ? "Saving..." : "Save Changes"}
                             </button>
                         </div>
                     </div>
@@ -685,7 +685,7 @@ function CampaignResultsContent() {
                 <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8">
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-8">
                         <div className="space-y-6">
-                            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center">Output Calibration</h3>
+                            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center">Email Score</h3>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="relative group/tooltip flex justify-center cursor-help">
                                     <MicroGauge
@@ -695,7 +695,7 @@ function CampaignResultsContent() {
                                         color="blue"
                                     />
                                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/tooltip:opacity-100 transition-all duration-300 translate-y-2 group-hover/tooltip:translate-y-0 bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl pointer-events-none">
-                                        Potential Strategic Impact
+                                        Estimated impact
                                     </div>
                                 </div>
                                 <div className="relative group/tooltip flex justify-center cursor-help">
@@ -716,7 +716,7 @@ function CampaignResultsContent() {
                             {isDispatching && (
                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
                                     <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                        <span>Transmission Progress</span>
+                                        <span>Sending progress</span>
                                         <span>{dispatchProgress}%</span>
                                     </div>
                                     <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
@@ -737,7 +737,7 @@ function CampaignResultsContent() {
                                     )}
                                 >
                                     {copied ? <Check className="w-3.5 h-3.5 animate-in zoom-in duration-200" /> : <Copy className="w-3.5 h-3.5" />}
-                                    {copied ? "Source Verified" : "Capture Source"}
+                                    {copied ? "Copied" : "Copy Text"}
                                 </button>
                                 <button
                                     onClick={handleBatchDispatch}
@@ -749,7 +749,7 @@ function CampaignResultsContent() {
                                     ) : (
                                         <Send className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                                     )}
-                                    {isDispatching ? "Calibrating..." : selectedIds.size > 1 ? `Dispatch ${selectedIds.size} Nodes` : selectedIds.size === 1 ? "Dispatch Single Node" : "Dispatch Node"}
+                                    {isDispatching ? "Sending..." : selectedIds.size > 1 ? `Send ${selectedIds.size} Emails` : "Send Email"}
                                 </button>
                             </div>
                         </div>
@@ -758,7 +758,7 @@ function CampaignResultsContent() {
                             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-12 -mt-12" />
                             <div className="flex items-center gap-2 relative z-10">
                                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                                <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Alignment Intelligence</h4>
+                                <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Quick Tip</h4>
                             </div>
                             <p className="text-[11px] text-slate-400 leading-relaxed font-medium relative z-10">
                                 Current narrative aligns with {activeCampaign?.campaignType} objectives. Optimal window for {activeCampaign?.client?.clientName} is now active.

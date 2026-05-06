@@ -11,6 +11,8 @@ export async function GET() {
                     accountName: true,
                     email: true,
                     updatedAt: true,
+                    scopeGranted: true,
+                    lastStatus: true,
                 },
                 orderBy: { updatedAt: "desc" },
             }),

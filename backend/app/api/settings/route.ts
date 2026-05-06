@@ -4,7 +4,15 @@ import { ok, error } from "@/backend/lib/api-response";
 import { getGlobalSettings } from "@/backend/lib/settings";
 import { z } from "zod";
 
-const MASK = "••••••••••••••••";
+const MASK = "********";
+
+function isMaskedSecret(value?: string | null) {
+    if (!value) return false;
+    const v = value.trim();
+    if (!v) return false;
+    if (v === MASK) return true;
+    return /^[*•●·]+$/.test(v) && v.length >= 6;
+}
 
 const settingsSchema = z.object({
     aiProvider: z.string().min(1),
@@ -82,12 +90,12 @@ export async function POST(request: Request) {
         };
 
         // Encrypt sensitive fields
-        if (data.groqApiKey && data.groqApiKey !== MASK) updateData.groqApiKeyEncrypted = encrypt(data.groqApiKey);
-        if (data.openaiApiKey && data.openaiApiKey !== MASK) updateData.openaiApiKeyEncrypted = encrypt(data.openaiApiKey);
-        if (data.googleClientId && data.googleClientId !== MASK) updateData.googleClientIdEncrypted = encrypt(data.googleClientId);
-        if (data.googleClientSecret && data.googleClientSecret !== MASK) updateData.googleClientSecretEncrypted = encrypt(data.googleClientSecret);
-        if (data.invoiceApiKey && data.invoiceApiKey !== MASK) updateData.invoiceApiKeyEncrypted = encrypt(data.invoiceApiKey);
-        if (data.smtpPass && data.smtpPass !== MASK) updateData.smtpPassEncrypted = encrypt(data.smtpPass);
+        if (data.groqApiKey && !isMaskedSecret(data.groqApiKey)) updateData.groqApiKeyEncrypted = encrypt(data.groqApiKey);
+        if (data.openaiApiKey && !isMaskedSecret(data.openaiApiKey)) updateData.openaiApiKeyEncrypted = encrypt(data.openaiApiKey);
+        if (data.googleClientId && !isMaskedSecret(data.googleClientId)) updateData.googleClientIdEncrypted = encrypt(data.googleClientId);
+        if (data.googleClientSecret && !isMaskedSecret(data.googleClientSecret)) updateData.googleClientSecretEncrypted = encrypt(data.googleClientSecret);
+        if (data.invoiceApiKey && !isMaskedSecret(data.invoiceApiKey)) updateData.invoiceApiKeyEncrypted = encrypt(data.invoiceApiKey);
+        if (data.smtpPass && !isMaskedSecret(data.smtpPass)) updateData.smtpPassEncrypted = encrypt(data.smtpPass);
         
         // Handle invoice URL separately if provided
         if (data.invoiceApiUrl) updateData.invoiceApiUrlEncrypted = encrypt(data.invoiceApiUrl);

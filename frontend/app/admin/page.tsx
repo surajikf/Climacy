@@ -72,7 +72,7 @@ export default function AdminDashboard() {
                     <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">Access Management</h2>
-                <p className="text-slate-500 font-medium text-sm mt-1">Manage personnel and access directives for the Neural Matrix.</p>
+                <p className="text-slate-500 font-medium text-sm mt-1">Manage user access and roles.</p>
             </header>
 
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">

@@ -1,21 +1,45 @@
 import NextAuth from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
-export const authOptions = {
+const requiredEnvVars = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "NEXTAUTH_SECRET",
+] as const;
+
+const missingEnvVars = requiredEnvVars.filter((key) => {
+  const value = process.env[key];
+  return !value || value.trim().length === 0 || value.includes("replace-with-");
+});
+
+if (missingEnvVars.length > 0) {
+  throw new Error(
+    `[NextAuth config] Missing required env vars: ${missingEnvVars.join(", ")}. ` +
+      "Set them in frontend/.env.local (or frontend/.env) and restart the Next.js dev server."
+  );
+}
+
+const googleClientId = process.env.GOOGLE_CLIENT_ID as string;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET as string;
+const nextAuthSecret = process.env.NEXTAUTH_SECRET as string;
+
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
       authorization: {
         params: {
-          scope: "openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",
+          scope: "openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://mail.google.com/",
           access_type: "offline",
           prompt: "consent",
         },
       },
     }),
   ],
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: nextAuthSecret,
+  debug: process.env.NODE_ENV === "development",
   callbacks: {
     async jwt({ token, account, profile }) {
       // 1) Handle initial login: capture tokens and email

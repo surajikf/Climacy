@@ -24,9 +24,9 @@ export default function Error({
                     <AlertTriangle className="w-10 h-10" />
                 </div>
                 <div className="space-y-4 mb-10">
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">System Anomaly</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Something went wrong</h2>
                     <p className="text-sm font-medium text-slate-500 leading-relaxed">
-                        A dissonance has occurred in the matrix. Our systems have logged the fault.
+                        We could not load this page. Please try again.
                     </p>
                 </div>
                 <button
@@ -34,7 +34,7 @@ export default function Error({
                     className="w-full bg-slate-900 text-white py-5 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-xl shadow-slate-200 hover:bg-slate-800 hover-lift"
                 >
                     <RefreshCw className="w-4 h-4" />
-                    Reinitialize Core
+                    Try Again
                 </button>
             </div>
         </div>

@@ -39,7 +39,10 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { email, refreshToken, accessToken, scope, name } = body;
+        const { email, refreshToken, accessToken, scope, name } = body ?? {};
+
+        const asNonEmptyString = (value: unknown) =>
+            typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 
         // session.user.email is the correct path (not session.email)
         const sessionEmail = session.user?.email;
@@ -48,27 +51,53 @@ export async function POST(request: Request) {
             return error("VALIDATION_ERROR", "Identity mismatch. Sync rejected.", { status: 400 });
         }
 
-        // Check if sending scope was granted: https://www.googleapis.com/auth/gmail.send
-        const scopeStr = scope || "";
+        const safeRefreshToken = asNonEmptyString(refreshToken);
+        const safeAccessToken = asNonEmptyString(accessToken);
+        const safeScope = typeof scope === "string" ? scope : "";
+        const safeName = asNonEmptyString(name);
+
+        // SMTP with Gmail XOAUTH2 requires the full mail scope.
+        // `gmail.send` alone is insufficient for SMTP auth.
+        const scopeStr = safeScope;
         const hasSendPermission = scopeStr.includes("gmail.send");
+        const hasSmtpPermission = scopeStr.includes("mail.google.com");
         const hasReadPermission = scopeStr.includes("gmail.readonly");
 
-        console.log(`[IDENTITY_SYNC] Syncing identity: ${email} | Send: ${hasSendPermission} | Read: ${hasReadPermission}`);
+        console.log(`[IDENTITY_SYNC] Syncing identity: ${email} | Send: ${hasSendPermission} | SMTP: ${hasSmtpPermission} | Read: ${hasReadPermission}`);
+
+        const existingAccount = await prisma.gmailAccount.findUnique({
+            where: { email },
+            select: { id: true, refreshTokenEncrypted: true, isDefault: true },
+        });
 
         // Update or Create the Identity Node
         const upsertData: any = {
-            accountName: session.name || email.split("@")[0].replace(/[._]/g, " "),
+            accountName: safeName || email.split("@")[0].replace(/[._]/g, " "),
             email: email,
-            scopeGranted: hasSendPermission,
+            scopeGranted: hasSmtpPermission,
             updatedAt: new Date(),
         };
 
         // Only update tokens if provided (NextAuth only provides refreshToken on first login or prompt:consent)
-        if (refreshToken) {
-            upsertData.refreshTokenEncrypted = encrypt(refreshToken);
+        if (safeRefreshToken) {
+            upsertData.refreshTokenEncrypted = encrypt(safeRefreshToken);
         }
-        if (accessToken) {
-            upsertData.accessTokenEncrypted = encrypt(accessToken);
+        if (safeAccessToken) {
+            upsertData.accessTokenEncrypted = encrypt(safeAccessToken);
+        }
+
+        // For first-time account creation, refresh token is mandatory.
+        // If user logged in without consent or already granted access previously, NextAuth may not have it.
+        if (!existingAccount && !safeRefreshToken) {
+            const res = ok({
+                synced: false,
+                actionRequired: "RE_LOGIN_GMAIL_SEND",
+                reason: "MISSING_REFRESH_TOKEN",
+            });
+            Object.entries(corsHeaders).forEach(([key, value]) => {
+                res.headers.set(key, value);
+            });
+            return res;
         }
 
         const account = await prisma.gmailAccount.upsert({
@@ -76,8 +105,8 @@ export async function POST(request: Request) {
             update: upsertData,
             create: {
                 ...upsertData,
-                refreshTokenEncrypted: encrypt(refreshToken || ""), 
-                isDefault: true, 
+                refreshTokenEncrypted: encrypt(safeRefreshToken as string),
+                isDefault: !existingAccount?.isDefault,
             },
         });
 
@@ -87,7 +116,7 @@ export async function POST(request: Request) {
             accountId: account.id,
             email: account.email,
             scopeGranted: account.scopeGranted,
-            actionRequired: !hasSendPermission ? "RE_LOGIN_GMAIL_SEND" : null
+            actionRequired: !hasSmtpPermission ? "RE_LOGIN_GMAIL_SMTP" : null
         });
         
         // Add CORS headers to the response
@@ -99,7 +128,20 @@ export async function POST(request: Request) {
 
     } catch (err: any) {
         console.error("Identity Sync Failure:", err);
-        const res = error("INTERNAL_ERROR", "Identity sync failed.", { details: err.message });
+        const code = err?.code as string | undefined;
+        if (code === "P2021") {
+            const res = error("DB_SCHEMA_MISSING", "Identity tables are missing in the connected runtime database.", {
+                status: 500,
+                details: err?.meta ?? "Prisma error P2021",
+            });
+            Object.entries(corsHeaders).forEach(([key, value]) => {
+                res.headers.set(key, value);
+            });
+            return res;
+        }
+
+        const details = err?.message || String(err);
+        const res = error("INTERNAL_ERROR", "Identity sync failed.", { details });
         Object.entries(corsHeaders).forEach(([key, value]) => {
             res.headers.set(key, value);
         });

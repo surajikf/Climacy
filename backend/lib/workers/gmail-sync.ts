@@ -2,6 +2,86 @@ import prisma from "../prisma";
 import { decrypt, encrypt } from "../encryption";
 import { isRoleBasedEmail } from "../email-utils";
 
+type GmailSyncFolder = "INBOX" | "SENT" | "LABEL";
+type GmailHeader = "from" | "to" | "cc" | "bcc";
+
+type GmailSyncOptions = {
+  sourceFolders?: GmailSyncFolder[];
+  customLabels?: string[];
+  extractHeaders?: GmailHeader[];
+  excludedDomains?: string[];
+  excludedKeywords?: string[];
+  persistBlockList?: boolean;
+  includeAutomatedEmails?: boolean;
+};
+
+function toTitleCase(value: string) {
+  return value
+    .split(" ")
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : ""))
+    .join(" ")
+    .trim();
+}
+
+function deriveNameFromEmail(email: string) {
+  const local = String(email || "").split("@")[0] || "";
+  const tokens = local
+    .replace(/[0-9]+/g, " ")
+    .replace(/[._\-+]+/g, " ")
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return "";
+  return toTitleCase(tokens[0]);
+}
+
+function resolveGmailContactName(email: string, rawName: string, roleBased: boolean) {
+  const cleaned = String(rawName || "").trim();
+  if (cleaned) return cleaned;
+  if (roleBased) return "";
+  return deriveNameFromEmail(email);
+}
+
+function normalizeSyncOptions(options?: GmailSyncOptions) {
+  const sourceFolders = (options?.sourceFolders && options.sourceFolders.length > 0)
+    ? options.sourceFolders
+    : ["INBOX", "SENT"];
+  const customLabels = (options?.customLabels || []).map((v) => v.trim()).filter(Boolean);
+  const sanitizedSourceFolders = sourceFolders.includes("LABEL") && customLabels.length === 0
+    ? sourceFolders.filter((f) => f !== "LABEL")
+    : sourceFolders;
+  const extractHeaders = (options?.extractHeaders && options.extractHeaders.length > 0)
+    ? options.extractHeaders
+    : ["from", "to"];
+  const excludedDomains = new Set((options?.excludedDomains || []).map((d) => d.trim().toLowerCase()).filter(Boolean));
+  const excludedKeywords = (options?.excludedKeywords || []).map((k) => k.trim().toLowerCase()).filter(Boolean);
+
+  return {
+    sourceFolders: sanitizedSourceFolders.length > 0 ? sanitizedSourceFolders : ["INBOX", "SENT"],
+    customLabels,
+    extractHeaders,
+    excludedDomains,
+    excludedKeywords,
+    persistBlockList: options?.persistBlockList === true,
+    includeAutomatedEmails: options?.includeAutomatedEmails === true,
+  };
+}
+
+function classifyAutomatedEmail(email: string, name: string) {
+  const value = `${String(email || "").toLowerCase()} ${String(name || "").toLowerCase()}`;
+  const local = String(email || "").split("@")[0]?.toLowerCase() || "";
+  const domain = String(email || "").split("@")[1]?.toLowerCase() || "";
+
+  const hasAny = (tokens: string[]) => tokens.some((token) => value.includes(token) || local.includes(token) || domain.includes(token));
+
+  if (hasAny(["newsletter", "digest", "updates"])) return "newsletter";
+  if (hasAny(["alert", "notification", "notify", "incident"])) return "alert";
+  if (hasAny(["spam", "junk"])) return "spam_like";
+  if (hasAny(["invoice", "receipt", "billing", "payment", "transaction", "otp"])) return "transactional";
+  if (hasAny(["noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon", "postmaster"])) return "system";
+  return null;
+}
+
 async function mapLimit<T, R>(
   items: T[],
   limit: number,
@@ -35,8 +115,9 @@ async function mapLimit<T, R>(
   });
 }
 
-export async function runGmailSync(accountId: string) {
+export async function runGmailSync(accountId: string, options?: GmailSyncOptions) {
   console.log(`[GMAIL_SYNC] Starting sync for account: ${accountId}`);
+  const syncOptions = normalizeSyncOptions(options);
 
   // 1) Fetch Gmail account and ensure access token.
   const account = await prisma.gmailAccount.findUnique({
@@ -100,8 +181,19 @@ export async function runGmailSync(accountId: string) {
 
   // 2) Fetch recent messages
   console.log("[GMAIL_SYNC] Fetching messages from Google API...");
+  const queryParts: string[] = ["after:2024/01/01"];
+  if (syncOptions.sourceFolders.includes("INBOX")) queryParts.push("in:inbox");
+  if (syncOptions.sourceFolders.includes("SENT")) queryParts.push("in:sent");
+  const labelClauses = syncOptions.sourceFolders.includes("LABEL")
+    ? syncOptions.customLabels.map((label) => `label:${label.replace(/\s+/g, "-")}`)
+    : [];
+  if (labelClauses.length > 0) {
+    queryParts.push(`(${labelClauses.join(" OR ")})`);
+  }
+  const gmailQuery = queryParts.join(" ");
+
   const messagesRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=after:2024/01/01`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${encodeURIComponent(gmailQuery)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
 
@@ -114,6 +206,8 @@ export async function runGmailSync(accountId: string) {
 
   // 3) Extract headers (From/To)
   const contacts = new Map<string, { email: string; name: string }>();
+  const skippedAutomated: Record<string, number> = {};
+  const skippedAutomatedSamples: Array<{ email: string; category: string }> = [];
 
   const parseEmailHeader = (headerValue: string): { email: string; name: string }[] => {
     const parts = headerValue.split(",");
@@ -133,9 +227,11 @@ export async function runGmailSync(accountId: string) {
     return out;
   };
 
+  const headerList = Array.from(new Set(syncOptions.extractHeaders.map((h) => h.toLowerCase())));
+  const metadataParams = headerList.map((h) => `metadataHeaders=${encodeURIComponent(h.charAt(0).toUpperCase() + h.slice(1))}`).join("&");
   const detailItems = await mapLimit(messages, 5, async (msg: any) => {
     const detailRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&${metadataParams}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     if (!detailRes.ok) return null;
@@ -145,19 +241,51 @@ export async function runGmailSync(accountId: string) {
   for (const detail of detailItems) {
     const headers = (detail as any)?.payload?.headers || [];
     headers.forEach((h: any) => {
+      const headerName = String(h?.name || "").toLowerCase();
+      if (!headerList.includes(headerName)) return;
       const results = parseEmailHeader(h.value);
       results.forEach((res: any) => {
         const emailLower = String(res.email || "").toLowerCase();
+        const domain = emailLower.split("@")[1] || "";
+        const isExcludedByDomain = syncOptions.excludedDomains.has(domain);
+        const payload = `${emailLower} ${String(res.name || "").toLowerCase()}`;
+        const isExcludedByKeyword = syncOptions.excludedKeywords.some((keyword) => payload.includes(keyword));
+        const automatedCategory = classifyAutomatedEmail(emailLower, String(res.name || ""));
+        const isAutomatedBlocked = !syncOptions.includeAutomatedEmails && !!automatedCategory;
         if (
           emailLower &&
           emailLower !== String(account.email || "").toLowerCase() &&
           !emailLower.includes("@noreply") &&
-          !emailLower.includes("google.com")
+          !emailLower.includes("google.com") &&
+          !isExcludedByDomain &&
+          !isExcludedByKeyword &&
+          !isAutomatedBlocked
         ) {
           contacts.set(emailLower, { email: emailLower, name: res.name });
+        } else if (isAutomatedBlocked && automatedCategory) {
+          skippedAutomated[automatedCategory] = (skippedAutomated[automatedCategory] || 0) + 1;
+          if (skippedAutomatedSamples.length < 30) {
+            skippedAutomatedSamples.push({ email: emailLower, category: automatedCategory });
+          }
         }
       });
     });
+  }
+
+  if (syncOptions.persistBlockList) {
+    const blockedCandidates = Array.from(syncOptions.excludedDomains.values()).map((domain) => domain.trim()).filter(Boolean);
+    if (blockedCandidates.length > 0) {
+      for (const domain of blockedCandidates) {
+        await prisma.client.updateMany({
+          where: {
+            email: { endsWith: `@${domain}` },
+          },
+          data: { isBlocked: true },
+        }).catch(() => {
+          // non-fatal, keep sync running.
+        });
+      }
+    }
   }
 
   // 4) Upsert Clients
@@ -173,6 +301,10 @@ export async function runGmailSync(accountId: string) {
   const upsertResults = await mapLimit(contactEntries, 5, async ([email, info]: any) => {
     const existingSource = existingMap.get(String(email).toLowerCase());
     const isConflict = !!(existingSource && existingSource !== "GMAIL");
+    const roleBased = isRoleBasedEmail(email);
+    const resolvedName = resolveGmailContactName(email, info.name, roleBased);
+    const resolvedClientName = resolvedName || "Anonymous Contact";
+    const resolvedContactPerson = resolvedName || null;
 
     try {
       await prisma.client.upsert({
@@ -183,21 +315,21 @@ export async function runGmailSync(accountId: string) {
           },
         },
         update: {
-          clientName: info.name || String(email).split("@")[0].replace(/[._]/g, " "),
-          contactPerson: info.name || null,
+          clientName: resolvedClientName,
+          contactPerson: resolvedContactPerson,
           gmailSourceAccount: account.email,
-          isRoleBased: isRoleBasedEmail(email),
+          isRoleBased: roleBased,
         },
         create: {
-          clientName: info.name || String(email).split("@")[0].replace(/[._]/g, " "),
-          contactPerson: info.name || null,
+          clientName: resolvedClientName,
+          contactPerson: resolvedContactPerson,
           email: email,
           industry: "Corporate",
           relationshipLevel: "Warm Lead",
           source: "GMAIL",
           externalId: `${account.id}:${email}`,
           gmailSourceAccount: account.email,
-          isRoleBased: isRoleBasedEmail(email),
+          isRoleBased: roleBased,
         },
       });
     } catch (err) {
@@ -209,7 +341,14 @@ export async function runGmailSync(accountId: string) {
 
   const importedCount = upsertResults.length;
   const conflictCount = upsertResults.filter((r) => r.isConflict).length;
+  const skippedAutomatedTotal = Object.values(skippedAutomated).reduce((acc, curr) => acc + curr, 0);
 
-  console.log(`[GMAIL_SYNC] Sync complete. Imported: ${importedCount}, Conflicts: ${conflictCount}`);
-  return { count: importedCount, conflicts: conflictCount };
+  console.log(`[GMAIL_SYNC] Sync complete. Imported: ${importedCount}, Conflicts: ${conflictCount}, SkippedAutomated: ${skippedAutomatedTotal}`);
+  return {
+    count: importedCount,
+    conflicts: conflictCount,
+    skippedAutomatedTotal,
+    skippedAutomatedByCategory: skippedAutomated,
+    skippedAutomatedSamples,
+  };
 }

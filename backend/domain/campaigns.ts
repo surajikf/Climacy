@@ -148,6 +148,7 @@ export async function getTargetClients(type: CampaignType, serviceFilters: strin
     select: {
       id: true,
       clientName: true,
+      email: true,
       industry: true,
       contactPerson: true,
       relationshipLevel: true,

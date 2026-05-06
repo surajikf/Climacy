@@ -45,8 +45,71 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SmartLoader } from "@/frontend/components/SmartLoader";
 import { apiPath, appPath } from "@/frontend/lib/app-path";
 
-const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onToggleBlock }: any) => {
+const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onToggleBlock, isSimpleGmailView = false, showServicesColumn = true }: any) => {
     const isBlocked = contact.isBlocked;
+    const source = contact?.source || "MANUAL";
+    const isGmail = source === "GMAIL";
+    const isInvoice = source === "INVOICE_SYSTEM";
+    const isZoho = source === "ZOHO_BIGIN";
+
+    if (isSimpleGmailView) {
+        return (
+            <motion.tr
+                initial={pageSize > 50 ? false : { opacity: 0, y: 5 }}
+                animate={pageSize > 50 ? false : { opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.2 }}
+                className={cn(
+                    "hover:bg-slate-50/50 transition-all border-l-[3px] border-l-transparent hover:border-l-blue-600 group/row",
+                    isBlocked && "opacity-40 grayscale-[0.5]"
+                )}
+            >
+                <td className="px-6 py-5 align-top">
+                    <span className="text-sm font-black text-slate-800 tracking-tight leading-tight">
+                        {contact.contactPerson || "Anonymous Contact"}
+                    </span>
+                </td>
+                <td className="px-6 py-5 align-top">
+                    <div className="flex flex-col gap-1">
+                        {(contact.email?.split(",") || [])
+                            .map((email: string) => email.trim())
+                            .filter(Boolean)
+                            .map((email: string, idx: number) => (
+                                <a
+                                    key={idx}
+                                    href={`mailto:${email}`}
+                                    className="text-[11px] font-bold text-slate-600 hover:text-blue-600 transition-colors truncate max-w-[260px]"
+                                >
+                                    {email}
+                                </a>
+                            ))}
+                    </div>
+                </td>
+                <td className="px-6 py-5 align-top">
+                    {contact.lastContacted ? (
+                        <span className="text-[11px] font-black text-slate-700">
+                            {new Date(contact.lastContacted).toLocaleDateString(undefined, {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric"
+                            })}
+                        </span>
+                    ) : (
+                        <span className="text-[10px] font-bold text-slate-400 italic">No outreach yet</span>
+                    )}
+                </td>
+                <td className="px-6 py-5 align-top">
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
+                        {contact.relationshipLevel}
+                    </span>
+                </td>
+                <td className="px-6 py-5 align-top">
+                    <span className="text-[9px] font-black text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
+                        {(contact?.source || "MANUAL").replace("_", " ")}
+                    </span>
+                </td>
+            </motion.tr>
+        );
+    }
 
     return (
         <motion.tr
@@ -98,7 +161,7 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                                     {contact.clientName || (contact.email ? contact.email.split('@')[0].toUpperCase() : "UNKNOWN ENTITY")}
                                 </span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            {!isSimpleGmailView && <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <div className="flex items-center gap-1 text-slate-400" title={`Industry: ${contact.industry || "General Business"}`}>
                                     <Tag className="w-2.5 h-2.5" />
                                     <span className="text-[10px] font-bold uppercase tracking-tight truncate max-w-[100px]">{contact.industry || "General"}</span>
@@ -116,14 +179,14 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                                         <span className="text-[10px] font-medium">{new Date(contact.clientAddedOn).getUTCFullYear()}</span>
                                     </div>
                                 )}
-                            </div>
+                            </div>}
                         </div>
                     </div>
                 </div>
             </td>
-            <td className="px-6 py-5 align-top">
+            {!isSimpleGmailView && showServicesColumn && <td className="px-6 py-5 align-top">
                 <div className="flex flex-wrap gap-1.5 items-start justify-start pt-1">
-                    {contact.source === "INVOICE_SYSTEM" ? (
+                    {isInvoice ? (
                         contact.invoiceServiceNames ? (
                             <span className="text-[9px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase tracking-widest shadow-sm cursor-help" title="These services are directly detected from your external Invoice System.">
                                 {contact.invoiceServiceNames}
@@ -131,6 +194,13 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                         ) : (
                             <span className="text-[10px] text-slate-300 italic font-bold">No Services Identified</span>
                         )
+                    ) : isGmail ? (
+                        <span
+                            className="inline-flex items-center text-[9px] font-black text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wider"
+                            title="Gmail sync brings contacts and engagement signals. Service mapping is not collected from Gmail."
+                        >
+                            N/A (Gmail)
+                        </span>
                     ) : (
                         <>
                             {contact.services?.map((s: any) => (
@@ -142,7 +212,7 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                         </>
                     )}
                 </div>
-            </td>
+            </td>}
             <td className="px-6 py-5 align-top">
                 <div className="flex flex-col gap-2 pt-0.5">
                     <div className="flex flex-col gap-1.5">
@@ -187,9 +257,9 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                     </div>
                 </div>
             </td>
-            <td className="px-6 py-5 align-top">
+            {!isSimpleGmailView && <td className="px-6 py-5 align-top">
                 <div className="flex flex-col gap-3 pt-1">
-                    {/* Smart Engagement Logic */}
+                    {/* Source-aware engagement display */}
                     <div className="flex flex-col gap-2">
                         {contact.lastInvoiceDate ? (
                             <div className="flex flex-col gap-0.5 group/invoice cursor-help" title={`Latest Transaction detected on ${new Date(contact.lastInvoiceDate).toLocaleString()}. Data synced from Invoice System.`}>
@@ -202,6 +272,16 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                                         year: "numeric"
                                     })}
                                 </span>
+                            </div>
+                        ) : isGmail ? (
+                            <div className="flex flex-col gap-0.5" title="Invoice history is not captured from Gmail sync contacts.">
+                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Invoice</span>
+                                <span className="text-[10px] font-bold text-slate-400 italic">N/A (Gmail)</span>
+                            </div>
+                        ) : isZoho ? (
+                            <div className="flex flex-col gap-0.5" title="Invoice history is not guaranteed for Zoho-only contacts unless invoice data is merged.">
+                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Invoice</span>
+                                <span className="text-[10px] font-bold text-slate-400 italic">Not linked yet</span>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-0.5" title="No invoice history detected in the connected system.">
@@ -227,7 +307,9 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                         {!contact.lastContacted && (
                             <div className="flex flex-col gap-0.5 border-t border-slate-50 pt-1">
                                 <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Last Contact</span>
-                                <span className="text-[10px] font-bold text-slate-300 italic">Never Engaged</span>
+                                <span className="text-[10px] font-bold text-slate-300 italic">
+                                    {isGmail ? "No outreach yet" : "Never Engaged"}
+                                </span>
                             </div>
                         )}
 
@@ -247,7 +329,7 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                         ) : null}
                     </div>
                 </div>
-            </td>
+            </td>}
             <td className="px-6 py-5 align-top">
                 <div 
                     className="flex items-center gap-2 pt-1.5 cursor-help group/status" 
@@ -271,8 +353,8 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
             <td className="px-6 py-5 align-top">
                 <div className="pt-1">
                     {contact?.source && (
-                        <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
-                            {contact.source.slice(0, 3)}
+                        <span className="text-[9px] font-black text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200">
+                            {contact.source.replace("_", " ")}
                         </span>
                     )}
                     {!contact?.source && (
@@ -499,17 +581,40 @@ export default function ClientManager() {
         }
     };
 
-    const filteredClients = useMemo(() => clients, [clients]);
+    const filteredClients = useMemo(() => {
+        const priority: Record<string, number> = {
+            "Active": 0,
+            "Warm Lead": 1,
+            "Past Client": 2,
+            "Not Active": 3,
+        };
 
+        return [...clients].sort((a, b) => {
+            const aInvoiceTs = a?.lastInvoiceDate ? new Date(a.lastInvoiceDate).getTime() : 0;
+            const bInvoiceTs = b?.lastInvoiceDate ? new Date(b.lastInvoiceDate).getTime() : 0;
+            const aContactTs = a?.lastContacted ? new Date(a.lastContacted).getTime() : 0;
+            const bContactTs = b?.lastContacted ? new Date(b.lastContacted).getTime() : 0;
 
+            const aIsDue = aInvoiceTs > 0 && (aContactTs === 0 || aInvoiceTs > aContactTs);
+            const bIsDue = bInvoiceTs > 0 && (bContactTs === 0 || bInvoiceTs > bContactTs);
 
-    const industries = useMemo(() => {
-        const set = new Set(clients.map(c => c.industry).filter(Boolean));
-        return Array.from(set).sort();
+            // 1) Bubble actionable rows first.
+            if (aIsDue !== bIsDue) return aIsDue ? -1 : 1;
+
+            // 2) Within same action state, keep most recently contacted at top.
+            if (aContactTs !== bContactTs) return bContactTs - aContactTs;
+
+            // 3) Then apply relationship-level priority.
+            const aPriority = priority[a?.relationshipLevel] ?? 99;
+            const bPriority = priority[b?.relationshipLevel] ?? 99;
+            if (aPriority !== bPriority) return aPriority - bPriority;
+
+            // 4) Final tie-breaker by latest invoice recency.
+            if (aInvoiceTs !== bInvoiceTs) return bInvoiceTs - aInvoiceTs;
+            return 0;
+        });
     }, [clients]);
-
     const levels = ["Active", "Warm Lead", "Past Client", "Not Active"];
-    const sources = ["MANUAL", "ZOHO_BIGIN", "GMAIL", "INVOICE_SYSTEM"];
 
     const toggleFilter = (setter: any, current: string[], value: string) => {
         if (current.includes(value)) {
@@ -529,6 +634,18 @@ export default function ClientManager() {
     };
 
     const activeFilterCount = filterIndustry.length + filterLevel.length + filterService.length + filterSource.length;
+    const hasAnyGmailRows = filteredClients.some((c) => c?.source === "GMAIL");
+    const isAutoGmailOnlyDataset = filteredClients.length > 0 && filteredClients.every((c) => c?.source === "GMAIL");
+    const isSimpleGmailView = (filterSource.length === 1 && filterSource[0] === "GMAIL") || isAutoGmailOnlyDataset;
+    const hasAnyInvoiceRows = filteredClients.some((c) => c?.source === "INVOICE_SYSTEM");
+    const isAutoInvoiceOnlyDataset = filteredClients.length > 0 && filteredClients.every((c) => c?.source === "INVOICE_SYSTEM");
+    const isInvoiceFocusedView = (filterSource.length === 1 && filterSource[0] === "INVOICE_SYSTEM") || isAutoInvoiceOnlyDataset;
+    const showServicesColumn = !isSimpleGmailView && isInvoiceFocusedView && hasAnyInvoiceRows;
+    const tableColumnCount = isSimpleGmailView ? 5 : (showServicesColumn ? 8 : 7);
+    const gmailRowsWithoutInvoiceServices = filteredClients.filter((c) => c?.source === "GMAIL").length;
+    const outreachDueCount = filteredClients.filter((c) =>
+        c?.lastInvoiceDate && (!c?.lastContacted || new Date(c.lastInvoiceDate) > new Date(c.lastContacted))
+    ).length;
 
     const stats = useMemo(() => {
         const total = clients.length;
@@ -840,29 +957,20 @@ export default function ClientManager() {
 
                             <div className="flex flex-wrap gap-2">
                                 <FilterPopover
-                                    label="Industry"
-                                    options={industries}
-                                    selected={filterIndustry}
-                                    onToggle={(val: string) => toggleFilter(setFilterIndustry, filterIndustry, val)}
-                                    icon={Building2}
-                                />
-                                <FilterPopover
-                                    label="Capabilities"
-                                    options={services.map(s => ({ label: s.serviceName, value: s.id }))}
-                                    selected={filterService}
-                                    onToggle={(val: string) => toggleFilter(setFilterService, filterService, val)}
-                                    icon={Plus}
-                                />
-                                <FilterPopover
-                                    label="Priority"
+                                    label="Status"
                                     options={levels}
                                     selected={filterLevel}
                                     onToggle={(val: string) => toggleFilter(setFilterLevel, filterLevel, val)}
                                     icon={Shield}
                                 />
                                 <FilterPopover
-                                    label="System"
-                                    options={sources}
+                                    label="Source"
+                                    options={[
+                                        { label: "Manual", value: "MANUAL" },
+                                        { label: "Zoho", value: "ZOHO_BIGIN" },
+                                        { label: "Gmail", value: "GMAIL" },
+                                        { label: "Invoice", value: "INVOICE_SYSTEM" },
+                                    ]}
                                     selected={filterSource}
                                     onToggle={(val: string) => toggleFilter(setFilterSource, filterSource, val)}
                                     icon={Database}
@@ -922,24 +1030,53 @@ export default function ClientManager() {
                     </div>
 
                     <div className="bg-white overflow-hidden rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-sm">
+                        {isSimpleGmailView && (
+                            <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
+                                <p className="text-[11px] font-semibold text-blue-800">
+                                    Gmail contacts do not include invoice/services data.
+                                </p>
+                            </div>
+                        )}
+                        {!isSimpleGmailView && hasAnyGmailRows && (
+                            <div className="px-6 py-3 bg-amber-50/70 border-b border-amber-100 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <p className="text-[11px] font-semibold text-amber-800">
+                                    {gmailRowsWithoutInvoiceServices} Gmail contacts in this view have no invoice/services mapping.
+                                </p>
+                                <p className="text-[11px] font-semibold text-slate-600">
+                                    Outreach due in current result: {outreachDueCount}
+                                </p>
+                            </div>
+                        )}
                         <table className="w-full text-left border-collapse overflow-hidden">
                             <thead>
                                 <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] sm:text-[11px]">
-                                    <th className="px-4 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-12 text-center">Sr.</th>
-                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[30%]">Client Profile</th>
-                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Services</th>
-                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[20%]">Contact Info</th>
-                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Engagement</th>
-                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Status</th>
-                                    <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Source</th>
-                                    <th className="px-6 py-6 text-right w-20"></th>
+                                    {isSimpleGmailView ? (
+                                        <>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[25%]">Name</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[30%]">Email</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[20%]">Last Contact</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Status</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Source</th>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <th className="px-4 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-12 text-center">Sr.</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[30%]">Client Profile</th>
+                                            {showServicesColumn && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Services</th>}
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[20%]">Contact Info</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[15%]">Engagement</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Status</th>
+                                            <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-slate-400 w-[10%]">Source</th>
+                                            <th className="px-6 py-6 text-right w-20"></th>
+                                        </>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50 bg-white">
                                 {loading ? (
                                     [...Array(6)].map((_, i) => (
                                         <tr key={i} className="animate-pulse border-b border-slate-50">
-                                            <td className="px-6 py-8" colSpan={8}>
+                                            <td className="px-6 py-8" colSpan={tableColumnCount}>
                                                 <div className="flex items-center gap-4">
                                                     <div className="w-12 h-12 rounded-xl bg-slate-50" />
                                                     <div className="space-y-2">
@@ -952,7 +1089,7 @@ export default function ClientManager() {
                                     ))
                                 ) : filteredClients.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-8 py-24 text-center">
+                                        <td colSpan={tableColumnCount} className="px-8 py-24 text-center">
                                             <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
                                                 <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
                                                     <Search className="w-6 h-6" />
@@ -1000,6 +1137,8 @@ export default function ClientManager() {
                                             onEdit={handleEdit}
                                             onDelete={(id: string) => setClientToDelete(id)}
                                             onToggleBlock={handleToggleBlock}
+                                            isSimpleGmailView={isSimpleGmailView}
+                                            showServicesColumn={showServicesColumn}
                                         />
                                     ))
                                 )}
@@ -1146,13 +1285,13 @@ export default function ClientManager() {
                                 <Trash2 className="w-5 h-5" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-semibold text-slate-900">Purge Service Node</h3>
+                                <h3 className="text-lg font-semibold text-slate-900">Remove Service</h3>
                                 <p className="text-sm text-slate-500 mt-1">This will remove this service from the catalog and all linked clients. Continue?</p>
                             </div>
                         </div>
                         <div className="flex gap-3 pt-6">
                             <button onClick={() => setServiceToDelete(null)} className="flex-1 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors rounded-md shadow-sm">Cancel</button>
-                            <button onClick={confirmServiceDelete} className="flex-1 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors rounded-md shadow-sm active:scale-[0.98]">Purge</button>
+                            <button onClick={confirmServiceDelete} className="flex-1 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors rounded-md shadow-sm active:scale-[0.98]">Remove</button>
                         </div>
                     </div>
                 </div>
@@ -1164,7 +1303,7 @@ export default function ClientManager() {
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-all" onClick={() => setIsServiceModalOpen(false)} />
                     <div className="bg-white w-full max-w-md rounded-2xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <h3 className="font-bold text-slate-900 uppercase tracking-widest text-xs">{editingService ? "Recalibrate Service" : "Integrate New Service"}</h3>
+                            <h3 className="font-bold text-slate-900 uppercase tracking-widest text-xs">{editingService ? "Edit Service" : "Add Service"}</h3>
                             <button onClick={() => setIsServiceModalOpen(false)} className="text-slate-400 hover:text-slate-900"><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleServiceSubmit} className="p-6 space-y-4">
@@ -1197,14 +1336,14 @@ export default function ClientManager() {
                                     value={newServiceData.description}
                                     onChange={(e) => setNewServiceData({ ...newServiceData, description: e.target.value })}
                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium h-24 resize-none"
-                                    placeholder="Briefly describe the service vector..."
+                                    placeholder="Briefly describe this service..."
                                 />
                             </div>
                             <button
                                 type="submit"
                                 className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-[0.98] mt-2 shadow-lg"
                             >
-                                {editingService ? "Update Node" : "Deploy Service"}
+                                {editingService ? "Save Service" : "Add Service"}
                             </button>
                         </form>
                     </div>

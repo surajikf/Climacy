@@ -178,7 +178,7 @@ export function Sidebar() {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-slate-900 truncate">
-                                {user?.name || "Neural Operator"}
+                                {user?.name || "User"}
                             </p>
                             <p className="text-[10px] font-medium text-slate-500 truncate">
                                 {user?.email}

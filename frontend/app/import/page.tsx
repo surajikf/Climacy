@@ -10,6 +10,37 @@ import { SmartLoader } from "@/frontend/components/SmartLoader";
 import { safeImportRequest, type ImportSyncStatus } from "@/frontend/lib/import-sync";
 import { apiPath, appPath } from "@/frontend/lib/app-path";
 
+type GmailConnectIntent = "send" | "sync" | "both";
+type GmailSyncFolder = "INBOX" | "SENT" | "LABEL";
+type GmailHeader = "from" | "to" | "cc" | "bcc";
+type GmailSyncProfile = {
+    sourceFolders: GmailSyncFolder[];
+    customLabelsText: string;
+    extractHeaders: GmailHeader[];
+    excludedDomainsText: string;
+    excludedKeywordsText: string;
+    persistBlockList: boolean;
+    includeAutomatedEmails: boolean;
+};
+
+type GmailSyncInsight = {
+    skippedAutomatedTotal: number;
+    skippedAutomatedByCategory: Record<string, number>;
+    skippedAutomatedSamples: Array<{ email: string; category: string }>;
+};
+
+const DEFAULT_GMAIL_SYNC_PROFILE: GmailSyncProfile = {
+    sourceFolders: ["INBOX", "SENT"],
+    customLabelsText: "",
+    extractHeaders: ["from", "to"],
+    excludedDomainsText: "noreply.com",
+    excludedKeywordsText: "unsubscribe, abuse, spam",
+    persistBlockList: true,
+    includeAutomatedEmails: false,
+};
+
+const GMAIL_PROFILE_STORAGE_KEY = "ikf.gmail.syncProfiles.v1";
+
 export default function ImportIntegrationsPage() {
     const { data: session } = useSession();
     const user = session?.user;
@@ -24,6 +55,11 @@ export default function ImportIntegrationsPage() {
     const [gmailAccounts, setGmailAccounts] = useState<any[]>([]);
     const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
     const [gmailLabel, setGmailLabel] = useState("Sales Team");
+    const [gmailIntent, setGmailIntent] = useState<GmailConnectIntent>("both");
+    const [gmailSyncProfile, setGmailSyncProfile] = useState<GmailSyncProfile>(DEFAULT_GMAIL_SYNC_PROFILE);
+    const [gmailSyncInsights, setGmailSyncInsights] = useState<Record<string, GmailSyncInsight>>({});
+    const [isGmailProfileModalOpen, setIsGmailProfileModalOpen] = useState(false);
+    const [activeGmailAccountForProfile, setActiveGmailAccountForProfile] = useState<{ id: string; email: string; name: string } | null>(null);
 
     // Zoho Config State
     const [isZohoModalOpen, setIsZohoModalOpen] = useState(false);
@@ -86,6 +122,58 @@ export default function ImportIntegrationsPage() {
     const inFlightKeysRef = useRef<Set<string>>(new Set());
     const setGmailStatus = (accountId: string, status: ImportSyncStatus) => {
         setSyncStatus((prev) => ({ ...prev, gmail: { ...prev.gmail, [accountId]: status } }));
+    };
+    const parseCsvText = (value: string) =>
+        value
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+    const buildSyncOptionsPayload = (profile: GmailSyncProfile) => {
+        const sourceFolders = profile.sourceFolders.length > 0 ? profile.sourceFolders : ["INBOX", "SENT"];
+        const extractHeaders = profile.extractHeaders.length > 0 ? profile.extractHeaders : ["from", "to"];
+        return {
+            sourceFolders,
+            customLabels: parseCsvText(profile.customLabelsText),
+            extractHeaders,
+            excludedDomains: parseCsvText(profile.excludedDomainsText),
+            excludedKeywords: parseCsvText(profile.excludedKeywordsText),
+            persistBlockList: profile.persistBlockList,
+            includeAutomatedEmails: profile.includeAutomatedEmails,
+        };
+    };
+
+    const loadSavedProfileForAccount = (accountKey: string) => {
+        try {
+            const raw = localStorage.getItem(GMAIL_PROFILE_STORAGE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as Record<string, GmailSyncProfile>;
+            return parsed[accountKey] || null;
+        } catch {
+            return null;
+        }
+    };
+
+    const saveProfileForAccount = (accountKey: string, profile: GmailSyncProfile) => {
+        try {
+            const raw = localStorage.getItem(GMAIL_PROFILE_STORAGE_KEY);
+            const parsed = raw ? (JSON.parse(raw) as Record<string, GmailSyncProfile>) : {};
+            parsed[accountKey] = profile;
+            localStorage.setItem(GMAIL_PROFILE_STORAGE_KEY, JSON.stringify(parsed));
+        } catch {
+            // non-fatal
+        }
+    };
+    const getEffectiveProfileForAccount = (accountEmail?: string) => {
+        if (!accountEmail) return DEFAULT_GMAIL_SYNC_PROFILE;
+        return loadSavedProfileForAccount(accountEmail.toLowerCase()) || DEFAULT_GMAIL_SYNC_PROFILE;
+    };
+    const profileSummary = (profile: GmailSyncProfile) => {
+        const folders = profile.sourceFolders.join(" + ");
+        const headers = profile.extractHeaders.map((h) => h.toUpperCase()).join(", ");
+        const domains = parseCsvText(profile.excludedDomainsText).length;
+        const keywords = parseCsvText(profile.excludedKeywordsText).length;
+        return `${folders} | ${headers} | blocks: ${domains} domains, ${keywords} keywords`;
     };
 
     const fetchGlobalSettings = async () => {
@@ -195,16 +283,19 @@ export default function ImportIntegrationsPage() {
         Promise.all([fetchSettings(), fetchGmailAccounts(), fetchGlobalSettings()]).finally(() => setLoading(false));
     }, []);
 
-    const handleGmailSync = async (accountId: string, accountName: string) => {
+    const handleGmailSync = async (accountId: string, accountName: string, accountEmail?: string) => {
         const lockKey = `gmail:${accountId}`;
         if (inFlightKeysRef.current.has(lockKey)) return;
         inFlightKeysRef.current.add(lockKey);
         setGmailStatus(accountId, "syncing");
         try {
+            const savedProfile = accountEmail ? loadSavedProfileForAccount(accountEmail.toLowerCase()) : null;
+            const syncOptions = buildSyncOptionsPayload(savedProfile || gmailSyncProfile);
+            toast.info(`Syncing ${accountName} with: ${profileSummary(savedProfile || gmailSyncProfile)}`);
             const result = await safeImportRequest<{ jobId: string }>("/api/import/gmail", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ accountId })
+                body: JSON.stringify({ accountId, options: syncOptions })
             });
 
             const jobId = result.data?.jobId;
@@ -236,10 +327,32 @@ export default function ImportIntegrationsPage() {
             const data = finalJob?.result || {};
             const count = Number(data.count || 0);
             const conflicts = Number(data.conflicts || 0);
+            const skippedAutomatedTotal = Number(data.skippedAutomatedTotal || 0);
+            const skippedCategories = data.skippedAutomatedByCategory || {};
+            const skippedSamples = Array.isArray(data.skippedAutomatedSamples) ? data.skippedAutomatedSamples : [];
 
-            const message = `Successfully imported ${count} clients from ${accountName} Gmail.${conflicts > 0 ? ` Detected ${conflicts} existing record conflicts.` : ""}`;
+            const message = `Successfully imported ${count} clients from ${accountName} Gmail.${conflicts > 0 ? ` Detected ${conflicts} existing record conflicts.` : ""}${skippedAutomatedTotal > 0 ? ` Skipped ${skippedAutomatedTotal} automated/system emails.` : ""}`;
             toast.success(message);
+            if (skippedAutomatedTotal > 0) {
+                const details = Object.entries(skippedCategories)
+                    .map(([key, val]) => `${key}: ${val}`)
+                    .join(", ");
+                if (details) {
+                    toast.info(`Skipped by type -> ${details}`);
+                }
+            }
+            setGmailSyncInsights((prev) => ({
+                ...prev,
+                [accountId]: {
+                    skippedAutomatedTotal,
+                    skippedAutomatedByCategory: skippedCategories,
+                    skippedAutomatedSamples: skippedSamples,
+                },
+            }));
             setGmailStatus(accountId, conflicts > 0 ? "warning" : "success");
+            if (accountEmail) {
+                saveProfileForAccount(accountEmail.toLowerCase(), gmailSyncProfile);
+            }
             await fetchGmailAccounts();
         } catch (error) {
             toast.error(`Network error during ${accountName} sync.`);
@@ -248,10 +361,34 @@ export default function ImportIntegrationsPage() {
             inFlightKeysRef.current.delete(lockKey);
         }
     };
+    const openProfileModal = (acc: any) => {
+        const effective = getEffectiveProfileForAccount(acc.email);
+        setActiveGmailAccountForProfile({ id: acc.id, email: acc.email, name: acc.accountName || acc.email });
+        setGmailSyncProfile(effective);
+        setIsGmailProfileModalOpen(true);
+    };
+    const saveActiveProfile = () => {
+        if (!activeGmailAccountForProfile?.email) {
+            setIsGmailProfileModalOpen(false);
+            return;
+        }
+        saveProfileForAccount(activeGmailAccountForProfile.email.toLowerCase(), gmailSyncProfile);
+        toast.success(`Saved sync filters for ${activeGmailAccountForProfile.name}.`);
+        setIsGmailProfileModalOpen(false);
+    };
 
     const handleAddGmailAccount = () => {
-        // Redirect to Google Auth with the selected label in state
-        window.location.href = `${appPath("/api/auth/google")}?state=${encodeURIComponent(gmailLabel)}`;
+        const label = gmailLabel.trim();
+        if (!label) {
+            toast.error("Please enter an account label.");
+            return;
+        }
+        if ((gmailIntent === "sync" || gmailIntent === "both") && gmailSyncProfile.sourceFolders.length === 0) {
+            toast.error("Please select at least one sync source.");
+            return;
+        }
+        const url = `${appPath("/api/gmail/connect")}?label=${encodeURIComponent(label)}&intent=${encodeURIComponent(gmailIntent)}&returnTo=${encodeURIComponent("/import")}`;
+        window.location.href = url;
     };
 
     const handleInvoiceSync = async () => {
@@ -360,9 +497,9 @@ export default function ImportIntegrationsPage() {
             <header className="px-2">
                 <div className="flex items-center gap-3 text-blue-600 mb-2">
                     <DownloadCloud className="w-5 h-5" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Universal Data Ingestion</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Data Import</span>
                 </div>
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Integrations Studio</h2>
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Integrations</h2>
                 <p className="text-slate-500 font-medium text-sm mt-1">Connect external data channels and synchronize your client base.</p>
             </header>
 
@@ -380,7 +517,7 @@ export default function ImportIntegrationsPage() {
                                 <FileText className="w-6 h-6 text-blue-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Core Data Node</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Main Source</span>
                                 <div className={cn(
                                     "mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter",
                                     syncStatus.invoice === "success" ? "bg-emerald-100 text-emerald-600" : 
@@ -419,7 +556,7 @@ export default function ImportIntegrationsPage() {
                                 className="w-full h-12 bg-blue-600 text-white rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
                             >
                                 {syncStatus.invoice === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                Synchronize Node
+                                Sync Now
                             </button>
                         </div>
                     </div>
@@ -438,7 +575,7 @@ export default function ImportIntegrationsPage() {
                                 <Cloud className="w-6 h-6 text-orange-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pipeline Connector</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pipeline</span>
                                 <div className={cn(
                                     "mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter",
                                     syncStatus.zoho === "success" ? "bg-emerald-100 text-emerald-600" : 
@@ -495,7 +632,7 @@ export default function ImportIntegrationsPage() {
                                 <Mail className="w-6 h-6 text-red-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Communication Node</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email</span>
                                 <span className="mt-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[9px] font-bold uppercase tracking-tighter">
                                     {gmailAccounts.length} Connected
                                 </span>
@@ -509,8 +646,14 @@ export default function ImportIntegrationsPage() {
 
                         <div className="space-y-4">
                             <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
-                                {gmailAccounts.map((acc: any) => (
-                                    <div key={acc.id} className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100 group/item hover:bg-white hover:border-red-100/50 transition-all hover:shadow-sm">
+                                {gmailAccounts.map((acc: any) => {
+                                    const insight = gmailSyncInsights[acc.id];
+                                    return (
+                                    <div key={acc.id} className="space-y-2">
+                                    <div className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100 group/item hover:bg-white hover:border-red-100/50 transition-all hover:shadow-sm">
+                                        {(() => {
+                                            const effective = getEffectiveProfileForAccount(acc.email);
+                                            return (
                                         <div className="flex flex-col min-w-0 pr-4">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <div className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center border border-red-100">
@@ -533,23 +676,56 @@ export default function ImportIntegrationsPage() {
                                                         {acc.count || 0} Clients Synced
                                                     </span>
                                                 </div>
+                                                <span className="text-[9px] text-slate-500 font-medium truncate" title={profileSummary(effective)}>
+                                                    {profileSummary(effective)}
+                                                </span>
                                             </div>
                                         </div>
-                                        <button 
-                                            onClick={() => handleGmailSync(acc.id, acc.accountName || acc.email)}
-                                            disabled={syncStatus.gmail[acc.id] === "syncing"}
-                                            className="flex flex-col items-center gap-1 group/btn"
-                                        >
-                                            <div className={cn(
-                                                "w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl transition-all",
-                                                syncStatus.gmail[acc.id] === "syncing" ? "border-blue-200 text-blue-600" : "hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-400 shadow-sm"
-                                            )}>
-                                                {syncStatus.gmail[acc.id] === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500" />}
-                                            </div>
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 group-hover/btn:text-red-500">Sync Again</span>
-                                        </button>
+                                            );
+                                        })()}
+                                        <div className="flex flex-col items-center gap-1">
+                                            <button
+                                                onClick={() => openProfileModal(acc)}
+                                                className="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600"
+                                            >
+                                                Edit Filters
+                                            </button>
+                                            <button 
+                                                onClick={() => handleGmailSync(acc.id, acc.accountName || acc.email, acc.email)}
+                                                disabled={syncStatus.gmail[acc.id] === "syncing"}
+                                                className="flex flex-col items-center gap-1 group/btn"
+                                            >
+                                                <div className={cn(
+                                                    "w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl transition-all",
+                                                    syncStatus.gmail[acc.id] === "syncing" ? "border-blue-200 text-blue-600" : "hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-400 shadow-sm"
+                                                )}>
+                                                    {syncStatus.gmail[acc.id] === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500" />}
+                                                </div>
+                                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 group-hover/btn:text-red-500">Sync Again</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                ))}
+                                    {insight && insight.skippedAutomatedTotal > 0 && (
+                                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50">
+                                            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
+                                                Skipped Emails ({insight.skippedAutomatedTotal}) for {acc.accountName || acc.email}
+                                            </p>
+                                            <p className="text-[10px] text-amber-700 mt-1">
+                                                {Object.entries(insight.skippedAutomatedByCategory).map(([k, v]) => `${k}: ${v}`).join(", ")}
+                                            </p>
+                                            <div className="mt-2 max-h-24 overflow-y-auto space-y-1">
+                                                {insight.skippedAutomatedSamples.slice(0, 12).map((row, idx) => (
+                                                    <div key={`${row.email}-${idx}`} className="text-[10px] text-amber-800 flex items-center justify-between gap-2">
+                                                        <span className="truncate">{row.email}</span>
+                                                        <span className="uppercase font-bold text-[9px]">{row.category}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    </div>
+                                    );
+                                })}
                                 {gmailAccounts.length === 0 && (
                                     <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">No accounts linked</p>
@@ -562,7 +738,7 @@ export default function ImportIntegrationsPage() {
                                 className="w-full h-12 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-slate-50 hover:border-red-100 hover:text-red-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
                             >
                                 <Plus className="w-4 h-4" />
-                                Link Account Node
+                                Connect Account
                             </button>
                         </div>
                     </div>
@@ -849,7 +1025,7 @@ export default function ImportIntegrationsPage() {
                                 className="w-full h-12 bg-slate-900 text-white rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-slate-800 transition-all active:scale-[0.98] shadow-lg shadow-slate-900/10 flex items-center justify-center gap-3 disabled:opacity-50"
                             >
                                 {isSavingZoho ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-                                Sync Node Configuration
+                                Save Settings
                             </button>
 
                             {(zohoConfig.hasClientId || zohoFormData.clientId) && (
@@ -870,17 +1046,17 @@ export default function ImportIntegrationsPage() {
             {isGmailModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsGmailModalOpen(false)} />
-                    <div className="bg-white w-full max-w-sm rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="bg-white w-full max-w-xl rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Mail className="w-5 h-5 text-red-600" />
-                                <h3 className="font-bold text-slate-900">Link Gmail Account</h3>
+                                <h3 className="font-bold text-slate-900">Connect Gmail</h3>
                             </div>
                             <button onClick={() => setIsGmailModalOpen(false)} className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors"><X className="w-4 h-4" /></button>
                         </div>
-                        <div className="p-6 space-y-4">
+                        <div className="p-6 space-y-5">
                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Account Identity Label</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Account Label</label>
                                 <input 
                                     type="text" 
                                     value={gmailLabel} 
@@ -888,7 +1064,154 @@ export default function ImportIntegrationsPage() {
                                     placeholder="e.g. Sales Team, Support"
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all font-medium"
                                 />
-                                <p className="mt-2 text-[10px] text-slate-400 font-medium">This label helps identify the context of imported clients.</p>
+                                <p className="mt-2 text-[10px] text-slate-400 font-medium">Use this to identify this Gmail account later.</p>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">What do you want to do?</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    {[
+                                        { id: "send", title: "Send Emails", detail: "Best for campaigns and test dispatch." },
+                                        { id: "sync", title: "Sync Contacts", detail: "Best for importing contacts only." },
+                                        { id: "both", title: "Do Both", detail: "Connect once for sending and sync." },
+                                    ].map((item) => (
+                                        <button
+                                            key={item.id}
+                                            type="button"
+                                            onClick={() => setGmailIntent(item.id as GmailConnectIntent)}
+                                            className={cn(
+                                                "text-left p-3 rounded-xl border transition-all",
+                                                gmailIntent === item.id
+                                                    ? "border-red-300 bg-red-50"
+                                                    : "border-slate-200 bg-white hover:border-red-200"
+                                            )}
+                                        >
+                                            <p className="text-[11px] font-bold text-slate-900">{item.title}</p>
+                                            <p className="text-[10px] text-slate-500 mt-1">{item.detail}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {(gmailIntent === "sync" || gmailIntent === "both") && (
+                                <div className="space-y-4 border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                                    <p className="text-[11px] font-bold text-slate-800">Contact Sync Options</p>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Source folders</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(["INBOX", "SENT", "LABEL"] as GmailSyncFolder[]).map((folder) => (
+                                                <button
+                                                    key={folder}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setGmailSyncProfile((prev) => ({
+                                                            ...prev,
+                                                            sourceFolders: prev.sourceFolders.includes(folder)
+                                                                ? prev.sourceFolders.filter((f) => f !== folder)
+                                                                : [...prev.sourceFolders, folder],
+                                                        }))
+                                                    }
+                                                    className={cn(
+                                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold border",
+                                                        gmailSyncProfile.sourceFolders.includes(folder)
+                                                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                            : "bg-white text-slate-500 border-slate-200"
+                                                    )}
+                                                >
+                                                    {folder}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {gmailSyncProfile.sourceFolders.includes("LABEL") && (
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Custom labels (comma separated)</label>
+                                            <input
+                                                type="text"
+                                                value={gmailSyncProfile.customLabelsText}
+                                                onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, customLabelsText: e.target.value }))}
+                                                placeholder="leads, clients, high-priority"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Extract from</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(["from", "to", "cc", "bcc"] as GmailHeader[]).map((header) => (
+                                                <button
+                                                    key={header}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setGmailSyncProfile((prev) => ({
+                                                            ...prev,
+                                                            extractHeaders: prev.extractHeaders.includes(header)
+                                                                ? prev.extractHeaders.filter((h) => h !== header)
+                                                                : [...prev.extractHeaders, header],
+                                                        }))
+                                                    }
+                                                    className={cn(
+                                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold border uppercase",
+                                                        gmailSyncProfile.extractHeaders.includes(header)
+                                                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                            : "bg-white text-slate-500 border-slate-200"
+                                                    )}
+                                                >
+                                                    {header}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block domains</label>
+                                            <input
+                                                type="text"
+                                                value={gmailSyncProfile.excludedDomainsText}
+                                                onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedDomainsText: e.target.value }))}
+                                                placeholder="noreply.com, spam.com"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block keywords</label>
+                                            <input
+                                                type="text"
+                                                value={gmailSyncProfile.excludedKeywordsText}
+                                                onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedKeywordsText: e.target.value }))}
+                                                placeholder="unsubscribe, abuse"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                        <input
+                                            type="checkbox"
+                                            checked={gmailSyncProfile.persistBlockList}
+                                            onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, persistBlockList: e.target.checked }))}
+                                        />
+                                        Keep blocked domains active after future syncs
+                                    </label>
+                                    <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                        <input
+                                            type="checkbox"
+                                            checked={gmailSyncProfile.includeAutomatedEmails}
+                                            onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, includeAutomatedEmails: e.target.checked }))}
+                                        />
+                                        Include newsletter/alert/transaction emails in normal sync
+                                    </label>
+                                </div>
+                            )}
+
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                                <p className="text-[10px] text-blue-700 font-medium">
+                                    Permissions are requested based on your selection to reduce unnecessary access.
+                                </p>
                             </div>
                             <button 
                                 onClick={handleAddGmailAccount}
@@ -896,7 +1219,92 @@ export default function ImportIntegrationsPage() {
                                 className="w-full h-12 bg-slate-900 text-white rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-slate-800 transition-all active:scale-[0.98] shadow-lg shadow-slate-900/10 flex items-center justify-center gap-3 disabled:opacity-50"
                             >
                                 <User className="w-4 h-4" />
-                                Authenticate Node
+                                Continue with Google
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {isGmailProfileModalOpen && activeGmailAccountForProfile && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsGmailProfileModalOpen(false)} />
+                    <div className="bg-white w-full max-w-xl rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden">
+                        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="font-bold text-slate-900">Edit Sync Filters</h3>
+                            <button onClick={() => setIsGmailProfileModalOpen(false)} className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors"><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-[11px] text-slate-600 font-medium">{activeGmailAccountForProfile.name} ({activeGmailAccountForProfile.email})</p>
+                            <div className="space-y-3 border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Source folders</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(["INBOX", "SENT", "LABEL"] as GmailSyncFolder[]).map((folder) => (
+                                            <button
+                                                key={folder}
+                                                type="button"
+                                                onClick={() =>
+                                                    setGmailSyncProfile((prev) => ({
+                                                        ...prev,
+                                                        sourceFolders: prev.sourceFolders.includes(folder)
+                                                            ? prev.sourceFolders.filter((f) => f !== folder)
+                                                            : [...prev.sourceFolders, folder],
+                                                    }))
+                                                }
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-[10px] font-bold border",
+                                                    gmailSyncProfile.sourceFolders.includes(folder)
+                                                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                        : "bg-white text-slate-500 border-slate-200"
+                                                )}
+                                            >
+                                                {folder}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {gmailSyncProfile.sourceFolders.includes("LABEL") && (
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Custom labels</label>
+                                        <input
+                                            type="text"
+                                            value={gmailSyncProfile.customLabelsText}
+                                            onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, customLabelsText: e.target.value }))}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                )}
+                                <div className="grid sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block domains</label>
+                                        <input
+                                            type="text"
+                                            value={gmailSyncProfile.excludedDomainsText}
+                                            onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedDomainsText: e.target.value }))}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block keywords</label>
+                                        <input
+                                            type="text"
+                                            value={gmailSyncProfile.excludedKeywordsText}
+                                            onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedKeywordsText: e.target.value }))}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                    <input
+                                        type="checkbox"
+                                        checked={gmailSyncProfile.includeAutomatedEmails}
+                                        onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, includeAutomatedEmails: e.target.checked }))}
+                                    />
+                                    Include newsletter/alert/transaction emails in normal sync
+                                </label>
+                            </div>
+                            <button onClick={saveActiveProfile} className="w-full h-11 bg-slate-900 text-white rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em]">
+                                Save Filters
                             </button>
                         </div>
                     </div>

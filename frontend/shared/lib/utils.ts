@@ -5,13 +5,77 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export function getSmartGreeting(contactPerson?: string | null) {
-    if (!contactPerson || !contactPerson.trim()) {
-        return "Dear Sir/Ma'am";
+type GreetingOptions = {
+    email?: string | null;
+    signature?: string | null;
+    isRoleBased?: boolean;
+};
+
+const GENERIC_LOCAL_PARTS = new Set([
+    "admin",
+    "info",
+    "support",
+    "sales",
+    "contact",
+    "help",
+    "hello",
+    "team",
+    "office",
+    "accounts",
+    "billing",
+    "hr",
+    "careers",
+    "noreply",
+    "no-reply",
+    "donotreply",
+    "do-not-reply",
+    "mailer",
+    "mail",
+]);
+
+function toTitleCaseToken(value: string) {
+    if (!value) return "";
+    return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function getFirstNameFromEmailLocalPart(email?: string | null) {
+    if (!email || !email.includes("@")) return "";
+    const localPart = email.split("@")[0]?.trim().toLowerCase();
+    if (!localPart) return "";
+    if (GENERIC_LOCAL_PARTS.has(localPart)) return "";
+    const tokens = localPart
+        .split(/[._\-+0-9]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    const candidate = tokens[0] || "";
+    if (!candidate || GENERIC_LOCAL_PARTS.has(candidate) || candidate.length < 2) return "";
+    return toTitleCaseToken(candidate);
+}
+
+function getFirstNameFromSignature(signature?: string | null) {
+    if (!signature || !signature.trim()) return "";
+    const cleanSignature = signature
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!cleanSignature) return "";
+    return getFirstName(cleanSignature);
+}
+
+export function getSmartGreeting(contactPerson?: string | null, options?: GreetingOptions) {
+    const contactFirstName = getFirstName(contactPerson);
+    if (contactFirstName) {
+        return `Dear ${contactFirstName}`;
     }
-    const firstName = getFirstName(contactPerson);
-    if (!firstName) return "Dear Sir/Ma'am";
-    return `Dear ${firstName}`;
+    const emailFirstName = options?.isRoleBased ? "" : getFirstNameFromEmailLocalPart(options?.email);
+    if (emailFirstName) {
+        return `Dear ${emailFirstName}`;
+    }
+    const signatureFirstName = getFirstNameFromSignature(options?.signature);
+    if (signatureFirstName) {
+        return `Dear ${signatureFirstName}`;
+    }
+    return "Dear Sir/Ma'am";
 }
 
 export function getFirstName(contactPerson?: string | null) {
@@ -63,12 +127,19 @@ export function replaceVariables(content: string, client: any) {
     derivedCompany = derivedCompany || "your organization";
 
     const fullName = client.contactPerson || client.poc || "";
-    const firstName = getFirstName(fullName) || "there";
+    const derivedFirstName =
+        getFirstName(fullName) ||
+        getFirstNameFromEmailLocalPart(client.email) ||
+        getFirstNameFromSignature(client.emailSignature || client.signature || client.signatureName) ||
+        "there";
     
     // Core variable map with prioritized fallbacks
     const variables: Record<string, string> = {
-        greeting: getSmartGreeting(fullName),
-        firstName: firstName,
+        greeting: getSmartGreeting(fullName, {
+            email: client.email,
+            signature: client.emailSignature || client.signature || client.signatureName,
+        }),
+        firstName: derivedFirstName,
         lastName: getLastName(fullName) || "",
         fullName: fullName || "Valued Partner",
         companyName: derivedCompany,

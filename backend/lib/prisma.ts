@@ -1,14 +1,19 @@
 import { PrismaClient } from '@prisma/client';
 
 const prismaClientSingleton = () => {
-    return new PrismaClient().$extends({
+    const runtimeUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    const baseClient = runtimeUrl
+        ? new PrismaClient({ datasourceUrl: runtimeUrl })
+        : new PrismaClient();
+
+    return baseClient.$extends({
         query: {
             client: {
                 async $allOperations({ model, operation, args, query }) {
                     // List of read operations that we want to protect
                     const readOperations = ['findMany', 'findFirst', 'findUnique', 'count', 'aggregate', 'groupBy'];
 
-                    if (readOperations.includes(operation)) {
+                    if (model === 'Client' && readOperations.includes(operation)) {
                         const anyArgs = args as any;
                         anyArgs.where = anyArgs.where || {};
 

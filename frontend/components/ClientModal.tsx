@@ -359,7 +359,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                         onClick={onClose}
                         className="flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 transition-all"
                     >
-                        Abort Modification
+                        Cancel
                     </button>
                     <button
                         type="submit"
@@ -368,7 +368,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                         className="flex-[1.5] py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 shadow-xl shadow-slate-200 disabled:opacity-70 group"
                     >
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 group-hover:scale-110 transition-transform" />}
-                        {client ? "Initialize Version" : "Commit New Member"}
+                        {client ? "Save Changes" : "Add Client"}
                     </button>
                 </div>
             </div>
