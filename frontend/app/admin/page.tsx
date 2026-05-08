@@ -147,6 +147,16 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                                        {userItem.status === "APPROVED" && !userItem.canAccessInvoiceData && (
+                                            <button onClick={() => handleAction(userItem.id, "GRANT_INVOICE_ACCESS")} className="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors text-xs font-semibold" title="Grant Invoice Access">
+                                                Grant Invoice
+                                            </button>
+                                        )}
+                                        {userItem.status === "APPROVED" && userItem.canAccessInvoiceData && userItem.email !== currentUser?.email && (
+                                            <button onClick={() => handleAction(userItem.id, "REVOKE_INVOICE_ACCESS")} className="px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg transition-colors text-xs font-semibold" title="Revoke Invoice Access">
+                                                Revoke Invoice
+                                            </button>
+                                        )}
                                         {userItem.email !== currentUser?.email && (
                                             <>
                                                 {userItem.status === "PENDING" && (
@@ -162,16 +172,6 @@ export default function AdminDashboard() {
                                                 {userItem.status !== "BANNED" && (
                                                     <button onClick={() => handleAction(userItem.id, "BAN")} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Access">
                                                         <Ban className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && !userItem.canAccessInvoiceData && (
-                                                    <button onClick={() => handleAction(userItem.id, "GRANT_INVOICE_ACCESS")} className="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors text-xs font-semibold" title="Grant Invoice Access">
-                                                        Grant Invoice
-                                                    </button>
-                                                )}
-                                                {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && userItem.canAccessInvoiceData && (
-                                                    <button onClick={() => handleAction(userItem.id, "REVOKE_INVOICE_ACCESS")} className="px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg transition-colors text-xs font-semibold" title="Revoke Invoice Access">
-                                                        Revoke Invoice
                                                     </button>
                                                 )}
                                                 {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && (
