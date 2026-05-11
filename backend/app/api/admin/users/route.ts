@@ -1,6 +1,6 @@
 import prisma from "@/backend/lib/prisma";
 import { ok, error } from "@/backend/lib/api-response";
-import { isAdmin } from "@/backend/lib/auth";
+import { getBackendSession, isAdmin } from "@/backend/lib/auth";
 import type { UserRole, UserStatus } from "@prisma/client";
 
 export async function GET(req: Request) {
@@ -32,7 +32,8 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
     try {
-        if (!await isAdmin(req)) {
+        const session = await getBackendSession(req);
+        if (!session || session.user.role !== "ADMIN") {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
 
@@ -47,37 +48,69 @@ export async function PUT(req: Request) {
             return error("NOT_FOUND", "User not found in database.");
         }
 
-        // Primary admin protection
-        if (target.email === "suraj.sonnar@ikf.co.in" && (action === "BAN" || action === "REVOKE_ADMIN")) {
-            return error("BAD_REQUEST", "Cannot revoke or ban the primary administrator.");
+        const actorId = session.user.id;
+        const actorEmail = (session.user.email || "").toLowerCase();
+        const targetEmail = (target.email || "").toLowerCase();
+        const isSelf = actorId === target.id;
+        const isPrimaryAdmin = targetEmail === "suraj.sonnar@ikf.co.in";
+
+        // Base protections
+        if (isPrimaryAdmin && (action === "BAN" || action === "REVOKE_ADMIN" || action === "DELETE_USER")) {
+            return error("BAD_REQUEST", "Cannot revoke, demote, or delete the primary administrator.");
+        }
+
+        if (isSelf && (action === "BAN" || action === "REVOKE_ADMIN" || action === "DELETE_USER")) {
+            return error("BAD_REQUEST", "You cannot apply this action to your own account.");
+        }
+
+        const approvedAdminCount = await prisma.user.count({
+            where: { role: "ADMIN", status: "APPROVED" },
+        });
+
+        const targetIsApprovedAdmin = target.role === "ADMIN" && target.status === "APPROVED";
+        const removingLastApprovedAdmin =
+            targetIsApprovedAdmin &&
+            approvedAdminCount <= 1 &&
+            (action === "BAN" || action === "REVOKE_ADMIN" || action === "DELETE_USER");
+
+        if (removingLastApprovedAdmin) {
+            return error("BAD_REQUEST", "Cannot remove the last approved administrator.");
         }
 
         let updateData: any = {};
 
         switch (action) {
             case "APPROVE":
-                updateData.status = "APPROVED";
+                if (target.status === "APPROVED") return ok({ updated: false, user: target });
+                updateData.status = "APPROVED" as UserStatus;
                 break;
             case "BAN":
-                updateData.status = "BANNED";
+                if (target.status === "BANNED") return ok({ updated: false, user: target });
+                updateData.status = "BANNED" as UserStatus;
                 break;
             case "UNBAN":
-                updateData.status = "APPROVED";
+                if (target.status !== "BANNED") return error("BAD_REQUEST", "Only banned users can be unbanned.");
+                updateData.status = "APPROVED" as UserStatus;
                 break;
             case "MAKE_ADMIN":
-                updateData.role = "ADMIN";
-                updateData.canAccessInvoiceData = true;
+                if (target.status !== "APPROVED") {
+                    return error("BAD_REQUEST", "Only approved users can be promoted to admin.");
+                }
+                updateData.role = "ADMIN" as UserRole;
                 break;
             case "REVOKE_ADMIN":
-                updateData.role = "USER";
+                if (target.role !== "ADMIN") return ok({ updated: false, user: target });
+                updateData.role = "USER" as UserRole;
                 break;
             case "GRANT_INVOICE_ACCESS":
+                if (target.canAccessInvoiceData) return ok({ updated: false, user: target });
                 updateData.canAccessInvoiceData = true;
                 break;
             case "REVOKE_INVOICE_ACCESS":
-                if (target.email === "suraj.sonnar@ikf.co.in") {
-                    return error("BAD_REQUEST", "Cannot revoke invoice access from the primary administrator.");
+                if (isPrimaryAdmin || target.role === "ADMIN") {
+                    return error("BAD_REQUEST", "Cannot revoke invoice access from an administrator.");
                 }
+                if (!target.canAccessInvoiceData) return ok({ updated: false, user: target });
                 updateData.canAccessInvoiceData = false;
                 break;
             case "DELETE_USER":

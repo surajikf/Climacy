@@ -1,9 +1,7 @@
-import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
-import { getGlobalSettings } from "@/backend/lib/settings";
 import { ok, error } from "@/backend/lib/api-response";
 import { z } from "zod";
 import { normalizeEmailBodyHtml } from "@/shared/lib/email-format";
+import { runAiWithFallback } from "@/backend/lib/ai-router";
 
 const refineSchema = z.object({
     text: z.string().min(1, "Text to refine is required"),
@@ -23,19 +21,6 @@ export async function POST(request: Request) {
         }
 
         const { text, command } = parsed.data;
-        const settings = await getGlobalSettings();
-
-        let aiProvider = settings.aiProvider || "Groq";
-        let apiKey = aiProvider === "Groq" ? settings.groqApiKey : settings.openaiApiKey;
-
-        if (!apiKey || apiKey.includes("your_")) {
-            // Mock response if no API key
-            return ok({ 
-                refinedText: `[AI REFINE MOCK]: ${text} (Applied: ${command})`,
-                originalText: text 
-            });
-        }
-
         const prompt = `
             TASK: Refine the following email segment based on the user instruction.
             SEGMENT: "${text}"
@@ -49,31 +34,25 @@ export async function POST(request: Request) {
             5. Return ONLY the refined content.
         `;
 
-        let refinedText = "";
-
-        if (aiProvider === "Groq") {
-            const groq = new Groq({ apiKey });
-            const chatCompletion = await groq.chat.completions.create({
+        let aiResult: Awaited<ReturnType<typeof runAiWithFallback>> | null = null;
+        let refinedText = text;
+        try {
+            aiResult = await runAiWithFallback({
                 messages: [
                     { role: "system", content: "You are a professional business communication editor. Return ONLY the refined text without any conversational filler." },
                     { role: "user", content: prompt }
                 ],
-                model: settings.aiModel,
                 temperature: 0.5,
             });
-            refinedText = chatCompletion.choices[0].message.content || text;
-        } else if (aiProvider === "OpenAI") {
-            const OpenAI = (await import("openai")).default;
-            const openai = new OpenAI({ apiKey });
-            const chatCompletion = await openai.chat.completions.create({
-                messages: [
-                    { role: "system", content: "You are a professional business communication editor. Return ONLY the refined text without any conversational filler." },
-                    { role: "user", content: prompt }
-                ],
-                model: settings.aiModel,
-                temperature: 0.5,
-            });
-            refinedText = chatCompletion.choices[0].message.content || text;
+            refinedText = aiResult.content || text;
+        } catch (aiErr: any) {
+            if (String(aiErr?.message || "").includes("No AI provider keys configured")) {
+                return ok({
+                    refinedText: `[AI REFINE MOCK]: ${text} (Applied: ${command})`,
+                    originalText: text
+                });
+            }
+            throw aiErr;
         }
 
         const inputWasHtml = /<\s*\/?\s*[a-zA-Z][^>]*>/.test(text);
@@ -81,7 +60,12 @@ export async function POST(request: Request) {
 
         return ok({ 
             refinedText: normalized,
-            originalText: text 
+            originalText: text,
+            aiRouting: {
+                providerUsed: aiResult?.providerUsed || "groq",
+                fallbackActive: aiResult?.fallbackActive || false,
+                groqRetryAt: aiResult?.groqRetryAt || null,
+            }
         });
 
     } catch (err) {

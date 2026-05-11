@@ -10,6 +10,7 @@ export interface GlobalSettings {
     aiModel: string;
     groqApiKey: string;
     openaiApiKey: string;
+    openrouterApiKey: string;
     googleClientId: string;
     googleClientSecret: string;
     googleRefreshToken: string;
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     aiModel: "llama-3.3-70b-versatile",
     groqApiKey: "",
     openaiApiKey: "",
+    openrouterApiKey: "",
     googleClientId: "",
     googleClientSecret: "",
     googleRefreshToken: "",
@@ -75,6 +77,7 @@ function getDefaultSettings(): GlobalSettings {
         ...DEFAULT_SETTINGS,
         groqApiKey: process.env.GROQ_API_KEY || "",
         openaiApiKey: process.env.OPENAI_API_KEY || "",
+        openrouterApiKey: process.env.OPENROUTER_API_KEY || "",
         googleClientId: process.env.GOOGLE_CLIENT_ID || "",
         googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         invoiceApiKey: process.env.INVOICE_API_KEY?.trim() || "",
@@ -96,6 +99,7 @@ async function processSettings(settings: any): Promise<GlobalSettings> {
         aiModel: get(settings, 'aiModel') || "llama-3.3-70b-versatile",
         groqApiKey: safeDecrypt(get(settings, 'groqApiKeyEncrypted')) || process.env.GROQ_API_KEY || "",
         openaiApiKey: safeDecrypt(get(settings, 'openaiApiKeyEncrypted')) || process.env.OPENAI_API_KEY || "",
+        openrouterApiKey: safeDecrypt(get(settings, 'openrouterApiKeyEncrypted')) || process.env.OPENROUTER_API_KEY || "",
         googleClientId: safeDecrypt(get(settings, 'googleClientIdEncrypted')) || process.env.GOOGLE_CLIENT_ID || "",
         googleClientSecret: safeDecrypt(get(settings, 'googleClientSecretEncrypted')) || process.env.GOOGLE_CLIENT_SECRET || "",
         googleRefreshToken: safeDecrypt(get(settings, 'googleRefreshTokenEncrypted')) || process.env.GOOGLE_REFRESH_TOKEN || "",

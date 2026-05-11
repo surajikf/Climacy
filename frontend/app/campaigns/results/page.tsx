@@ -1,6 +1,8 @@
 "use client";
-
-import { useState, useEffect, Suspense } from "react";
+/** Refreshed imports to resolve Search icon registration issue **/
+import { useState, useEffect, Suspense, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import {
@@ -28,7 +30,12 @@ import {
     Type,
     Save,
     Clock,
-    AlignLeft
+    AlignLeft,
+    Search,
+    X,
+    Eye,
+    EyeOff,
+    MoreVertical
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { toast } from "sonner";
@@ -37,6 +44,8 @@ import { normalizeEmailBodyHtml } from "@/shared/lib/email-format";
 import { sanitizeEmailHtml } from "@/shared/lib/email-sanitize";
 import { apiPath, appPath } from "@/frontend/lib/app-path";
 import { clearCampaignSession, readCampaignSession, writeCampaignSession } from "@/frontend/lib/campaign-session";
+
+const isTerminalJobStatus = (status?: string) => status === "SUCCEEDED" || status === "FAILED";
 
 const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: number, label: string, icon: any, color?: "blue" | "red" | "emerald" | "slate" }) => {
     const radius = 18;
@@ -90,7 +99,7 @@ const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: numbe
             </div>
             <div className="text-center space-y-0.5">
                 <span className="block text-lg font-bold text-slate-900 leading-none">{safeValue}%</span>
-                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
+                <span className="block text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</span>
             </div>
         </div>
     );
@@ -125,6 +134,7 @@ const StudioSkeleton = () => (
 
 function CampaignResultsContent() {
     const router = useRouter();
+    const { data: session } = useSession();
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -139,6 +149,25 @@ function CampaignResultsContent() {
     const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
     const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
     const [jobCreatedAt, setJobCreatedAt] = useState<string | null>(null);
+    const [jobTopic, setJobTopic] = useState<string | null>(null);
+    const [jobType, setJobType] = useState<string | null>(null);
+    const [jobStatusText, setJobStatusText] = useState<string>("");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isMobileQueueOpen, setIsMobileQueueOpen] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState(0);
+    const loadingWarningShownRef = useRef(false);
+
+    // Global UI Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsMobileQueueOpen(false);
+                if (selectedIds.size > 0) setSelectedIds(new Set());
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedIds.size]);
 
     const searchParams = useSearchParams();
     const jobId = searchParams.get("jobId");
@@ -190,6 +219,7 @@ function CampaignResultsContent() {
             setDraftRestored(false);
             setPendingDraft(null);
             setHasEditedSinceLoad(false);
+            loadingWarningShownRef.current = false;
 
             if (!jobId) {
                 fetchLatestResults(null);
@@ -198,20 +228,49 @@ function CampaignResultsContent() {
 
             // Wait for the queued batch generation job to complete,
             // so the results page shows fresh campaign payloads immediately.
+            const startedAt = Date.now();
+            const maxWaitMs = 180000; // hard stop
+            let attempts = 0;
             const poll = async () => {
+                attempts += 1;
                 try {
-            const res = await fetch(apiPath(`/jobs/${encodeURIComponent(jobId)}`));
+                    const res = await fetch(apiPath(`/jobs/${encodeURIComponent(jobId)}`));
+                    const contentType = res.headers.get("content-type") || "";
+                    if (!contentType.includes("application/json")) {
+                        if (cancelled) return;
+                        setLoading(false);
+                        toast.error("Session expired or invalid response. Please open campaign list and continue.");
+                        return;
+                    }
                     const json = await res.json();
                     const job = json?.data?.job;
 
                     if (json?.success && job) {
+                        if (job.status) setJobStatusText(String(job.status));
                         if (!jobCreatedAt && job.createdAt) {
                             setJobCreatedAt(String(job.createdAt));
+                        }
+                        if (!jobTopic && job.payload?.topic) {
+                            setJobTopic(String(job.payload.topic));
+                        }
+                        if (!jobType && job.payload?.type) {
+                            setJobType(String(job.payload.type));
+                        }
+                        
+                        // Update generation progress
+                        if (job.status === "RUNNING") {
+                            setGenerationProgress(job.progress || 0);
                         }
 
                         if (job.status === "SUCCEEDED") {
                             if (cancelled) return;
-                            await fetchLatestResults(job.createdAt ? String(job.createdAt) : jobCreatedAt);
+                            await fetchLatestResults(
+                                job.createdAt ? String(job.createdAt) : jobCreatedAt,
+                                { silentEmpty: false, preserveEditor: true },
+                                job.payload?.topic,
+                                job.payload?.type
+                            );
+                            setLoading(false);
                             return;
                         }
 
@@ -221,12 +280,45 @@ function CampaignResultsContent() {
                             setLoading(false);
                             return;
                         }
+
+                        if (job.status === "RUNNING" || job.status === "QUEUED") {
+                            if (cancelled) return;
+                            const count = await fetchLatestResults(
+                                job.createdAt ? String(job.createdAt) : jobCreatedAt,
+                                { silentEmpty: true, preserveEditor: true },
+                                job.payload?.topic,
+                                job.payload?.type
+                            );
+                            if (count > 0 || attempts >= 5) {
+                                setLoading(false);
+                            } else if (attempts >= 30 && !loadingWarningShownRef.current) {
+                                loadingWarningShownRef.current = true;
+                                toast.info("Generation is in progress. Emails will appear as they are ready.");
+                            }
+                        }
+
+                        if (!isTerminalJobStatus(job.status) && Date.now() - startedAt > maxWaitMs) {
+                            if (cancelled) return;
+                            setLoading(false);
+                            toast.warning("Generation is taking longer than expected. You can reopen from Campaign List.");
+                            return;
+                        }
+                    } else if (Date.now() - startedAt > maxWaitMs) {
+                        if (cancelled) return;
+                        setLoading(false);
+                        toast.warning("Could not confirm job status. Please open Campaign List and continue.");
+                        return;
                     }
                 } catch {
-                    // Non-blocking; keep polling.
+                    if (Date.now() - startedAt > maxWaitMs) {
+                        if (cancelled) return;
+                        setLoading(false);
+                        toast.error("Network issue while loading generated campaigns.");
+                        return;
+                    }
                 }
 
-                if (!cancelled) setTimeout(poll, 2000);
+                if (!cancelled) setTimeout(poll, 1000); // 1s polling for real-time feel
             };
 
             setLoading(true);
@@ -293,38 +385,73 @@ function CampaignResultsContent() {
         return () => clearTimeout(t);
     }, [activeDraftContext, editedSubject, editedBody, campaigns, activeIndex, pendingDraft, hasEditedSinceLoad]);
 
-    const fetchLatestResults = async (sinceOverride?: string | null) => {
+    const fetchLatestResults = async (
+        sinceOverride?: string | null,
+        opts?: { silentEmpty?: boolean; preserveEditor?: boolean },
+        topicOverride?: string | null,
+        typeOverride?: string | null
+    ) => {
         try {
-            const res = await fetch(apiPath("/campaigns/history?limit=20"));
+            const topic = topicOverride !== undefined ? topicOverride : jobTopic;
+            const type = typeOverride !== undefined ? typeOverride : jobType;
+            
+            let query = "?limit=200";
+            if (topic) query += `&search=${encodeURIComponent(topic)}`;
+            if (type && type !== "All") query += `&type=${encodeURIComponent(type)}`;
+            
+            const res = await fetch(apiPath(`/campaigns/history${query}`));
+            const contentType = res.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                throw new Error("Invalid session response");
+            }
             const result = await res.json();
             if (result.success) {
                 const since = sinceOverride !== undefined ? sinceOverride : jobCreatedAt;
                 const sinceTs = since ? new Date(since).getTime() : null;
                 const processed = result.data
                     .map((c: any) => {
+                        // Strict filter: Topic must match exactly (trimmed/case-insensitive) if provided
+                        if (topic && c.campaignTopic?.trim().toLowerCase() !== topic.trim().toLowerCase()) return null;
+                        if (type && type !== "All" && c.campaignType?.trim().toLowerCase() !== type.trim().toLowerCase()) return null;
+                        
                         const content = safeParseGeneratedOutput(c.generatedOutput);
                         if (!content) return null;
                         const dateTs = c?.dateCreated ? new Date(c.dateCreated).getTime() : null;
-                        if (sinceTs !== null && dateTs !== null && dateTs < sinceTs) return null;
+                        // DB clocks are synchronized, but we add a 2s buffer for safety
+                        if (sinceTs !== null && dateTs !== null && dateTs < (sinceTs - 2000)) return null;
                         return { ...c, content };
                     })
                     .filter(Boolean);
+                const currentActiveId = campaigns[activeIndex]?.id as string | undefined;
                 setCampaigns(processed);
                 if (processed.length > 0) {
                     const focusIndex = campaignId ? processed.findIndex((c: any) => c.id === campaignId) : -1;
-                    const startIndex = focusIndex >= 0 ? focusIndex : 0;
-                    setActiveIndex(startIndex);
-                    setEditedBody(processed[startIndex].content.body);
-                    setEditedSubject(processed[startIndex].content.subject);
-                } else {
+                    const keepIndex = currentActiveId ? processed.findIndex((c: any) => c.id === currentActiveId) : -1;
+                    const startIndex = focusIndex >= 0 ? focusIndex : keepIndex >= 0 ? keepIndex : 0;
+                    
+                    // Only update activeIndex if it actually changed to avoid UI jitter
+                    if (startIndex !== activeIndex) {
+                        setActiveIndex(startIndex);
+                    }
+                    if (!opts?.preserveEditor || !hasEditedSinceLoad) {
+                        setEditedBody(processed[startIndex].content.body);
+                        setEditedSubject(processed[startIndex].content.subject);
+                    }
+                    setLoading(false);
+                } else if (!opts?.silentEmpty) {
                     toast.error("Campaign payloads are invalid. Please regenerate campaigns.");
                 }
+                return processed.length;
             }
         } catch (err) {
             console.error(err);
+            toast.error("Could not load generated campaigns. Please try again from Campaign List.");
         } finally {
-            setTimeout(() => setLoading(false), 800);
+            if (!opts?.silentEmpty) {
+                setTimeout(() => setLoading(false), 800);
+            }
         }
+        return 0;
     };
 
     const toggleSelect = (id: string, e: React.MouseEvent) => {
@@ -375,7 +502,11 @@ function CampaignResultsContent() {
             const res = await fetch(apiPath("/campaigns/dispatch/batch"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ campaignIds: idsToDispatch, dispatchMode: mode })
+                body: JSON.stringify({ 
+                    campaignIds: idsToDispatch, 
+                    dispatchMode: mode,
+                    userId: (session?.user as any)?.id 
+                })
             });
 
             const data = await res.json().catch(() => null);
@@ -482,21 +613,35 @@ function CampaignResultsContent() {
     const readingTime = Math.ceil(editedBody.split(/\s+/).length / 200);
     const charCount = editedBody.length;
 
-    if (loading) return (
+    const filteredCampaigns = campaigns.filter(c => 
+        c.client?.clientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.content?.subject?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const isJobActive = jobId && !isTerminalJobStatus(jobStatusText);
+
+    // If we are strictly loading the initial session/job data and have NO jobId or campaigns yet, show skeleton
+    if (loading && campaigns.length === 0 && !jobId) return (
         <div className="w-full py-8 px-3 sm:px-4 lg:px-6">
+            <div className="mb-4 text-sm text-slate-500 font-medium flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                {jobStatusText ? `Preparing… (${jobStatusText})` : "Preparing…"}
+            </div>
             <StudioSkeleton />
         </div>
     );
 
-    if (campaigns.length === 0) return (
-        <div className="w-full min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
-            <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-sm">
-                <Zap className="w-6 h-6 text-slate-400" />
-            </div>
-            <div className="text-center space-y-1.5">
-                <h3 className="text-xl font-semibold text-slate-900 tracking-tight">No Campaigns Yet</h3>
-                <p className="text-sm font-medium text-slate-500">No campaigns found right now.</p>
-            </div>
+    // If we have no campaigns AND no active job, show empty state
+    if (campaigns.length === 0 && !isJobActive) {
+        return (
+            <div className="w-full min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-sm">
+                    <Zap className="w-6 h-6 text-slate-400" />
+                </div>
+                <div className="text-center space-y-1.5">
+                    <h3 className="text-xl font-semibold text-slate-900 tracking-tight">No Campaigns Yet</h3>
+                    <p className="text-sm font-medium text-slate-500">No campaigns found right now.</p>
+                </div>
                 <button
                     onClick={() => {
                         clearCampaignSession();
@@ -505,130 +650,245 @@ function CampaignResultsContent() {
                     className="bg-blue-600 text-white px-6 py-2.5 rounded-md text-sm font-semibold shadow-sm hover:bg-blue-700 active:scale-[0.98] transition-all"
                 >
                     Generate First Campaign
-            </button>
-        </div>
-    );
-
+                </button>
+            </div>
+        );
+    }
     const activeCampaign = campaigns[activeIndex];
 
     return (
-        <div className="w-full space-y-8 pb-20 px-3 sm:px-4 lg:px-6">
-            <header className="flex items-center justify-between px-2">
-                <div>
-                    <h2 className="text-2xl font-semibold tracking-tight text-slate-900 flex items-center gap-3">
-                        Campaign Editor
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-600 uppercase tracking-widest animate-pulse">Sync Active</span>
-                    </h2>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Review and edit your generated emails before sending.</p>
+        <div className="w-full space-y-6 pb-24 px-3 sm:px-4 lg:px-6 max-w-[1600px] mx-auto">
+            <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-2 py-4">
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => setIsMobileQueueOpen(true)}
+                        className="md:hidden p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                        aria-label="Open Company Queue"
+                    >
+                        <List className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 flex items-center gap-3 text-wrap-balance">
+                            Campaign Editor
+                            {isJobActive ? (
+                                <span className="flex items-center gap-2 text-[7px] font-black px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-[0.2em]">
+                                    <RefreshCw className="w-2 h-2 animate-spin" />
+                                    Generating {generationProgress}%
+                                </span>
+                            ) : (
+                                <span className="hidden xs:inline-block text-[7px] font-black px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-[0.2em]">Live</span>
+                            )}
+                        </h2>
+                        <p className="text-[10px] font-medium text-slate-400 mt-0.5 uppercase tracking-wide">
+                            {isJobActive ? "Drafts are being prepared in real-time" : "Refine and dispatch your outreach campaign"}
+                        </p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => router.push(appPath("/campaigns"))}
-                        className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 rounded-md hover:bg-slate-100 border border-transparent hover:border-slate-200"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all px-4 py-2 rounded-lg hover:bg-slate-100 border border-slate-200"
+                        aria-label="Back to Configuration"
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Config
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline">Back to Config</span>
                     </button>
                     <button
                         onClick={() => {
                             clearCampaignSession();
                             router.push(appPath("/campaigns"));
                         }}
-                        className="text-sm font-medium text-rose-600 hover:text-rose-700 transition-colors px-4 py-2 rounded-md hover:bg-rose-50 border border-rose-200"
+                        className="flex-1 sm:flex-none text-xs font-bold text-rose-600 hover:text-rose-700 transition-all px-4 py-2 rounded-lg hover:bg-rose-50 border border-rose-200"
                     >
                         New Campaign
                     </button>
                 </div>
             </header>
 
-            <div className="grid lg:grid-cols-12 gap-6 items-start">
-                {/* Left: Campaign List */}
-                <div className="lg:col-span-3 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-6 items-start relative">
+                {/* Left: Campaign List (Desktop/Tablet) */}
+                <div className="hidden md:block md:col-span-4 lg:col-span-3 space-y-4 sticky top-6">
                     <div className="flex items-center justify-between px-2">
-                        <h3 className="text-xs font-semibold text-slate-500 tracking-wide">Company Queue</h3>
+                        <h3 className="text-[8px] font-black text-slate-400 uppercase tracking-[0.25em]">Company Queue</h3>
                         {campaigns.length > 1 && (
                             <button
                                 onClick={toggleSelectAll}
-                                className="text-xs font-semibold text-slate-400 hover:text-slate-900 transition-colors flex items-center gap-1.5"
+                                className="text-[8px] font-black text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-blue-50 tracking-[0.1em]"
+                                aria-label={selectedIds.size === campaigns.length ? "Deselect all campaigns" : "Select all campaigns"}
                             >
                                 <div className={cn(
-                                    "w-3.5 h-3.5 rounded border transition-all flex items-center justify-center",
+                                    "w-2.5 h-2.5 rounded border transition-all flex items-center justify-center",
                                     selectedIds.size === campaigns.length && campaigns.length > 0
                                         ? "bg-blue-600 border-blue-700 text-white"
                                         : "bg-white border-slate-300"
                                 )}>
-                                    {selectedIds.size === campaigns.length && campaigns.length > 0 && <Check className="w-2.5 h-2.5" />}
+                                    {selectedIds.size === campaigns.length && campaigns.length > 0 && <Check className="w-2 h-2" />}
                                 </div>
                                 {selectedIds.size === campaigns.length && campaigns.length > 0 ? "DESELECT" : "SELECT ALL"}
                             </button>
                         )}
                     </div>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-y-auto custom-scrollbar divide-y divide-slate-100 max-h-[700px]">
-                        {campaigns.map((c, i) => (
-                            <div
-                                key={c.id}
-                                onClick={() => handleSelectCampaign(i)}
-                                className={cn(
-                                    "p-4 cursor-pointer transition-all duration-200 relative group flex items-start gap-3",
-                                    activeIndex === i ? "bg-slate-50" : "bg-white hover:bg-slate-50/50",
-                                    selectedIds.has(c.id) && "ring-1 ring-inset ring-blue-500/20 bg-blue-50/30"
-                                )}
-                            >
-                                <div
-                                    onClick={(e) => toggleSelect(c.id, e)}
-                                    className={cn(
-                                        "mt-0.5 w-4 h-4 rounded border transition-all flex items-center justify-center shrink-0",
-                                        selectedIds.has(c.id)
-                                            ? "bg-blue-600 border-blue-700 text-white"
-                                            : "bg-white border-slate-300 opacity-0 group-hover:opacity-100"
-                                    )}
-                                >
-                                    {selectedIds.has(c.id) && <Check className="w-3 h-3" />}
-                                </div>
-                                <div className="flex flex-col gap-2 flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className={cn("w-1.5 h-1.5 rounded-full", activeIndex === i ? "bg-blue-600" : "bg-slate-300")} />
-                                            <h4 className={cn("text-xs font-semibold uppercase tracking-wide truncate transition-colors", activeIndex === i ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
-                                                {c.client?.clientName}
-                                            </h4>
-                                        </div>
-                                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 uppercase tracking-widest shrink-0">
-                                            {c.campaignType}
-                                        </span>
-                                    </div>
-                                    <p className={cn(
-                                        "text-[10px] font-medium leading-relaxed line-clamp-1 transition-colors pl-3.5",
-                                        activeIndex === i ? "text-slate-600" : "text-slate-400"
-                                    )}>
-                                        {c.content?.subject}
-                                    </p>
-                                    <div className="pl-3.5">
-                                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500">
-                                            Standard
-                                        </span>
-                                    </div>
-                                </div>
+
+                    <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input 
+                            type="text" 
+                            placeholder="Search clients…"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-slate-100/50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all"
+                        />
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-y-auto custom-scrollbar divide-y divide-slate-100 max-h-[calc(100vh-280px)]">
+                        {filteredCampaigns.length === 0 ? (
+                            <div className="p-8 text-center space-y-2">
+                                <Search className="w-8 h-8 text-slate-200 mx-auto" />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    {isJobActive ? "Scanning Contacts..." : "No matches found"}
+                                </p>
                             </div>
-                        ))}
+                        ) : (
+                            filteredCampaigns.map((c, i) => {
+                                const originalIndex = campaigns.findIndex(orig => orig.id === c.id);
+                                return (
+                                    <div
+                                        key={c.id}
+                                        onClick={() => handleSelectCampaign(originalIndex)}
+                                        className={cn(
+                                            "p-4 cursor-pointer transition-all duration-200 relative group flex items-start gap-3",
+                                            activeIndex === originalIndex ? "bg-slate-50" : "bg-white hover:bg-slate-50/50",
+                                            selectedIds.has(c.id) && "ring-1 ring-inset ring-blue-500/20 bg-blue-50/30"
+                                        )}
+                                    >
+                                        <div
+                                            onClick={(e) => toggleSelect(c.id, e)}
+                                            className={cn(
+                                                "mt-0.5 w-4 h-4 rounded border transition-all flex items-center justify-center shrink-0",
+                                                selectedIds.has(c.id)
+                                                    ? "bg-blue-600 border-blue-700 text-white"
+                                                    : "bg-white border-slate-300 hover:border-slate-400"
+                                            )}
+                                            aria-label={`Select ${c.client?.clientName}`}
+                                        >
+                                            {selectedIds.has(c.id) && <Check className="w-3 h-3" />}
+                                        </div>
+                                        <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className={cn("w-1.5 h-1.5 rounded-full", activeIndex === originalIndex ? "bg-blue-600" : "bg-slate-300")} />
+                                                    <h4 className={cn("text-[9px] font-bold uppercase tracking-wider truncate transition-colors", activeIndex === originalIndex ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
+                                                        {c.client?.clientName}
+                                                    </h4>
+                                                </div>
+                                                <span className="text-[7px] font-black px-1.5 py-0.5 rounded-full border border-slate-100 bg-slate-50 text-slate-300 uppercase tracking-tighter shrink-0">
+                                                    {c.campaignType}
+                                                </span>
+                                            </div>
+                                            <p className={cn(
+                                                "text-[10px] font-medium leading-relaxed line-clamp-1 transition-colors pl-3.5",
+                                                activeIndex === originalIndex ? "text-slate-600" : "text-slate-400"
+                                            )}>
+                                                {c.content?.subject}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
 
-                {/* Center: Editor */}
-                <div className="lg:col-span-6 space-y-6">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[720px] transition-all">
-                        <div className="p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar bg-white">
+                {/* Mobile Drawer Overlay */}
+                <AnimatePresence>
+                    {isMobileQueueOpen && (
+                        <>
+                            <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsMobileQueueOpen(false)}
+                                className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] md:hidden"
+                            />
+                            <motion.div 
+                                initial={{ x: "-100%" }}
+                                animate={{ x: 0 }}
+                                exit={{ x: "-100%" }}
+                                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                                className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-white shadow-2xl z-[101] flex flex-col md:hidden"
+                            >
+                                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Company Queue</h3>
+                                    <button onClick={() => setIsMobileQueueOpen(false)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                                        <X className="w-5 h-5 text-slate-400" />
+                                    </button>
+                                </div>
+                                <div className="p-4 bg-slate-50 border-b border-slate-100">
+                                    <div className="relative group">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search clients…"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100 p-2">
+                                    {filteredCampaigns.map((c, i) => {
+                                        const originalIndex = campaigns.findIndex(orig => orig.id === c.id);
+                                        return (
+                                            <div
+                                                key={c.id}
+                                                onClick={() => { handleSelectCampaign(originalIndex); setIsMobileQueueOpen(false); }}
+                                                className={cn(
+                                                    "p-5 cursor-pointer transition-all rounded-xl relative group flex items-start gap-4 mb-1",
+                                                    activeIndex === originalIndex ? "bg-slate-50" : "bg-white hover:bg-slate-50/50",
+                                                    selectedIds.has(c.id) && "ring-1 ring-inset ring-blue-500/20 bg-blue-50/30"
+                                                )}
+                                            >
+                                                <div
+                                                    onClick={(e) => { e.stopPropagation(); toggleSelect(c.id, e); }}
+                                                    className={cn(
+                                                        "mt-0.5 w-5 h-5 rounded border transition-all flex items-center justify-center shrink-0",
+                                                        selectedIds.has(c.id) ? "bg-blue-600 border-blue-700 text-white" : "bg-white border-slate-300"
+                                                    )}
+                                                >
+                                                    {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 truncate">{c.client?.clientName}</h4>
+                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{c.campaignType}</span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 line-clamp-1">{c.content?.subject}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                <div className="col-span-1 md:col-span-8 lg:col-span-6 space-y-6">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[680px] sm:h-[720px] transition-all relative">
+                        <div className="p-4 sm:p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar bg-white">
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 group">
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                                    <label className="text-xs font-semibold text-slate-500 tracking-wide">Subject</label>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Subject</label>
                                 </div>
                                 <input
                                     type="text"
                                     value={editedSubject}
                                     onChange={(e) => { setEditedSubject(e.target.value); setHasEditedSinceLoad(true); }}
-                                    className="w-full bg-transparent border-none text-[2rem] font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 leading-tight p-0"
-                                    placeholder="Write your subject line..."
+                                    className="w-full bg-transparent border-none text-[1.25rem] sm:text-[1.5rem] font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 leading-tight p-0 text-wrap-balance"
+                                    placeholder={isJobActive ? "Crafting your first draft..." : "Write your subject line…"}
+                                    aria-label="Email Subject"
+                                    disabled={campaigns.length === 0}
                                 />
                             </div>
 
@@ -639,84 +899,63 @@ function CampaignResultsContent() {
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
                                     <label className="text-xs font-semibold text-slate-500 tracking-wide">Message</label>
                                 </div>
-                                {pendingDraft && (
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
-                                        <span>Saved draft found. Restore your last edits?</span>
-                                        <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setEditedSubject(pendingDraft.subject || "");
-                                                    setEditedBody(pendingDraft.bodyHtml || "");
-                                                    setDraftRestored(true);
-                                                    setPendingDraft(null);
-                                                    toast.info("Draft restored.");
-                                                }}
-                                                    className="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
-                                            >
-                                                Restore
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={async () => {
-                                                    try {
-                await fetch(apiPath(`/drafts/${encodeURIComponent(activeDraftContext!)}`), { method: "DELETE" });
-                                                    } catch {}
-                                                    setPendingDraft(null);
-                                                    toast.info("Draft discarded.");
-                                                }}
-                                                    className="px-3 py-1.5 rounded-md bg-white border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors"
-                                            >
-                                                Discard
-                                            </button>
-                                        </div>
+                                {activeDraftContext && (
+                                    <div className="hidden">
+                                        {/* Silent restoration happens in useEffect */}
                                     </div>
                                 )}
-                                {draftRestored && !pendingDraft && (
-                                    <div className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-lg">
-                                        Draft restored. Auto-save is on.
+                                {campaigns.length === 0 && isJobActive ? (
+                                    <div className="space-y-4 animate-pulse">
+                                        <div className="h-4 w-[90%] bg-slate-50 rounded" />
+                                        <div className="h-4 w-[85%] bg-slate-50 rounded" />
+                                        <div className="h-4 w-[95%] bg-slate-50 rounded" />
+                                        <div className="h-4 w-[40%] bg-slate-50 rounded" />
                                     </div>
+                                ) : (
+                                    <RichTextEditor
+                                        content={editedBody}
+                                        onChange={(v) => { setEditedBody(v); setHasEditedSinceLoad(true); }}
+                                        onSave={handleSaveEvolution}
+                                        onSend={() => handleBatchDispatch("SEND")}
+                                        placeholder={isJobActive ? "Drafting narrative..." : "Refine the narrative…"}
+                                        sampleData={activeCampaign?.client}
+                                    />
                                 )}
-                                <RichTextEditor
-                                    content={editedBody}
-                                    onChange={(v) => { setEditedBody(v); setHasEditedSinceLoad(true); }}
-                                    placeholder="Refine the narrative..."
-                                    sampleData={activeCampaign?.client}
-                                />
                             </div>
                         </div>
 
                         {/* Footer HUD */}
-                        <div className="px-8 py-4 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-6">
+                        <div className="px-4 sm:px-8 py-4 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-4 sm:gap-6">
                                 <div className="flex items-center gap-2">
                                     <AlignLeft className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-xs font-semibold text-slate-500">
+                                    <span className="text-[10px] font-bold text-slate-500 tabular-nums">
                                         {editedBody.replace(/<[^>]*>/g, '').length} Chars
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-xs font-semibold text-slate-500">{readingTime}m read</span>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] tabular-nums">{readingTime}m read</span>
                                 </div>
                             </div>
-                            <button
-                                onClick={handleSaveEvolution}
-                                disabled={isSaving}
-                                className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-blue-600 transition-all px-3 py-1.5 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
-                            >
-                                {isSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                {isSaving ? "Saving..." : "Save Changes"}
-                            </button>
+                                <button
+                                    onClick={handleSaveEvolution}
+                                    disabled={isSaving}
+                                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 hover:text-blue-600 transition-all px-4 py-2 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
+                                    aria-label="Save changes to campaign"
+                                >
+                                    {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                    {isSaving ? "SAVING" : "SAVE CHANGES"}
+                                </button>
                         </div>
                     </div>
                 </div>
 
                 {/* Right: Controls & Metrics */}
-                <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-8">
+                <div className="md:col-span-12 lg:col-span-3 space-y-6 lg:sticky lg:top-8">
+                    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-8">
                         <div className="space-y-6">
-                            <h3 className="text-xs font-semibold text-slate-500 tracking-wide text-center">Email Quality</h3>
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] text-center">Email Quality</h3>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="relative group/tooltip flex justify-center cursor-help">
                                     <MicroGauge
@@ -743,11 +982,11 @@ function CampaignResultsContent() {
                             </div>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-4 hidden md:block">
                             {isDispatching && (
                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
-                                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                        <span>{dispatchMode === "DRAFT" ? "Draft progress" : "Sending progress"}</span>
+                                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest tabular-nums">
+                                        <span>{dispatchMode === "DRAFT" ? "Drafting…" : "Sending…"}</span>
                                         <span>{dispatchProgress}%</span>
                                     </div>
                                     <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
@@ -763,7 +1002,8 @@ function CampaignResultsContent() {
                                 <button
                                     onClick={() => handleBatchDispatch("DRAFT")}
                                     disabled={isDispatching || (selectedIds.size === 0 && !campaigns[activeIndex])}
-                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                    aria-label="Save draft to Gmail"
                                 >
                                     {isDispatching && dispatchMode === "DRAFT" ? (
                                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -771,7 +1011,7 @@ function CampaignResultsContent() {
                                         <FileDown className="w-3.5 h-3.5" />
                                     )}
                                     {isDispatching && dispatchMode === "DRAFT"
-                                        ? "Creating Drafts..."
+                                        ? "Creating…"
                                         : selectedIds.size > 1
                                             ? `Save ${selectedIds.size} Drafts`
                                             : "Save Draft"}
@@ -780,14 +1020,15 @@ function CampaignResultsContent() {
                                     onClick={() => handleBatchDispatch("SEND")}
                                     disabled={isDispatching || (selectedIds.size === 0 && !campaigns[activeIndex])}
                                     className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-blue-600 border border-blue-700 text-white text-sm font-semibold shadow-[0_4px_12px_rgba(37,99,235,0.15)] hover:bg-blue-700 active:scale-[0.98] transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                                    aria-label="Send email via Gmail"
                                 >
-                                    {isDispatching ? (
+                                    {isDispatching && dispatchMode === "SEND" ? (
                                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                                     ) : (
                                         <Send className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                                     )}
                                     {isDispatching && dispatchMode === "SEND"
-                                        ? "Sending..."
+                                        ? "Sending…"
                                         : selectedIds.size > 1
                                             ? `Send ${selectedIds.size} Emails`
                                             : "Send Email"}
@@ -799,9 +1040,9 @@ function CampaignResultsContent() {
                             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-12 -mt-12" />
                             <div className="flex items-center gap-2 relative z-10">
                                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                                <h4 className="text-white font-semibold text-xs tracking-wide">Quick Tip</h4>
+                                <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">Quick Tip</h4>
                             </div>
-                            <p className="text-xs text-slate-400 leading-relaxed font-medium relative z-10">
+                            <p className="text-[11px] text-slate-400 leading-relaxed font-medium relative z-10">
                                 This message fits the {activeCampaign?.campaignType} goal. Keep one clear value point and one clear next step.
                             </p>
                             <div className="pt-2 flex items-center gap-2 relative z-10">
@@ -809,12 +1050,76 @@ function CampaignResultsContent() {
                                     <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-slate-900" />
                                     <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-slate-900" />
                                 </div>
-                                <span className="text-[10px] font-semibold text-slate-500">Confidence: High</span>
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">Confidence: High</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Floating Action HUD (Mobile/Selection) */}
+            <AnimatePresence>
+                {(selectedIds.size > 0 || isDispatching) && (
+                    <motion.div 
+                        initial={{ y: 100, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 100, opacity: 0 }}
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-lg"
+                    >
+                        <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 shadow-2xl rounded-2xl p-4 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-lg shadow-blue-500/20 tabular-nums">
+                                    {selectedIds.size || "1"}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Batch</span>
+                                    <span className="text-white text-xs font-bold truncate max-w-[140px]">
+                                        {selectedIds.size === 1 
+                                            ? campaigns.find(c => selectedIds.has(c.id))?.client?.clientName 
+                                            : `${selectedIds.size} Campaigns Ready`}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => handleBatchDispatch("DRAFT")}
+                                    disabled={isDispatching}
+                                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                                >
+                                    {isDispatching && dispatchMode === "DRAFT" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                                    Draft
+                                </button>
+                                <button
+                                    onClick={() => handleBatchDispatch("SEND")}
+                                    disabled={isDispatching}
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                                >
+                                    {isDispatching && dispatchMode === "SEND" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                    Send
+                                </button>
+                                <button 
+                                    onClick={() => setSelectedIds(new Set())}
+                                    className="p-2.5 text-slate-400 hover:text-white transition-colors"
+                                    aria-label="Clear selection"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {isDispatching && (
+                            <div className="absolute -top-1 left-0 right-0 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${dispatchProgress}%` }}
+                                    className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                />
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

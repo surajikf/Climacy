@@ -40,13 +40,19 @@ const settingsSchema = z.object({
 
 export async function GET(request: Request) {
     try {
+        const settings = await getGlobalSettings();
         const session = await getBackendSession(request);
+        
+        // Publicly accessible branding info
+        const brandingInfo = {
+            projectName: settings.projectName || "IKF Outreach",
+            projectLogo: settings.projectLogo || "",
+        };
+
         if (!session?.user?.id) {
-            return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
+            return ok(brandingInfo);
         }
 
-        const settings = await getGlobalSettings();
-        
         // Fetch current user's registered Gmail IDs only
         const gmailAccounts = await prisma.gmailAccount.findMany({
             where: { userId: session.user.id },
@@ -55,7 +61,8 @@ export async function GET(request: Request) {
 
         return ok({
             ...settings,
-            gmailAccounts: gmailAccounts, // Include the accounts list frontend expects
+            ...brandingInfo,
+            gmailAccounts: gmailAccounts, 
             groqApiKey: settings.groqApiKey ? MASK : "",
             openaiApiKey: settings.openaiApiKey ? MASK : "" ,
             googleClientId: settings.googleClientId ? MASK : "",

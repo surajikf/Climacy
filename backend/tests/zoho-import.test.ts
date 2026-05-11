@@ -12,6 +12,13 @@ vi.mock("@/backend/domain/integrations", () => ({
   syncZohoDeals: syncZohoDealsMock,
 }));
 
+vi.mock("@/backend/lib/auth", () => ({
+  isApprovedUser: vi.fn().mockResolvedValue(true),
+  getBackendSession: vi.fn().mockResolvedValue({
+    user: { id: "user_1", role: "USER", status: "APPROVED" },
+  }),
+}));
+
 describe("/api/import/zoho POST", () => {
   beforeEach(() => {
     vi.resetAllMocks();

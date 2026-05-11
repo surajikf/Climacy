@@ -5,6 +5,7 @@ import { z } from "zod";
 const dispatchBatchSchema = z.object({
   campaignIds: z.array(z.string().min(1)).min(1),
   dispatchMode: z.enum(["SEND", "DRAFT"]).optional().default("SEND"),
+  userId: z.string().optional(),
 });
 
 export async function POST(request: Request) {

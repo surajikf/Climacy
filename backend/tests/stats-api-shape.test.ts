@@ -78,7 +78,7 @@ describe("/api/stats GET response contract", () => {
 
     it("includes backward-compatible and new smart dashboard fields", async () => {
         const { GET } = await import("@/app/api/stats/route");
-        const res = await GET();
+        const res = await GET(new Request("http://localhost/api/stats"));
         const payload = await res.json();
 
         expect(res.status).toBe(200);

@@ -1,7 +1,6 @@
-import Groq from "groq-sdk";
-import { getGlobalSettings } from "@/backend/lib/settings";
 import { ok, error } from "@/backend/lib/api-response";
 import { z } from "zod";
+import { runAiWithFallback } from "@/backend/lib/ai-router";
 
 const suggestSchema = z.object({
     topic: z.string().min(1),
@@ -37,22 +36,13 @@ export async function POST(request: Request) {
         }
 
         const { topic, coreMessage, clientName, industry } = parsed.data;
-        const settings = await getGlobalSettings();
-
-        const aiProvider = settings.aiProvider || "Groq";
-        const apiKey = aiProvider === "Groq" ? settings.groqApiKey : settings.openaiApiKey;
-
-        if (!apiKey || apiKey.includes("your_")) {
-            return ok({ 
-                suggestions: [
-                    `Strategic Perspective on ${topic} for ${clientName || "Your Team"}`,
-                    `${industry || "Business"} Intelligence: The ${topic} Shift`,
-                    `Re: Selective Advisory on ${topic}`
-                ]
-            });
-        }
-
-        const prompt = `
+        let aiResult: Awaited<ReturnType<typeof runAiWithFallback>> | null = null;
+        let suggestions: string[] = [];
+        try {
+            aiResult = await runAiWithFallback({
+                messages: [
+                    { role: "system", content: "You are a strategic marketing AI. Return ONLY a JSON object with `suggestions` as an array of strings." },
+                    { role: "user", content: `
             TASK: Generate 3 high-impact, professional, and "Executive Advisory" style subject lines for an email campaign.
             TOPIC: "${topic}"
             CORE MESSAGE: "${coreMessage}"
@@ -64,36 +54,24 @@ export async function POST(request: Request) {
             2. Intellectual, observant, and peer-to-peer tone.
             3. Maximum 60 characters each.
             4. Focus on the strategic value of ${topic}.
-            5. Return ONLY a JSON array of 3 strings.
-        `;
-
-        let suggestions: string[] = [];
-
-        if (aiProvider === "Groq") {
-            const groq = new Groq({ apiKey });
-            const chatCompletion = await groq.chat.completions.create({
-                messages: [
-                    { role: "system", content: "You are a strategic marketing AI. Return ONLY a JSON array of strings." },
-                    { role: "user", content: prompt }
+            5. Return ONLY a JSON object like: {"suggestions":["...","...","..."]}.
+        ` }
                 ],
-                model: settings.aiModel,
-                response_format: { type: "json_object" },
+                responseFormat: "json_object",
             });
-            const content = JSON.parse(chatCompletion.choices[0].message.content || '{"suggestions": []}');
+            const content = JSON.parse(aiResult.content || '{"suggestions": []}');
             suggestions = Array.isArray(content) ? content : (content.suggestions || []);
-        } else if (aiProvider === "OpenAI") {
-            const OpenAI = (await import("openai")).default;
-            const openai = new OpenAI({ apiKey });
-            const chatCompletion = await openai.chat.completions.create({
-                messages: [
-                    { role: "system", content: "You are a strategic marketing AI. Return ONLY a JSON array of strings." },
-                    { role: "user", content: prompt }
-                ],
-                model: settings.aiModel,
-                response_format: { type: "json_object" },
+        } catch (aiErr: any) {
+            if (!String(aiErr?.message || "").includes("No AI provider keys configured")) {
+                console.error("Subject Suggestion AI failed; using local fallback:", aiErr);
+            }
+            return ok({
+                suggestions: [
+                    `Strategic Perspective on ${topic} for ${clientName || "Your Team"}`,
+                    `${industry || "Business"} Intelligence: The ${topic} Shift`,
+                    `Re: Selective Advisory on ${topic}`
+                ]
             });
-            const content = JSON.parse(chatCompletion.choices[0].message.content || '{"suggestions": []}');
-            suggestions = Array.isArray(content) ? content : (content.suggestions || []);
         }
 
         const unique = Array.from(new Set(suggestions.map(s => (s || "").trim()).filter(Boolean)));
@@ -114,6 +92,11 @@ export async function POST(request: Request) {
             suggestions: ranked.map((r) => r.subject).slice(0, 3),
             ranked,
             warnings,
+            aiRouting: {
+                providerUsed: aiResult?.providerUsed || "groq",
+                fallbackActive: aiResult?.fallbackActive || false,
+                groqRetryAt: aiResult?.groqRetryAt || null,
+            }
         });
 
     } catch (err) {

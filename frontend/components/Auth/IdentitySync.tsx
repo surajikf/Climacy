@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -11,30 +11,43 @@ import { toast } from "sonner";
 export function IdentitySync() {
     const { data: session, status } = useSession();
     const [lastSyncEmail, setLastSyncEmail] = useState<string | null>(null);
+    const syncInFlightRef = useRef(false);
 
     useEffect(() => {
         // Only sync if authenticated and we have tokens in the session
         if (status === "authenticated" && session?.user && (session.user as any).refreshToken) {
             const userEmail = (session.user as any).email;
+            if (!userEmail) return;
+            if (lastSyncEmail === userEmail) return;
+            if (syncInFlightRef.current) return;
             
             // Avoid redundant syncs within the same session
             const syncIdentity = async () => {
+                syncInFlightRef.current = true;
                 console.log(`[IDENTITY_SYNC] Attempting synchronization via internal proxy...`);
                 
                 try {
-                    const response = await fetch(`/api/sync-session`, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            email: userEmail,
-                            refreshToken: (session.user as any).refreshToken,
-                            accessToken: (session.user as any).accessToken,
-                            scope: (session.user as any).scope,
-                        }),
-                    });
+                    const postOnce = () =>
+                        fetch(`/api/sync-session`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            credentials: "include",
+                            body: JSON.stringify({
+                                email: userEmail,
+                                refreshToken: (session.user as any).refreshToken,
+                                accessToken: (session.user as any).accessToken,
+                                scope: (session.user as any).scope,
+                            }),
+                        });
+
+                    let response = await postOnce();
+                    if (response.status === 502) {
+                        // short retry for local startup/proxy race conditions
+                        await new Promise((r) => setTimeout(r, 600));
+                        response = await postOnce();
+                    }
 
                     if (!response.ok) {
                         const rawBody = await response.text().catch(() => "");
@@ -43,6 +56,10 @@ export function IdentitySync() {
                             errorData = rawBody ? JSON.parse(rawBody) : {};
                         } catch {
                             errorData = { rawBody };
+                        }
+                        if (response.status === 502) {
+                            console.warn("[IDENTITY_SYNC] Backend sync unavailable (502). Will retry on next interaction.");
+                            return;
                         }
                         console.error("[IDENTITY_SYNC] Server Error:", response.status, errorData);
                         return;
@@ -70,6 +87,8 @@ export function IdentitySync() {
                     if (err.message === "Failed to fetch") {
                         console.warn("[IDENTITY_SYNC] Hint: Ensure your backend server is running on port 3001 and CORS is configured.");
                     }
+                } finally {
+                    syncInFlightRef.current = false;
                 }
             };
 

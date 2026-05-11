@@ -1,7 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
 const prismaClientSingleton = () => {
-    const runtimeUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    let runtimeUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    if (runtimeUrl && !runtimeUrl.includes("connection_limit")) {
+        const separator = runtimeUrl.includes("?") ? "&" : "?";
+        runtimeUrl += `${separator}connection_limit=2`;
+    }
     const baseClient = runtimeUrl
         ? new PrismaClient({ datasourceUrl: runtimeUrl })
         : new PrismaClient();

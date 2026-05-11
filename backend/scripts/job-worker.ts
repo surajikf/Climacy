@@ -8,9 +8,29 @@ import { sanitizeEmailHtml } from "../shared/lib/email-sanitize";
 import { evaluateEmailQuality } from "../shared/lib/campaign-quality";
 import { createStrategicGmailDraft, sendStrategicEmail } from "../lib/mail";
 import { parseCampaignGeneratedOutput } from "../shared/lib/campaign-output";
-import { runGmailSync } from "../lib/workers/gmail-sync";
 
-import Groq from "groq-sdk";
+/**
+ * Aggressively replaces a literal name with a variable placeholder.
+ * Used to scrub hardcoded names from sample drafts.
+ */
+function scrubLiteralName(content: string, nameToScrub: string, replacementVariable: string = "{{fullName}}") {
+    if (!content || !nameToScrub || nameToScrub.length < 3) return content;
+    
+    // Create a regex for the full name
+    const fullRegex = new RegExp(nameToScrub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    let processed = content.replace(fullRegex, replacementVariable);
+
+    // Also try scrubbing the first name part if it's long enough
+    const firstName = nameToScrub.split(' ')[0];
+    if (firstName && firstName.length > 2 && firstName !== nameToScrub) {
+        const firstRegex = new RegExp(`\\b${firstName}\\b`, 'gi');
+        processed = processed.replace(firstRegex, "{{firstName}}");
+    }
+
+    return processed;
+}
+import { runGmailSync } from "../lib/workers/gmail-sync";
+import { runAiWithFallback } from "../lib/ai-router";
 
 type JobRow = {
   id: string;
@@ -21,8 +41,8 @@ type JobRow = {
 };
 
 const POLL_INTERVAL_MS = Number(process.env.JOB_POLL_INTERVAL_MS ?? 1500);
-const MAX_CONCURRENT_JOBS = Number(process.env.JOB_MAX_CONCURRENT_JOBS ?? 2);
-const MAX_GENERATE_CLIENT_CONCURRENCY = Number(process.env.JOB_MAX_GENERATE_CLIENT_CONCURRENCY ?? 3);
+const MAX_CONCURRENT_JOBS = 1; // Only one batch job at a time to save DB pool
+const MAX_GENERATE_CLIENT_CONCURRENCY = 2; // Low concurrency to avoid session pool exhaustion
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -127,6 +147,7 @@ async function runCampaignGenerate(job: JobRow) {
     excludedClientIds,
     serviceFilters = [],
     serviceLogic = "OR",
+    sampleClientId,
   } = payload as any;
 
   const resolvedSources: Array<"INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL"> =
@@ -141,12 +162,6 @@ async function runCampaignGenerate(job: JobRow) {
   }
 
   const settings = await getGlobalSettings();
-  const aiProvider = settings.aiProvider || "Groq";
-  const apiKey = aiProvider === "Groq" ? settings.groqApiKey : settings.openaiApiKey;
-
-  const isApiKeyConfigured =
-    apiKey && apiKey !== "your_groq_api_key_here" && apiKey !== "your_openai_api_key_here";
-  const useMock = !isApiKeyConfigured;
 
   const targetClients: any[] = [];
   if (clientId) {
@@ -166,28 +181,50 @@ async function runCampaignGenerate(job: JobRow) {
     if (client) targetClients.push(client);
   }
 
-  const clients =
-    targetClients.length > 0
-      ? targetClients
-      : (await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
+  let clients = targetClients;
+
+  if (clients.length === 0) {
+    if (clientId) {
+      // If a specific client was requested but not found in the source, don't fallback to others
+      console.warn(`[job-worker] Requested clientId ${clientId} not found in sources ${resolvedSources}`);
+      return { count: 0 };
+    }
+    // Only fallback to batch if no specific clientId was requested
+    clients = (await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
+  }
+
+  console.log(`[job-worker] Starting generation for ${clients.length} clients...`);
 
   if (clients.length === 0) {
     return { count: 0 };
   }
 
-  // Create AI client once per job (faster than per-client instantiation).
-  let groq: any = null;
-  let openai: any = null;
-  if (!useMock) {
-    if (aiProvider === "Groq") {
-      groq = new Groq({ apiKey });
-    } else {
-      const OpenAI = (await import("openai")).default;
-      openai = new OpenAI({ apiKey });
-    }
-  }
-
   const generatedCampaigns = await mapLimit(clients, MAX_GENERATE_CLIENT_CONCURRENCY, async (client, idx) => {
+    // Scrub hardcoded sample names from templates if sampleClientId is provided
+    let localTopic = topic;
+    let localCoreMessage = coreMessage;
+    let localStyleGuide = styleGuide ? { ...styleGuide } : null;
+    let nameToScrub = "";
+
+    if (sampleClientId) {
+      const sampleClient = await prisma.client.findUnique({ where: { id: sampleClientId } });
+      if (sampleClient) {
+        nameToScrub = sampleClient.contactPerson || sampleClient.clientName || "";
+
+        const scrub = (text: string) => {
+          if (!text || !nameToScrub) return text;
+          return scrubLiteralName(text, nameToScrub);
+        };
+
+        localTopic = scrub(localTopic);
+        localCoreMessage = scrub(localCoreMessage);
+        if (localStyleGuide) {
+          localStyleGuide.subject = scrub(localStyleGuide.subject);
+          localStyleGuide.body = scrub(localStyleGuide.body);
+        }
+      }
+    }
+
     const servicesList = client.invoiceServiceNames || "your business infrastructure";
     const greeting = getSmartGreeting(client.contactPerson || client.poc, {
       email: client.email,
@@ -212,7 +249,7 @@ async function runCampaignGenerate(job: JobRow) {
     const companyName = client.clientName || "your company";
     const industry = client.industry || "your industry";
 
-    let subject = replaceVariables(topic || `Strategic Perspective for {{companyName}}`, client);
+    let subject = replaceVariables(localTopic || `Strategic Perspective for {{companyName}}`, client);
     let emailBodyHtml = "";
 
     let resSubject = subject;
@@ -238,32 +275,11 @@ async function runCampaignGenerate(job: JobRow) {
         "GOAL: Re-igniting a dormant partnership. Reference previous successes and acknowledge the 'new chapter' or capability shift that makes a dialogue relevant now. The tone should be nostalgic yet forward-looking.",
     };
 
-    if (styleGuide) {
+    if (localStyleGuide) {
       // STRICT LOGIC: If user provided a style guide (edited sample), 
       // we MUST NOT use AI for generation to ensure 100% structural matching.
-      resSubject = replaceVariables(styleGuide.subject, client);
-      resEmailBody = replaceVariables(styleGuide.body, client);
-    } else if (useMock) {
-      resEmailBody = replaceVariables(coreMessage, client);
-      if (!resEmailBody.toLowerCase().startsWith(greeting.toLowerCase().split(" ")[0])) {
-        resEmailBody = `<p>${greeting},</p>${resEmailBody}`;
-      }
-      resEmailBody = dedupeLeadingSalutation(resEmailBody);
-
-      // Lightweight metrics for mock generation.
-      return {
-        clientId: client.id,
-        clientName: client.clientName,
-        contactPerson: client.contactPerson,
-        campaignType: type,
-        campaignTopic: topic,
-        generatedOutput: JSON.stringify({
-          subject: replaceVariables(resSubject, client),
-          body: resEmailBody,
-          leadStrength: 70,
-          spamRisk: 5,
-        }),
-      };
+      resSubject = replaceVariables(localStyleGuide.subject, client);
+      resEmailBody = replaceVariables(localStyleGuide.body, client);
     } else {
       // AI Logic: ONLY if no styleGuide is provided
       const prompt = `
@@ -279,8 +295,8 @@ async function runCampaignGenerate(job: JobRow) {
                           GOAL:
                           You have been provided with a MASTER DRAFT (Subject and Body). Your task is to perform a HIGH-FIDELITY PERSONALIZATION of this draft for ${client.clientName}.
                           
-                          MASTER SUBJECT: "${topic}"
-                          MASTER BODY: "${coreMessage}"
+                          MASTER SUBJECT: "${localTopic}"
+                          MASTER BODY: "${localCoreMessage}"
                           REQUIRED CTA: "${cta}"
                           LEARNED STYLE MEMORY: ${styleMemory ? JSON.stringify(styleMemory) : "None"}
                           
@@ -307,31 +323,51 @@ async function runCampaignGenerate(job: JobRow) {
       // ... (AI call continues)
       
       try {
-        const chatCompletion = await (aiProvider === "Groq" ? groq : openai).chat.completions.create({
+        const aiPromise = runAiWithFallback({
           messages: [
             { role: "system", content: "You are a strategic marketing AI that outputs ONLY pure JSON. For metrics like leadStrength and spamRisk, ALWAYS use integers between 0 and 100." },
             { role: "user", content: prompt },
           ],
-          model: settings.aiModel,
-          response_format: { type: "json_object" },
+          modelOverride: settings.aiModel,
+          responseFormat: "json_object",
           temperature: 0.7,
         });
-        
-        const rawContent = chatCompletion.choices[0].message.content || "{}";
+
+        // Add 25s timeout to AI call
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error("AI generation timed out")), 25000)
+        );
+
+        const aiResult = (await Promise.race([aiPromise, timeoutPromise])) as any;
+
+        const rawContent = aiResult.content || "{}";
         const content = JSON.parse(rawContent);
         
         resSubject = content.subject || subject;
         resEmailBody = content.body || "";
 
+        // SECONDARY SCRUB: If AI leaked the sample name despite instructions
+        if (nameToScrub) {
+          resSubject = scrubLiteralName(resSubject, nameToScrub);
+          resEmailBody = scrubLiteralName(resEmailBody, nameToScrub);
+          // Run replaceVariables again just in case scrub added new {{vars}}
+          resSubject = replaceVariables(resSubject, client);
+          resEmailBody = replaceVariables(resEmailBody, client);
+        }
+
         // If AI returned empty body, trigger fallback
         if (!resEmailBody || resEmailBody.length < 10) {
             throw new Error("AI returned empty or insufficient content");
         }
-      } catch (err) {
-        console.error(`[job-worker] AI generation failed for client ${client.id}:`, err);
+      } catch (err: any) {
+        if (String(err?.message || "").includes("No AI provider keys configured")) {
+          console.warn(`[job-worker] No Groq/OpenRouter key found. Using deterministic fallback for client ${client.id}.`);
+        } else {
+          console.error(`[job-worker] AI generation failed for client ${client.id}:`, err);
+        }
         // DETERMINISTIC FALLBACK: Use the master draft but still personalize variables
-        resSubject = replaceVariables(subject, client);
-        resEmailBody = replaceVariables(coreMessage, client);
+        resSubject = replaceVariables(localTopic, client);
+        resEmailBody = replaceVariables(localCoreMessage, client);
         
         // Ensure greeting is at start even in fallback
         if (!resEmailBody.toLowerCase().trim().startsWith(greeting.toLowerCase().split(" ")[0])) {
@@ -400,7 +436,7 @@ async function runCampaignGenerate(job: JobRow) {
     if (tenureYears > 2) leadStrength = Math.min(100, leadStrength + 10);
     if (client.relationshipLevel === "Active") leadStrength = Math.min(100, leadStrength + 5);
 
-    return {
+    const campaignData = {
       clientId: client.id,
       clientName: client.clientName,
       contactPerson: client.contactPerson,
@@ -422,32 +458,40 @@ async function runCampaignGenerate(job: JobRow) {
         personalizationMarker: companyName,
       }),
     };
+
+    // ONE-BY-ONE PERSISTENCE: Save immediately so frontend can stream results
+    try {
+      await (prisma as any).campaignHistory.create({
+        data: {
+          clientId: campaignData.clientId,
+          campaignType: campaignData.campaignType,
+          campaignTopic: campaignData.campaignTopic,
+          generatedOutput: campaignData.generatedOutput,
+        },
+      });
+
+      // Update client lastContacted
+      await (prisma as any).client.update({
+        where: { id: client.id },
+        data: { lastContacted: new Date() },
+      });
+
+      // Update job progress
+      const currentProgress = Math.round(((idx + 1) / clients.length) * 100);
+      await (prisma as any).job.update({
+        where: { id: job.id },
+        data: { progress: currentProgress },
+      });
+    } catch (dbErr) {
+      console.error(`[job-worker] Failed to save campaign for client ${client.id}:`, dbErr);
+    }
+
+    return campaignData;
   });
 
   const jobResult = {
     count: generatedCampaigns.length,
   };
-
-  // Persist only for batch jobs (the queued ones always represent batch generation).
-  const clientIds = clients.map((c) => c.id).filter(Boolean);
-
-  if (generatedCampaigns.length > 0) {
-    await (prisma as any).campaignHistory.createMany({
-      data: generatedCampaigns.map((c: any) => ({
-        clientId: c.clientId,
-        campaignType: c.campaignType,
-        campaignTopic: c.campaignTopic,
-        generatedOutput: c.generatedOutput,
-      })),
-    });
-
-    if (clientIds.length > 0) {
-      await (prisma as any).client.updateMany({
-        where: { id: { in: clientIds } },
-        data: { lastContacted: new Date() },
-      });
-    }
-  }
 
   return jobResult;
 }
@@ -487,13 +531,13 @@ async function runDispatchBatch(job: JobRow) {
             subject,
             html: htmlBody,
             text: body.replace(/<[^>]*>/g, ""),
-          })
+          }, { userId: payload?.userId })
         : await sendStrategicEmail({
             to: campaign.client.email,
             subject,
             html: htmlBody,
             text: body.replace(/<[^>]*>/g, ""),
-          });
+          }, { userId: payload?.userId });
 
       if (!result.success) {
         throw new Error(result.error || "Email dispatch failed.");
@@ -548,8 +592,10 @@ async function main() {
         (async () => {
           try {
             if (job.type === "CAMPAIGN_GENERATE") {
+              console.log(`[job-worker] Executing CAMPAIGN_GENERATE for job ${job.id}`);
               const result = await runCampaignGenerate(job);
               await setJobSucceeded(job.id, result);
+              console.log(`[job-worker] CAMPAIGN_GENERATE finished for job ${job.id}`);
             } else if (job.type === "CAMPAIGN_DISPATCH_BATCH") {
               const result = await runDispatchBatch(job);
               await setJobSucceeded(job.id, result);

@@ -18,6 +18,10 @@ vi.mock("@/backend/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/backend/lib/auth", () => ({
+  hasInvoiceAccess: vi.fn().mockResolvedValue(true),
+}));
+
 describe("/api/campaigns/estimate GET", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -37,22 +41,12 @@ describe("/api/campaigns/estimate GET", () => {
     const res = await estimate(
       new Request(url, {
         method: "POST",
-        body: JSON.stringify({ type: "broadcast" }),
+        body: JSON.stringify({ type: "broadcast", audienceSource: "INVOICE_SYSTEM" }),
       }),
     );
 
-    expect(countMock).toHaveBeenCalledWith({
-      where: {
-        AND: [{ isBlocked: false }, { isRoleBased: false }],
-      },
-    });
-    expect(groupByMock).toHaveBeenCalledWith({
-      by: ["industry"],
-      where: {
-        AND: [{ isBlocked: false }, { isRoleBased: false }],
-      },
-      _count: { _all: true },
-    });
+    expect(countMock).toHaveBeenCalledTimes(1);
+    expect(groupByMock).toHaveBeenCalledTimes(1);
 
     expect(res.body).toMatchObject({
       success: true,

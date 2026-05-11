@@ -63,11 +63,29 @@ const FontSize = Extension.create({
 interface RichTextEditorProps {
     content: string;
     onChange: (html: string) => void;
+    onSave?: () => void;
+    onSend?: () => void;
     placeholder?: string;
     sampleData?: any; // To power live preview
 }
 
-export function RichTextEditor({ content, onChange, placeholder, sampleData }: RichTextEditorProps) {
+function notifyAiRoutingStatus(aiRouting: any) {
+    if (!aiRouting) return;
+    if (aiRouting.providerUsed === "openrouter" && aiRouting.fallbackActive) {
+        const retryAt = aiRouting.groqRetryAt
+            ? new Date(aiRouting.groqRetryAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : null;
+        toast.info(
+            retryAt
+                ? `Using backup AI engine. Groq auto-retry after ${retryAt}.`
+                : "Using backup AI engine. Groq will auto-retry shortly."
+        );
+    } else if (aiRouting.providerUsed === "groq" && !aiRouting.fallbackActive) {
+        toast.success("Primary AI engine active.");
+    }
+}
+
+export function RichTextEditor({ content, onChange, onSave, onSend, placeholder, sampleData }: RichTextEditorProps) {
     const [isRefining, setIsRefining] = useState(false);
     const [showMagicMenu, setShowMagicMenu] = useState(false);
     const [isLivePreview, setIsLivePreview] = useState(false);
@@ -126,6 +144,23 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
             },
         },
     });
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                onSave?.();
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                onSend?.();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onSave, onSend]);
 
     // Reset history only when upstream content truly changes (new email loaded).
     // Parent components re-pass `content` on every keystroke; we must NOT reset then.
@@ -191,6 +226,7 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
             });
             const data = await res.json();
             if (data.success) {
+                notifyAiRoutingStatus(data.data?.aiRouting);
                 if (isFullBody) {
                     const normalized = normalizeEmailBodyHtml(data.data.refinedText);
                     isApplyingHistoryRef.current = true;
@@ -346,206 +382,147 @@ export function RichTextEditor({ content, onChange, placeholder, sampleData }: R
     ];
 
     return (
-        <div className="w-full border-2 border-slate-100 rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-slate-200/50">
-            {/* Toolbar */}
-            <div className="flex flex-wrap items-center gap-1.5 p-3 border-b-2 border-slate-50 bg-slate-50/50 sticky top-0 z-10 backdrop-blur-md">
-                {/* History */}
-                <div className="flex items-center border-r border-slate-200 pr-2 mr-1">
-                    <ToolbarButton 
-                        onClick={handleUndo}
-                        disabled={historyState.index <= 0}
-                        icon={<RotateCcw className="w-4 h-4" />}
-                        title={historyState.index <= 0 ? "Undo (at start)" : "Undo"}
-                    />
-                    <ToolbarButton 
-                        onClick={handleRedo}
-                        disabled={historyState.index >= historyState.length - 1}
-                        icon={<RotateCw className="w-4 h-4" />}
-                        title={historyState.index >= historyState.length - 1 ? "Redo (at latest)" : "Redo"}
-                    />
-                </div>
-
-                {/* Magic Pen AI Refiner */}
-                <div className="flex items-center border-r border-slate-200 pr-2 mr-1">
-                    <div className="relative group/magic">
-                        <button 
-                            onClick={() => setShowMagicMenu(!showMagicMenu)}
-                            disabled={isRefining}
-                            className={cn(
-                                "flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all shadow-md",
-                                isRefining 
-                                    ? "bg-indigo-600 text-white animate-pulse shadow-indigo-200" 
-                                    : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-indigo-200"
-                            )}
-                        >
-                            {isRefining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            <span className="text-[10px] font-black uppercase tracking-widest">Improve</span>
-                        </button>
-                        
-                        {showMagicMenu && (
-                            <>
-                                {/* Backdrop to close menu */}
-                                <div className="fixed inset-0 z-40" onClick={() => setShowMagicMenu(false)} />
-                                <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-1 max-h-[70vh] overflow-y-auto">
-                                    {/* Smart helper text */}
-                                    <div className="px-3 py-2 mb-1 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
-                                        <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">
-                                            {editor.state.selection.from !== editor.state.selection.to 
-                                                ? "✅ Text selected — AI will refine your selection"
-                                                : "💡 No selection — AI will work on the full email"
-                                            }
-                                        </p>
-                                    </div>
-
-                                    {magicPenCategories.map((cat, catIdx) => (
-                                        <div key={cat.title}>
-                                            {catIdx > 0 && <div className="border-t border-slate-100 my-1" />}
-                                            <p className="text-[9px] font-bold text-slate-400 px-3 pt-2 pb-1 uppercase tracking-tighter">{cat.title}</p>
-                                            {cat.items.map(opt => (
-                                                <button 
-                                                    key={opt.label}
-                                                    onClick={() => handleRefine(opt.cmd, !!cat.fullBody)}
-                                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-50 text-[11px] font-semibold text-slate-700 hover:text-indigo-700 transition-all flex items-center gap-2 group"
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-indigo-500 transition-colors shrink-0" />
-                                                    {opt.label}
-                                                </button>
-                                            ))}
+        <div className="w-full border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-slate-200/50">
+                        <div className="flex items-center justify-between gap-1 p-1.5 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10 backdrop-blur-md overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1">
+                    {/* Group 1: AI Power */}
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+                        <div className="relative group/magic">
+                            <button 
+                                onClick={() => setShowMagicMenu(!showMagicMenu)}
+                                disabled={isRefining}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all",
+                                    isRefining 
+                                        ? "bg-indigo-600 text-white animate-pulse" 
+                                        : "bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
+                                )}
+                                aria-label="AI Writing Assistant"
+                            >
+                                {isRefining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                <span className="text-[9px] font-black uppercase tracking-[0.1em]">Improve</span>
+                            </button>
+                            
+                            {showMagicMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowMagicMenu(false)} />
+                                    <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-1 max-h-[70vh] overflow-y-auto">
+                                        <div className="px-3 py-2 mb-1 bg-indigo-50 rounded-xl border border-indigo-100">
+                                            <p className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.1em]">
+                                                {editor.state.selection.from !== editor.state.selection.to 
+                                                    ? "Selection detected"
+                                                    : "Full body mode"}
+                                            </p>
                                         </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
+
+                                        {magicPenCategories.map((cat, catIdx) => (
+                                            <div key={cat.title}>
+                                                {catIdx > 0 && <div className="border-t border-slate-100 my-1" />}
+                                                <p className="text-[9px] font-black text-slate-400 px-3 pt-2 pb-1 uppercase tracking-tighter">{cat.title}</p>
+                                                {cat.items.map(opt => (
+                                                    <button 
+                                                        key={opt.label}
+                                                        onClick={() => handleRefine(opt.cmd, !!cat.fullBody)}
+                                                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-50 text-[11px] font-bold text-slate-700 hover:text-indigo-700 transition-all flex items-center gap-2 group"
+                                                    >
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-indigo-500 transition-colors shrink-0" />
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="w-[1px] h-3 bg-slate-200 mx-0.5" />
+
+                    {/* Group 2: Core Formatting */}
+                    <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+                        <ToolbarButton 
+                            onClick={() => editor.chain().focus().toggleBold().run()}
+                            active={editor.isActive('bold')}
+                            icon={<Bold className="w-3 h-3" />}
+                            title="Bold"
+                        />
+                        <ToolbarButton 
+                            onClick={() => editor.chain().focus().toggleItalic().run()}
+                            active={editor.isActive('italic')}
+                            icon={<Italic className="w-3 h-3" />}
+                            title="Italic"
+                        />
+                        <div className="w-[1px] h-2 bg-slate-100 mx-0.5" />
+                        <ToolbarButton 
+                            onClick={() => editor.chain().focus().toggleBulletList().run()}
+                            active={editor.isActive('bulletList')}
+                            icon={<List className="w-3 h-3" />}
+                            title="Bullet List"
+                        />
+                        <ToolbarButton 
+                            onClick={toggleLink}
+                            active={editor.isActive('link')}
+                            icon={<LinkIcon className="w-3 h-3" />}
+                            title="Link"
+                        />
                     </div>
                 </div>
 
-                {/* Typography Basic */}
-                <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().toggleBold().run()}
-                        active={editor.isActive('bold')}
-                        icon={<Bold className="w-4 h-4" />}
-                        title="Bold"
-                    />
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().toggleItalic().run()}
-                        active={editor.isActive('italic')}
-                        icon={<Italic className="w-4 h-4" />}
-                        title="Italic"
-                    />
-                </div>
-
-                {/* Font Size */}
-                <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-                    <ToolbarButton 
-                        onClick={() => (editor.chain() as any).focus().setFontSize('14px').run()}
-                        active={editor.isActive('textStyle', { fontSize: '14px' })}
-                        icon={<span className="text-[10px] font-bold">14</span>}
-                        title="Small"
-                    />
-                    <ToolbarButton 
-                        onClick={() => (editor.chain() as any).focus().setFontSize('18px').run()}
-                        active={editor.isActive('textStyle', { fontSize: '18px' })}
-                        icon={<span className="text-sm font-bold">18</span>}
-                        title="Medium"
-                    />
-                    <ToolbarButton 
-                        onClick={() => (editor.chain() as any).focus().setFontSize('26px').run()}
-                        active={editor.isActive('textStyle', { fontSize: '26px' })}
-                        icon={<span className="text-lg font-bold">26</span>}
-                        title="Large"
-                    />
-                </div>
-
-                {/* Alignment & Structure */}
-                <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                        active={editor.isActive({ textAlign: 'left' })}
-                        icon={<AlignLeft className="w-4 h-4" />}
-                        title="Align Left"
-                    />
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                        active={editor.isActive({ textAlign: 'center' })}
-                        icon={<AlignCenter className="w-4 h-4" />}
-                        title="Align Center"
-                    />
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                        active={editor.isActive('blockquote')}
-                        icon={<Quote className="w-4 h-4" />}
-                        title="Callout Block"
-                    />
-                </div>
-
-                {/* Colors & Highlight */}
-                <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()}
-                        active={editor.isActive('highlight')}
-                        icon={<Highlighter className="w-4 h-4 text-amber-500" />}
-                        title="Highlight"
-                    />
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().setColor('#2563eb').run()}
-                        active={editor.isActive('textStyle', { color: '#2563eb' })}
-                        icon={<CaseUpper className="w-4 h-4 text-blue-600" />}
-                        title="Brand Color"
-                    />
-                </div>
-
-                {/* Smart Variables */}
-                <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-                     <div className="relative group/vars">
-                        <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-all border border-slate-200 shadow-sm">
-                            <Variable className="w-3.5 h-3.5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Add Data</span>
-                            <ChevronDown className="w-3 h-3 opacity-50" />
-                        </button>
-                        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl opacity-0 invisible group-hover/vars:opacity-100 group-hover/vars:visible transition-all z-50 p-2 space-y-1">
-                            {['greeting', 'firstName', 'lastName', 'fullName', 'companyName', 'industry', 'services', 'location', 'relationship', 'tenureYears'].map(v => (
-                                <button 
-                                    key={v}
-                                    onClick={() => insertVariable(v)}
-                                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 text-[11px] font-bold text-slate-700 hover:text-blue-700 transition-colors"
-                                >
-                                    {v === 'greeting' ? 'Smart Greeting' : v.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                                </button>
-                            ))}
-                        </div>
-                     </div>
-                </div>
-
-                {/* Live Data Preview Toggle */}
-                <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-                    <button 
-                        onClick={() => setIsLivePreview(!isLivePreview)}
-                        className={cn(
-                            "flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all border shadow-sm",
-                            isLivePreview 
-                                ? "bg-emerald-600 text-white border-emerald-700" 
-                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        )}
-                    >
-                        {isLivePreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        <span className="text-[10px] font-black uppercase tracking-widest">Live Data</span>
-                    </button>
-                </div>
-
-                {/* Links & Clear */}
                 <div className="flex items-center gap-1">
-                    <ToolbarButton 
-                        onClick={toggleLink}
-                        active={editor.isActive('link')}
-                        icon={<LinkIcon className="w-4 h-4" />}
-                        title="Insert Link"
-                    />
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-                        icon={<Eraser className="w-4 h-4 text-rose-500" />}
-                        title="Clear Formatting"
-                    />
+                    {/* Group 3: Intelligence */}
+                    <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+                        <div className="relative group/vars">
+                            <button 
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 text-slate-600 hover:bg-blue-600 hover:text-white transition-all"
+                            >
+                                <Variable className="w-3 h-3" />
+                                <span className="text-[9px] font-black uppercase tracking-[0.1em]">Add Data</span>
+                            </button>
+                            <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl opacity-0 invisible group-hover/vars:opacity-100 group-hover/vars:visible transition-all z-50 p-2 space-y-1">
+                                {['greeting', 'firstName', 'lastName', 'fullName', 'companyName', 'industry', 'services', 'location', 'relationship'].map(v => (
+                                    <button 
+                                        key={v}
+                                        onClick={() => insertVariable(v)}
+                                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 text-[11px] font-bold text-slate-700 hover:text-blue-700 transition-colors"
+                                    >
+                                        {v === 'greeting' ? 'Smart Greeting' : v.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => setIsLivePreview(!isLivePreview)}
+                            className={cn(
+                                "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all",
+                                isLivePreview 
+                                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200" 
+                                    : "bg-slate-50 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
+                            )}
+                        >
+                            {isLivePreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span className="text-[9px] font-black uppercase tracking-[0.1em]">Live Data</span>
+                        </button>
+                    </div>
+
+                    <div className="w-[1px] h-3 bg-slate-200 mx-0.5" />
+
+                    {/* Group 4: History (Compact) */}
+                    <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+                        <ToolbarButton 
+                            onClick={handleUndo}
+                            disabled={historyState.index <= 0}
+                            icon={<RotateCcw className="w-3 h-3" />}
+                            title="Undo"
+                        />
+                        <ToolbarButton 
+                            onClick={handleRedo}
+                            disabled={historyState.index >= historyState.length - 1}
+                            icon={<RotateCw className="w-3 h-3" />}
+                            title="Redo"
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -589,7 +566,7 @@ function ToolbarButton({ onClick, active, disabled, icon, title }: {
             disabled={disabled}
             title={title}
             className={cn(
-                "p-2 rounded-lg transition-all duration-200 flex items-center justify-center border-2 border-transparent",
+                "p-1.5 sm:p-2 rounded-lg transition-all duration-200 flex items-center justify-center border-2 border-transparent",
                 active 
                     ? "bg-blue-600 text-white shadow-md shadow-blue-200 border-blue-600" 
                     : "text-slate-500 hover:bg-white hover:border-slate-200 hover:text-slate-900",

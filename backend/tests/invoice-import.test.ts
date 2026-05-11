@@ -39,6 +39,10 @@ vi.mock("@/backend/lib/supabase/server", () => ({
   }),
 }));
 
+vi.mock("@/backend/lib/auth", () => ({
+  isAdmin: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("fast-xml-parser", () => {
   return {
     XMLParser: class {

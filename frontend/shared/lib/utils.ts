@@ -5,6 +5,27 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
+/**
+ * Aggressively replaces a literal name with a variable placeholder.
+ * Used to scrub hardcoded names from sample drafts.
+ */
+export function scrubLiteralName(content: string, nameToScrub: string, replacementVariable: string = "{{fullName}}") {
+    if (!content || !nameToScrub || nameToScrub.length < 3) return content;
+    
+    // Create a regex for the full name
+    const fullRegex = new RegExp(nameToScrub.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    let processed = content.replace(fullRegex, replacementVariable);
+
+    // Also try scrubbing the first name part if it's long enough
+    const firstName = nameToScrub.split(' ')[0];
+    if (firstName && firstName.length > 2 && firstName !== nameToScrub) {
+        const firstRegex = new RegExp(`\\b${firstName}\\b`, 'gi');
+        processed = processed.replace(firstRegex, "{{firstName}}");
+    }
+
+    return processed;
+}
+
 type GreetingOptions = {
     email?: string | null;
     signature?: string | null;
@@ -173,3 +194,5 @@ export function replaceVariables(content: string, client: any) {
 
     return processed;
 }
+
+
