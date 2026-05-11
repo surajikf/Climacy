@@ -9,10 +9,12 @@ env:
   REPO_PATH: /var/www/apps/outreach
   APP_USER: ikf-support
   APP_GROUP: www-data
+  NODE_OPTIONS: "--max-old-space-size=2048"
 
 jobs:
   deploy:
     runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -32,26 +34,26 @@ jobs:
           sudo chmod -R u+rwX $REPO_PATH/backend/.next || true
           sudo chmod -R u+rwX $REPO_PATH/frontend/.next || true
 
-      - name: Deploy Application
+      - name: Pull latest code
         run: |
-          echo "Starting deployment..."
           cd $REPO_PATH
-
           git fetch origin main
           git reset --hard origin/main
 
-          echo "Building Backend..."
-          cd backend
+      - name: Build Backend
+        run: |
+          cd $REPO_PATH/backend
           npm ci
           npm run build
 
-          echo "Building Frontend..."
-          cd ../frontend
+      - name: Build Frontend
+        run: |
+          cd $REPO_PATH/frontend
           npm ci
           npm run build
 
-          echo "Restarting PM2 processes..."
-          cd ..
+      - name: Restart PM2 processes
+        run: |
+          cd $REPO_PATH
           pm2 restart ecosystem.config.js
-
           echo "Deployment completed successfully!"
