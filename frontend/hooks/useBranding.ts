@@ -19,6 +19,9 @@ export function useBranding() {
     async function fetchBranding() {
       try {
         const res = await fetch(apiPath("/settings"));
+        if (res.status === 401) {
+          return;
+        }
         const contentType = res.headers.get("content-type") || "";
         if (!res.ok || !contentType.includes("application/json")) {
           const text = await res.text().catch(() => "");
