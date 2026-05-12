@@ -54,15 +54,37 @@ export async function GET(request: Request) {
         }
 
         // Fetch current user's registered Gmail IDs only
-        const gmailAccounts = await prisma.gmailAccount.findMany({
-            where: { userId: session.user.id },
-            orderBy: { updatedAt: "desc" }
-        });
+        const [gmailAccounts, invoiceCount, lastInvoice, gmailCount, lastGmail] = await Promise.all([
+            prisma.gmailAccount.findMany({
+                where: { userId: session.user.id },
+                orderBy: { updatedAt: "desc" }
+            }),
+            prisma.client.count({ where: { source: "INVOICE_SYSTEM" } }),
+            prisma.client.findFirst({
+                where: { source: "INVOICE_SYSTEM" },
+                orderBy: { updatedAt: "desc" },
+                select: { updatedAt: true }
+            }),
+            prisma.client.count({ where: { source: "GMAIL" } }),
+            prisma.client.findFirst({
+                where: { source: "GMAIL" },
+                orderBy: { updatedAt: "desc" },
+                select: { updatedAt: true }
+            })
+        ]);
 
         return ok({
             ...settings,
             ...brandingInfo,
             gmailAccounts: gmailAccounts, 
+            invoiceStats: {
+                count: invoiceCount,
+                lastSyncAt: lastInvoice?.updatedAt || null
+            },
+            gmailStats: {
+                count: gmailCount,
+                lastSyncAt: lastGmail?.updatedAt || null
+            },
             groqApiKey: settings.groqApiKey ? MASK : "",
             openaiApiKey: settings.openaiApiKey ? MASK : "" ,
             googleClientId: settings.googleClientId ? MASK : "",

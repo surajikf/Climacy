@@ -7,6 +7,18 @@
 
 # Backend Changelogs
 
+## 2026-05-12 - Pass 59 (Google Contacts Split Flow + Source Channel Tagging)
+- Added separate Google Contacts OAuth flow:
+  - `GET /api/auth/google-contacts`
+  - `GET /api/auth/google-contacts/callback`
+- Added dedicated Google Contacts sync pipeline:
+  - `POST /api/import/google-contacts`
+  - new worker `services/workers/google-contacts-sync.ts` using Google People API (`people/me/connections`).
+- Kept Gmail and Google Contacts sync concerns separated to reduce operator confusion.
+- Added source-channel metadata tracking during Gmail sync:
+  - writes `metadata.importChannels` with `gmail_inbox`, `gmail_sent`, `gmail_label`.
+- Google Contacts sync now writes `metadata.importChannels` with `google_contacts`.
+
 ## 2026-05-05 - Pass 47 (Outreach Wizard Stabilization & UX Finalization)
 - **Stability – Wizard State Persistence**:
   - Implemented `localStorage` persistence in `OutreachCampaignWizard` to prevent data loss on page refreshes.

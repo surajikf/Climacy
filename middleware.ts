@@ -2,10 +2,6 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
-    const token = await getToken({ 
-        req: request, 
-        secret: process.env.NEXTAUTH_SECRET 
-    });
     const { pathname } = request.nextUrl;
     const withBasePath = (path: string) => `${request.nextUrl.basePath || ""}${path === "/" ? "" : path}` || "/";
 
@@ -18,6 +14,11 @@ export async function middleware(request: NextRequest) {
     ) {
         return NextResponse.next();
     }
+
+    const token = await getToken({ 
+        req: request, 
+        secret: process.env.NEXTAUTH_SECRET 
+    });
 
     // 2. Auth and status routes logic
     const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
@@ -67,5 +68,14 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.).*)'],
+    matcher: [
+        /*
+         * Match all request paths except for the ones starting with:
+         * - _next/static (static files)
+         * - _next/image (image optimization files)
+         * - favicon.ico (favicon file)
+         * - api (api routes)
+         */
+        '/((?!_next/static|_next/image|favicon.ico|api).*)',
+    ],
 };

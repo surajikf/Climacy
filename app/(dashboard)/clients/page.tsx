@@ -361,6 +361,23 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                             MAN
                         </span>
                     )}
+                    {Array.isArray(contact?.metadata?.importChannels) && contact.metadata.importChannels.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                            {contact.metadata.importChannels.map((channel: string) => {
+                                const label =
+                                    channel === "gmail_inbox" ? "Gmail Inbox" :
+                                    channel === "gmail_sent" ? "Gmail Sent" :
+                                    channel === "gmail_label" ? "Gmail Label" :
+                                    channel === "google_contacts" ? "Google Contacts" :
+                                    channel;
+                                return (
+                                    <span key={channel} className="text-[9px] font-black text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-blue-100">
+                                        {label}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </td>
             <td className="px-6 py-5 align-top text-right">
@@ -1336,4 +1353,3 @@ export default function ClientManager() {
         </div>
     );
 }
-

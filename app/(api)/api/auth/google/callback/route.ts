@@ -4,9 +4,18 @@ import { decrypt, encrypt } from "@/services/encryption";
 import { getBackendSession } from "@/services/auth";
 
 type GmailConnectIntent = "send" | "sync" | "both";
+type PendingGmailSyncProfile = {
+    sourceFolders?: Array<"INBOX" | "SENT" | "LABEL">;
+    customLabels?: string[];
+    extractHeaders?: Array<"from" | "to" | "cc" | "bcc">;
+    excludedDomains?: string[];
+    excludedKeywords?: string[];
+    persistBlockList?: boolean;
+    includeAutomatedEmails?: boolean;
+};
 
-function parseState(rawState: string | null): { label: string; intent: GmailConnectIntent; returnTo: string } {
-    if (!rawState) return { label: "", intent: "both", returnTo: "/settings" };
+function parseState(rawState: string | null): { label: string; intent: GmailConnectIntent; returnTo: string; syncProfile: PendingGmailSyncProfile | null } {
+    if (!rawState) return { label: "", intent: "both", returnTo: "/settings", syncProfile: null };
     try {
         const parsed = JSON.parse(rawState);
         const label = typeof parsed?.label === "string" ? parsed.label.trim() : "";
@@ -17,10 +26,13 @@ function parseState(rawState: string | null): { label: string; intent: GmailConn
         const returnTo = typeof parsed?.returnTo === "string" && parsed.returnTo.startsWith("/")
             ? parsed.returnTo
             : "/settings";
-        return { label, intent, returnTo };
+        const syncProfile = typeof parsed?.syncProfile === "object" && parsed?.syncProfile
+            ? parsed.syncProfile as PendingGmailSyncProfile
+            : null;
+        return { label, intent, returnTo, syncProfile };
     } catch {
         // Legacy support: old flow sent plain label in `state`.
-        return { label: rawState.trim(), intent: "both", returnTo: "/settings" };
+        return { label: rawState.trim(), intent: "both", returnTo: "/settings", syncProfile: null };
     }
 }
 
@@ -51,7 +63,7 @@ export async function GET(request: Request) {
         const url = new URL(request.url);
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state");
-        const { label, intent, returnTo } = parseState(state);
+        const { label, intent, returnTo, syncProfile } = parseState(state);
 
         if (!code) {
             return NextResponse.json({ error: "No authorization code received from the matrix." }, { status: 400 });
@@ -166,7 +178,13 @@ export async function GET(request: Request) {
         });
 
         // Redirect back to Settings with success
-        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${returnTo}?auth=success`);
+        const redirectUrl = new URL(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${returnTo}`);
+        redirectUrl.searchParams.set("auth", "success");
+        if (syncProfile) {
+            redirectUrl.searchParams.set("gmail_email", email);
+            redirectUrl.searchParams.set("gmail_sync_profile", encodeURIComponent(JSON.stringify(syncProfile)));
+        }
+        return NextResponse.redirect(redirectUrl.toString());
 
     } catch (error: any) {
         console.error("Neural Link Callback Error:", error);

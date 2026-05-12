@@ -21,10 +21,8 @@ export async function GET(req: NextRequest) {
     zohoAuthUrl.searchParams.set("redirect_uri", redirectUri);
     // Requesting broad scopes for Bigin CRM
     zohoAuthUrl.searchParams.set("scope", [
-        "ZohoBigin.deals.READ",
-        "ZohoBigin.contacts.READ",
-        "ZohoBigin.settings.READ",
-        "ZohoBigin.modules.READ"
+        "ZohoBigin.modules.ALL",
+        "ZohoBigin.settings.ALL"
     ].join(","));
 
     return NextResponse.redirect(zohoAuthUrl.toString());
