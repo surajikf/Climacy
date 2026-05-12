@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npm run *)",
+      "Bash(cat)",
+      "Bash(bash /tmp/check_imports.sh)",
+      "Bash(grep -r \"@/backend/lib/settings\" /e/Cursor/FINAL/IKF_OutReach --include=\"*.ts\" --include=\"*.tsx\" ! -path \"*/.next/*\" ! -path \"*/node_modules/*\")",
+      "Bash(grep -r \"@/services/supabase/server\" /e/Cursor/FINAL/IKF_OutReach --include=\"*.ts\" --include=\"*.tsx\" ! -path \"*/.next/*\" ! -path \"*/node_modules/*\")",
+      "Bash(grep -E \"\\\\.ts$|^d\")",
+      "Bash(bash /tmp/find_broken_relatives.sh)",
+      "Read(//tmp/**)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -I{} taskkill /F /PID {})",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output \"done\")",
+      "Bash(node -e \"const l = require\\('e:/Cursor/FINAL/IKF_OutReach/node_modules/lucide-react'\\); console.log\\('Indent:', !!l.Indent, 'Outdent:', !!l.Outdent, 'Strikethrough:', !!l.Strikethrough\\)\")",
+      "Bash(sed -i 's/text-\\\\[10px\\\\] font-bold text-slate-400 italic/text-xs font-medium text-slate-400 italic/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
+      "Bash(sed -i 's/text-\\\\[10px\\\\] text-slate-300 italic font-bold/text-xs text-slate-300 italic font-medium/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
+      "Bash(sed -i 's/text-\\\\[10px\\\\] font-bold text-slate-300 italic/text-xs font-medium text-slate-300 italic/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
+      "Bash(sed -i 's/text-\\\\[10px\\\\] font-medium text-slate-400 leading-tight/text-xs font-medium text-slate-400 leading-tight/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
+      "Bash(sed -i 's/text-\\\\[10px\\\\] font-bold text-slate-500 font-mono/text-xs font-medium text-slate-500 font-mono/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/settings/page.tsx)"
+    ],
+    "additionalDirectories": [
+      "e:\\Cursor\\FINAL\\IKF_OutReach\\app\\(dashboard)\\campaigns\\list"
+    ]
+  }
+}

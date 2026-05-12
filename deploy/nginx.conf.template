@@ -1,0 +1,42 @@
+# Next.js Standalone Reverse Proxy
+# Location: /etc/nginx/sites-available/outreach
+# Symlink: ln -s /etc/nginx/sites-available/outreach /etc/nginx/sites-enabled/
+
+server {
+    listen 80;
+    server_name your-domain.com; # TODO: Replace with your domain or IP
+
+    # Gzip Compression
+    gzip on;
+    gzip_proxied any;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/rss+xml text/javascript;
+    gzip_vary on;
+
+    # App Proxy
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_intercept_errors off;
+    }
+
+    # Static Assets (served directly by Nginx for performance)
+    location /_next/static {
+        alias /var/www/apps/outreach/.next/standalone/.next/static;
+        expires 365d;
+        access_log off;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /public {
+        alias /var/www/apps/outreach/.next/standalone/public;
+        expires 365d;
+        access_log off;
+    }
+}
