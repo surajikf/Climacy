@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { ok, error } from "@/services/api-response";
+import { getBackendSession, isApprovedUser } from "@/services/auth";
 import { z } from "zod";
 
 const dispatchBatchSchema = z.object({
@@ -10,6 +11,15 @@ const dispatchBatchSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    if (!await isApprovedUser(request)) {
+      return error("FORBIDDEN", "Unauthorized.", { status: 403 });
+    }
+
+    const session = await getBackendSession(request);
+    if (!session?.user?.id) {
+      return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
+    }
+
     const json = await request.json();
     const parsed = dispatchBatchSchema.safeParse(json);
 
@@ -20,12 +30,27 @@ export async function POST(request: Request) {
       });
     }
 
+    const isAdmin = (session.user as any)?.role === "ADMIN";
+    const scopedUserId = isAdmin ? (parsed.data.userId || session.user.id) : session.user.id;
+
+    // Non-admins can only dispatch their own campaigns
+    if (!isAdmin) {
+      const campaigns = await prisma.campaignHistory.findMany({
+        where: { id: { in: parsed.data.campaignIds } },
+        select: { id: true, userId: true },
+      });
+      const forbidden = campaigns.filter((c) => c.userId && c.userId !== session.user.id);
+      if (forbidden.length > 0) {
+        return error("FORBIDDEN", "One or more campaigns do not belong to you.", { status: 403 });
+      }
+    }
+
     const job = await (prisma as any).job.create({
       data: {
         type: "CAMPAIGN_DISPATCH_BATCH",
         status: "QUEUED",
         progress: 0,
-        payload: parsed.data,
+        payload: { ...parsed.data, userId: scopedUserId },
       },
     });
 
@@ -35,4 +60,3 @@ export async function POST(request: Request) {
     return error("INTERNAL_ERROR", "Failed to enqueue dispatch batch.");
   }
 }
-

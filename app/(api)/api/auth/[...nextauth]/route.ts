@@ -74,6 +74,7 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      (session.user as any).id = token.sub;           // DB user id — required for scoping
       (session.user as any).email = token.email;
       (session.user as any).role = token.role;
       (session.user as any).status = (token as any).status || "PENDING";
