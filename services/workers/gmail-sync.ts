@@ -423,6 +423,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
           externalId: `${account.id}:${email}`,
           gmailSourceAccount: account.email,
           isRoleBased: roleBased,
+          userId: account.userId,
           metadata: { importChannels },
         },
       });

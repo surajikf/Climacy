@@ -14,6 +14,7 @@ export interface ListClientsParams {
   sortDir?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  userId?: string;
 }
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -32,12 +33,14 @@ export async function listClients(params: ListClientsParams) {
     sortDir = "desc",
     page = 1,
     pageSize: rawPageSize = DEFAULT_PAGE_SIZE,
+    userId,
   } = params;
 
   const pageSize = Math.min(Math.max(rawPageSize || DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
   const safePage = Math.max(page || 1, 1);
 
   const where: any = {
+    ...(userId && { userId }),
     ...(industries.length > 0 && { industry: { in: industries } }),
     ...(levels.length > 0 && { relationshipLevel: { in: levels } }),
     ...(sources.length > 0 && { source: { in: sources as any } }),
@@ -126,10 +129,11 @@ export interface CreateClientInput {
   industry?: string;
   relationshipLevel: RelationshipLevel;
   serviceIds: string[];
+  userId?: string;
 }
 
 export async function createClient(input: CreateClientInput) {
-  const { clientName, contactPerson, email, industry, relationshipLevel, serviceIds } = input;
+  const { clientName, contactPerson, email, industry, relationshipLevel, serviceIds, userId } = input;
 
   return prisma.client.create({
     data: {
@@ -139,6 +143,7 @@ export async function createClient(input: CreateClientInput) {
       industry: industry || "Other",
       relationshipLevel,
       isRoleBased: isRoleBasedEmail(email),
+      ...(userId && { userId }),
       services: {
         connect: serviceIds.map((id) => ({ id })),
       },

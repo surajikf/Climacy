@@ -129,6 +129,7 @@ export async function runGoogleContactsSync(accountId: string) {
         source: "GMAIL",
         externalId: `${account.id}:google_contacts:${c.email}`,
         gmailSourceAccount: account.email,
+        userId: account.userId,
         metadata: { importChannels: ["google_contacts"] },
       },
     });

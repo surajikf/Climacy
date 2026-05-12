@@ -1,6 +1,6 @@
 import { estimateCampaignAudience } from "@/domain/campaigns";
 import { ok, error } from "@/services/api-response";
-import { hasInvoiceAccess } from "@/services/auth";
+import { hasInvoiceAccess, getBackendSession } from "@/services/auth";
 import { z } from "zod";
 
 const estimateQuerySchema = z.object({
@@ -14,6 +14,11 @@ const estimateQuerySchema = z.object({
 
 export async function POST(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        const user = session?.user;
+        const isAdmin = user?.role === "ADMIN";
+        const scopedUserId = isAdmin ? undefined : user?.id;
+
         const json = await request.json();
         const parsed = estimateQuerySchema.safeParse(json);
 
@@ -34,7 +39,7 @@ export async function POST(request: Request) {
         if (resolvedSources.includes("INVOICE_SYSTEM") && !await hasInvoiceAccess(request)) {
             return error("FORBIDDEN", "Invoice data access is not enabled for this user.", { status: 403 });
         }
-        const { count, industries } = await estimateCampaignAudience(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds);
+        const { count, industries } = await estimateCampaignAudience(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds, scopedUserId);
 
         return ok({ count, industries });
     } catch (err) {
@@ -42,4 +47,3 @@ export async function POST(request: Request) {
         return error("INTERNAL_ERROR", "Internal Server Error");
     }
 }
-

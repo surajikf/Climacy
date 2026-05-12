@@ -90,9 +90,11 @@ export async function estimateCampaignAudience(
   type: CampaignType,
   serviceFilters: string[] = [],
   serviceLogic: 'AND' | 'OR' = 'OR',
-  excludedIds: string[] = []
+  excludedIds: string[] = [],
+  userId?: string,
 ) {
   const where = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, false);
+  if (userId) where.userId = userId;
 
   // Sequentialize to avoid PgBouncer/Transaction mode concurrency hangs
   const count = await prisma.client.count({ where });
@@ -113,15 +115,17 @@ export interface CampaignHistoryFilter {
   search?: string;
   type?: string;
   ids?: string[];
+  userId?: string;
 }
 
 export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
-  const { limit = 50, search = "", type = "", ids = [] } = filter;
+  const { limit = 50, search = "", type = "", ids = [], userId } = filter;
 
   const where: any = {
     client: {
       isRoleBased: false,
     },
+    ...(userId && { userId }),
   };
 
   if (ids.length > 0) {
@@ -170,9 +174,11 @@ export async function getTargetClients(
   serviceFilters: string[] = [],
   serviceLogic: 'AND' | 'OR' = 'OR',
   excludedIds: string[] = [],
-  includeExclusions: boolean = false
+  includeExclusions: boolean = false,
+  userId?: string,
 ) {
   const where = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
+  if (userId) where.userId = userId;
 
   return await prisma.client.findMany({
     where,
