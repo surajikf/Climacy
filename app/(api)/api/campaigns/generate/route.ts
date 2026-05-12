@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getTargetClients } from "@/domain/campaigns";
 import { dedupeLeadingSalutation, normalizeEmailBodyHtml } from "@/lib/shared/email-format";
 import { evaluateEmailQuality } from "@/lib/shared/campaign-quality";
-import { hasInvoiceAccess } from "@/services/auth";
+import { hasInvoiceAccess, getBackendSession } from "@/services/auth";
 import { runAiWithFallback } from "@/services/ai-router";
 
 /**
@@ -57,6 +57,10 @@ const generateCampaignSchema = z.object({
 
 export async function POST(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        const sessionUser = session?.user;
+        const isAdmin = sessionUser?.role === "ADMIN";
+        const scopedUserId = isAdmin ? undefined : sessionUser?.id;
         const json = await request.json();
         const parsed = generateCampaignSchema.safeParse(json);
 
@@ -103,7 +107,7 @@ export async function POST(request: Request) {
         if (sampleOnly && clientId) {
             // Specific client requested for sample
             const client = await prisma.client.findFirst({
-                where: { id: clientId, source: { in: resolvedSources as any } },
+                where: { id: clientId, source: { in: resolvedSources as any }, ...(scopedUserId && { userId: scopedUserId }) },
                 select: {
                     id: true,
                     clientName: true,
@@ -119,7 +123,7 @@ export async function POST(request: Request) {
             if (client) targetClients = [client];
         } else {
             // Fetch potential targets respecting segmentation and exclusions
-            const allTargets = await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds);
+            const allTargets = await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds, false, scopedUserId);
             
             if (sampleOnly) {
                 // Pick one "random" (first) client for the sample
@@ -445,7 +449,8 @@ export async function POST(request: Request) {
                     clientId: c.clientId,
                     campaignType: c.campaignType,
                     campaignTopic: c.campaignTopic,
-                    generatedOutput: c.generatedOutput
+                    generatedOutput: c.generatedOutput,
+                    userId: sessionUser?.id ?? null,
                 })) as any
             });
 

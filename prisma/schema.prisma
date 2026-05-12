@@ -34,11 +34,14 @@ model Client {
   clientAddedOn       DateTime?
   invoiceServiceNames String?
   isBlocked           Boolean           @default(false)
+  userId              String?
   campaigns           CampaignHistory[]
   services            Service[]         @relation("ClientServices")
   metadata            Json?             @default("{}")
+  user                User?             @relation(fields: [userId], references: [id])
 
   @@unique([source, externalId])
+  @@index([userId])
 }
 
 model Service {
@@ -55,8 +58,12 @@ model CampaignHistory {
   campaignTopic   String
   generatedOutput String
   clientId        String?
+  userId          String?
   dateCreated     DateTime @default(now())
   client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user            User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 enum JobStatus {
@@ -163,9 +170,11 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  drafts EmailDraft[]
-  gmailAccounts GmailAccount[]
-  zohoConnection ZohoConnection?
+  drafts          EmailDraft[]
+  gmailAccounts   GmailAccount[]
+  zohoConnection  ZohoConnection?
+  clients         Client[]
+  campaignHistory CampaignHistory[]
 }
 
 model GmailAccount {

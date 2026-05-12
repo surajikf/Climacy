@@ -17,7 +17,8 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "100", 10);
     const search = searchParams.get("search") || "";
 
-    const campaigns = await listCampaignHistory({ limit, search });
+    const isAdmin = user.role === "ADMIN";
+    const campaigns = await listCampaignHistory({ limit, search, userId: isAdmin ? undefined : user.id });
     const campaignIds = campaigns.map((c: any) => c.id).filter(Boolean);
 
     const draftRows = campaignIds.length

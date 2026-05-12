@@ -71,6 +71,8 @@ export async function GET(request: Request) {
     try {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
+        const isAdmin = session?.user?.role === "ADMIN";
+        const scopedUserId = isAdmin ? undefined : userId;
         const { searchParams } = new URL(request.url);
         const industries = searchParams.getAll("industry");
         const levels = searchParams.getAll("level");
@@ -90,7 +92,8 @@ export async function GET(request: Request) {
         const pageSizeRaw = parseInt(searchParams.get("pageSize") || "25", 10) || 25;
 
         // Fetch granular source stats for the mini dashboard
-        const statsBaseWhere: any = canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } };
+        const userScope = scopedUserId ? { userId: scopedUserId } : {};
+        const statsBaseWhere: any = { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
         const [sourceStatsRaw, gmailStatsRaw, gmailAccounts] = await Promise.all([
             prisma.client.groupBy({
                 by: ['source', 'relationshipLevel'],
@@ -150,6 +153,7 @@ export async function GET(request: Request) {
 
         // Fetch Filter Distribution Stats (Smart Targeting Data)
         const statsWhere = {
+            ...userScope,
             isRoleBased: showRoleBased,
             isBlocked: false,
             ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" as const } }),
@@ -206,6 +210,7 @@ export async function GET(request: Request) {
             sortDir,
             page,
             pageSize: pageSizeRaw,
+            userId: scopedUserId,
         });
 
         const emails = clients
@@ -286,6 +291,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const session = await getBackendSession(request);
         const parsed = await parseJsonBody(createClientSchema, request);
         if (!parsed.ok) {
             return parsed.response;
@@ -300,6 +306,7 @@ export async function POST(request: Request) {
             industry: body.industry ?? undefined,
             relationshipLevel: body.relationshipLevel,
             serviceIds: body.serviceIds || [],
+            userId: session?.user?.id,
         });
 
         return ok(client);

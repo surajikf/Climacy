@@ -221,11 +221,12 @@ export async function syncZohoDeals(userId: string): Promise<ZohoSyncResult> {
       
       const upsertSql = `
         INSERT INTO "Client" (
-          "id", "clientName", "contactPerson", "email", "industry", "relationshipLevel", 
-          "source", "externalId", "zohoTags", "isRoleBased", "metadata", 
+          "id", "clientName", "contactPerson", "email", "industry", "relationshipLevel",
+          "source", "externalId", "zohoTags", "isRoleBased", "metadata", "userId",
           "updatedAt", "createdAt"
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7::"ClientSource", $8, $9::text[], $10, $11::jsonb, NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7::"ClientSource", $8, $9::text[], $10, $11::jsonb, $12,
+          NOW(), NOW()
         )
         ON CONFLICT ("source", "externalId") DO UPDATE SET
           "clientName" = EXCLUDED."clientName",
@@ -234,6 +235,7 @@ export async function syncZohoDeals(userId: string): Promise<ZohoSyncResult> {
           "zohoTags" = EXCLUDED."zohoTags",
           "isRoleBased" = EXCLUDED."isRoleBased",
           "metadata" = EXCLUDED."metadata",
+          "userId" = COALESCE("Client"."userId", EXCLUDED."userId"),
           "updatedAt" = NOW()
       `;
 
@@ -249,7 +251,8 @@ export async function syncZohoDeals(userId: string): Promise<ZohoSyncResult> {
         externalId,
         mappedData.zohoTags,
         mappedData.isRoleBased,
-        JSON.stringify(mappedData.metadata)
+        JSON.stringify(mappedData.metadata),
+        userId
       );
 
       logMsg(`[Zoho Sync] Successfully synced client: ${clientName} (Role-Based: ${isRoleBasedEmail(email)})`);

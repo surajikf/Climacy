@@ -14,6 +14,9 @@ export async function GET(request: Request) {
     try {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
+        const isAdmin = session?.user?.role === "ADMIN";
+        const canInvoice = isAdmin || Boolean(session?.user?.invoiceAccess);
+        const userFilter = isAdmin ? {} : { userId: userId ?? "__none__" };
         type SourceCount = { source: string; gmailSourceAccount: string | null; _count: number };
         type DailyCampaign = { dateCreated: Date };
         type DailyClient = { createdAt: Date };
@@ -37,16 +40,18 @@ export async function GET(request: Request) {
             // Level distribution
             prisma.client.groupBy({
                 by: ['relationshipLevel'],
+                where: userFilter,
                 _count: true
             }),
             // Monthly trends
             Promise.all([
-                prisma.client.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
-                prisma.campaignHistory.count({ where: { dateCreated: { gte: thirtyDaysAgo } } })
+                prisma.client.count({ where: { ...userFilter, createdAt: { gte: thirtyDaysAgo } } }),
+                prisma.campaignHistory.count({ where: { ...userFilter, dateCreated: { gte: thirtyDaysAgo } } })
             ]),
             // Industry distribution (Top 5)
             prisma.client.groupBy({
                 by: ['industry'],
+                where: userFilter,
                 _count: true,
                 orderBy: { _count: { industry: 'desc' } },
                 take: 5
@@ -65,9 +70,10 @@ export async function GET(request: Request) {
             }),
             // Data integrity (count missing fields instead of fetching all)
             Promise.all([
-                prisma.client.count(),
+                prisma.client.count({ where: userFilter }),
                 prisma.client.count({
                     where: {
+                        ...userFilter,
                         AND: [
                             { contactPerson: { not: null } },
                             { contactPerson: { not: "" } },
@@ -80,16 +86,17 @@ export async function GET(request: Request) {
             // Daily activity for chart
             Promise.all([
                 prisma.campaignHistory.findMany({
-                    where: { dateCreated: { gte: sevenDaysAgo } },
+                    where: { ...userFilter, dateCreated: { gte: sevenDaysAgo } },
                     select: { dateCreated: true }
                 }),
                 prisma.client.findMany({
-                    where: { createdAt: { gte: sevenDaysAgo } },
+                    where: { ...userFilter, createdAt: { gte: sevenDaysAgo } },
                     select: { createdAt: true }
                 })
             ]),
             // Recent activity
             prisma.campaignHistory.findMany({
+                where: userFilter,
                 take: 6,
                 orderBy: { dateCreated: "desc" },
                 select: {
@@ -107,10 +114,11 @@ export async function GET(request: Request) {
             // Source Breakdown
             prisma.client.groupBy({
                 by: ['source', 'gmailSourceAccount'],
+                where: userFilter,
                 _count: true
             }),
             prisma.campaignHistory.count({
-                where: { dateCreated: { gte: sevenDaysAgo } }
+                where: { ...userFilter, dateCreated: { gte: sevenDaysAgo } }
             }),
         ]);
 
@@ -136,6 +144,7 @@ export async function GET(request: Request) {
         const [dailyCampaignsRaw, dailyClientsRaw] = dailyActivityRaw;
         const noContact30d = await prisma.client.count({
             where: {
+                ...userFilter,
                 OR: [
                     { lastContacted: null },
                     { lastContacted: { lt: thirtyDaysAgo } },
@@ -155,7 +164,7 @@ export async function GET(request: Request) {
 
         (sourceCountsRaw as SourceCount[]).forEach((sc) => {
             if (sc.source === 'ZOHO_BIGIN') sourceStats.zoho += sc._count;
-            if (sc.source === 'INVOICE_SYSTEM') sourceStats.invoice += sc._count;
+            if (sc.source === 'INVOICE_SYSTEM' && canInvoice) sourceStats.invoice += sc._count;
             if (sc.source === 'GMAIL') {
                 const source = sc.gmailSourceAccount?.trim();
                 if (!source) {

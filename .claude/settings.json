@@ -21,7 +21,21 @@
       "Bash(sed -i 's/text-\\\\[10px\\\\] text-slate-300 italic font-bold/text-xs text-slate-300 italic font-medium/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
       "Bash(sed -i 's/text-\\\\[10px\\\\] font-bold text-slate-300 italic/text-xs font-medium text-slate-300 italic/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
       "Bash(sed -i 's/text-\\\\[10px\\\\] font-medium text-slate-400 leading-tight/text-xs font-medium text-slate-400 leading-tight/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/clients/page.tsx)",
-      "Bash(sed -i 's/text-\\\\[10px\\\\] font-bold text-slate-500 font-mono/text-xs font-medium text-slate-500 font-mono/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/settings/page.tsx)"
+      "Bash(sed -i 's/text-\\\\[10px\\\\] font-bold text-slate-500 font-mono/text-xs font-medium text-slate-500 font-mono/g' e:/Cursor/FINAL/IKF_OutReach/app/\\\\\\(dashboard\\\\\\)/settings/page.tsx)",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(git merge *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(sed -n '395,420p' services/workers/gmail-sync.ts)",
+      "Bash(sed -n '100,125p' services/workers/google-contacts-sync.ts)",
+      "Bash(npx dotenv *)",
+      "Bash(set DIRECT_URL=postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres)",
+      "Bash(set DATABASE_URL=postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres)",
+      "PowerShell(cd \"e:\\\\Cursor\\\\FINAL\\\\IKF_OutReach\"; $env:DATABASE_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; $env:DIRECT_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; npx prisma migrate dev --name add_user_scoping_to_client_and_campaign 2>&1)",
+      "PowerShell(cd \"e:\\\\Cursor\\\\FINAL\\\\IKF_OutReach\"; $env:DATABASE_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; $env:DIRECT_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; npx prisma db push 2>&1)"
     ],
     "additionalDirectories": [
       "e:\\Cursor\\FINAL\\IKF_OutReach\\app\\(dashboard)\\campaigns\\list"
