@@ -517,6 +517,20 @@ async function runDispatchBatch(job: JobRow) {
   const campaignIds: string[] = Array.isArray(payload?.campaignIds) ? payload.campaignIds : [];
   const dispatchMode: "SEND" | "DRAFT" = payload?.dispatchMode === "DRAFT" ? "DRAFT" : "SEND";
   const userId = payload?.userId ? String(payload.userId) : null;
+  const batchSize: number = typeof payload?.batchSize === "number" ? Math.max(1, Math.min(500, payload.batchSize)) : 50;
+  const batchDelayMs: number = typeof payload?.batchDelayMinutes === "number" ? payload.batchDelayMinutes * 60 * 1000 : 5 * 60 * 1000;
+  const scheduledAt: Date | null = payload?.scheduledAt ? new Date(payload.scheduledAt) : null;
+
+  // Scheduled dispatch: if not yet time, requeue and exit
+  if (scheduledAt && scheduledAt > new Date()) {
+    console.log(`[job-worker] Dispatch job ${job.id} is scheduled for ${scheduledAt.toISOString()}. Requeueing.`);
+    await (prisma as any).job.update({
+      where: { id: job.id },
+      data: { status: "QUEUED", startedAt: null },
+    });
+    await sleep(Math.min(scheduledAt.getTime() - Date.now(), 60_000));
+    return { scheduled: true, scheduledAt: scheduledAt.toISOString() };
+  }
 
   if (!userId) {
     console.warn("[job-worker] Dispatch batch started without explicit userId. Falling back to default identity.");
@@ -525,6 +539,8 @@ async function runDispatchBatch(job: JobRow) {
   const total = campaignIds.length;
   let successCount = 0;
   const failures: Array<{ campaignId: string; error: string }> = [];
+
+  console.log(`[job-worker] Dispatch batch: ${total} campaigns, batchSize=${batchSize}, delay=${batchDelayMs / 60000}min, mode=${dispatchMode}`);
 
   for (let i = 0; i < campaignIds.length; i++) {
     const campaignId = campaignIds[i];
@@ -579,8 +595,19 @@ async function runDispatchBatch(job: JobRow) {
         }).catch((err: any) => console.warn(`[job-worker] Failed to store draftId for ${campaignId}:`, err));
       }
 
-      // Smart Rate Limiting: 150ms delay to prevent burst issues
+      // Per-email rate limiting
       await sleep(150);
+
+      // Batch boundary: pause between batches to respect Gmail daily limits
+      const isEndOfBatch = (i + 1) % batchSize === 0 && i + 1 < total;
+      if (isEndOfBatch && batchDelayMs > 0) {
+        console.log(`[job-worker] Batch boundary after ${i + 1} emails. Waiting ${batchDelayMs / 60000}min before next batch.`);
+        await (prisma as any).job.update({
+          where: { id: job.id },
+          data: { progress: Math.round(((i + 1) / total) * 100) },
+        });
+        await sleep(batchDelayMs);
+      }
 
       successCount++;
     } catch (e: any) {

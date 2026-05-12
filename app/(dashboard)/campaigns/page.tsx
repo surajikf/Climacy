@@ -28,6 +28,7 @@ import {
     Database,
     ChevronRight,
     Loader2,
+    Clock,
 } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 import { SmartLoader } from "@/components/layout/SmartLoader";
@@ -204,6 +205,13 @@ export default function CampaignGenerator() {
     const [editedSubject, setEditedSubject] = useState("");
     const [editedBody, setEditedBody] = useState("");
     const [reviewTab, setReviewTab] = useState<"edit" | "preview">("edit");
+
+    // Schedule & batch state
+    const [sendMode, setSendMode] = useState<"now" | "scheduled">("now");
+    const [scheduledAt, setScheduledAt] = useState("");
+    const [batchSize, setBatchSize] = useState(50);
+    const [batchDelayMinutes, setBatchDelayMinutes] = useState(5);
+    const [showBatchSettings, setShowBatchSettings] = useState(false);
     
     // Client Selection State
     const [targetClients, setTargetClients] = useState<any[]>([]);
@@ -751,6 +759,9 @@ export default function CampaignGenerator() {
                     serviceLogic: serviceLogic,
                     excludedClientIds: finalExcludedIds,
                     sampleClientId: sampleData?.clientId,
+                    batchSize,
+                    batchDelayMinutes,
+                    scheduledAt: sendMode === "scheduled" && scheduledAt ? new Date(scheduledAt).toISOString() : null,
                 }),
             });
 
@@ -962,7 +973,79 @@ export default function CampaignGenerator() {
                                 </div>
                             </div>
 
-                            <div className="pt-6 space-y-3">
+                            {/* Schedule & Batch Settings */}
+                            <div className="pt-4 border-t border-slate-100 space-y-3">
+                                <p className="text-xs font-medium text-slate-500">Send Settings</p>
+
+                                {/* Send Now / Schedule toggle */}
+                                <div className="flex bg-slate-100 rounded-lg p-1">
+                                    <button onClick={() => setSendMode("now")} className={cn("flex-1 py-1.5 text-xs font-medium rounded-md transition-all", sendMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}>
+                                        Send Now
+                                    </button>
+                                    <button onClick={() => setSendMode("scheduled")} className={cn("flex-1 py-1.5 text-xs font-medium rounded-md transition-all", sendMode === "scheduled" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}>
+                                        Schedule
+                                    </button>
+                                </div>
+
+                                {sendMode === "scheduled" && (
+                                    <input
+                                        type="datetime-local"
+                                        value={scheduledAt}
+                                        min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                                        onChange={(e) => setScheduledAt(e.target.value)}
+                                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-none focus:border-blue-500 transition-all bg-white"
+                                    />
+                                )}
+
+                                {/* Batch settings toggle */}
+                                <button onClick={() => setShowBatchSettings(v => !v)} className="w-full flex items-center justify-between text-xs text-slate-500 hover:text-slate-700 transition-colors py-1">
+                                    <span className="font-medium">Batch Settings</span>
+                                    <span className="text-slate-400">{showBatchSettings ? "▲" : "▼"} {batchSize}/batch · {batchDelayMinutes}min gap</span>
+                                </button>
+
+                                {showBatchSettings && (
+                                    <div className="bg-slate-50 rounded-lg p-3 space-y-3 border border-slate-100">
+                                        {/* Gmail limit warning */}
+                                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
+                                            <span className="text-amber-500 text-xs mt-0.5">⚠</span>
+                                            <p className="text-[10px] text-amber-700 leading-relaxed">Gmail allows ~500 emails/day (free) or 2,000/day (Workspace). Batching prevents blocks.</p>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-medium text-slate-500">Emails per batch</label>
+                                            <div className="flex gap-1.5 flex-wrap">
+                                                {[10, 25, 50, 100].map(n => (
+                                                    <button key={n} onClick={() => setBatchSize(n)} className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-all", batchSize === n ? "bg-blue-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-blue-300")}>
+                                                        {n}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-medium text-slate-500">Delay between batches</label>
+                                            <div className="flex gap-1.5 flex-wrap">
+                                                {[1, 5, 10, 15, 30].map(m => (
+                                                    <button key={m} onClick={() => setBatchDelayMinutes(m)} className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-all", batchDelayMinutes === m ? "bg-blue-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-blue-300")}>
+                                                        {m}m
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Estimated time */}
+                                        {selectedRecipientsCount > 0 && (
+                                            <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                                                {Math.ceil(selectedRecipientsCount / batchSize)} batch{Math.ceil(selectedRecipientsCount / batchSize) !== 1 ? "es" : ""} ·{" "}
+                                                ~{Math.ceil((Math.ceil(selectedRecipientsCount / batchSize) - 1) * batchDelayMinutes)} min total
+                                                {selectedRecipientsCount > 500 && <span className="text-amber-500 ml-1">· Exceeds 500/day limit</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-2.5">
                                 <button
                                     onClick={handleGenerateSingleClient}
                                     disabled={isSavingSingle || isGenerating}
@@ -977,10 +1060,16 @@ export default function CampaignGenerator() {
                                     className="w-full bg-slate-900 text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group disabled:opacity-50"
                                 >
                                     {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-                                    Generate All
+                                    {sendMode === "scheduled" && !isGenerating ? <Clock className="w-4 h-4" /> : null}
+                                    {isGenerating ? "Generating…" : sendMode === "scheduled" ? "Schedule All" : "Generate All"}
                                     {!isGenerating && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
                                 </button>
-                                <p className="text-xs text-center text-slate-400 mt-1">Generate All creates emails for all {selectedRecipientsCount} matching clients.</p>
+                                <p className="text-[11px] text-center text-slate-400">
+                                    {sendMode === "scheduled" && scheduledAt
+                                        ? `Scheduled for ${new Date(scheduledAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`
+                                        : `${selectedRecipientsCount} clients · ${Math.ceil(selectedRecipientsCount / batchSize)} batch${Math.ceil(selectedRecipientsCount / batchSize) !== 1 ? "es" : ""}`
+                                    }
+                                </p>
                             </div>
                         </div>
                         <div className="bg-amber-50 border border-amber-100 rounded-xl p-5 flex gap-4">
@@ -1128,7 +1217,7 @@ export default function CampaignGenerator() {
                     </div>
                 </div>
 
-                <div className="w-full lg:w-[22rem] 2xl:w-96 flex-shrink-0 lg:sticky lg:top-6 space-y-4 md:space-y-6">
+                <div className="w-full lg:w-[22rem] 2xl:w-96 flex-shrink-0 self-start lg:sticky lg:top-4 space-y-4 md:space-y-6">
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                             <Network className="w-4 h-4 text-blue-600" />

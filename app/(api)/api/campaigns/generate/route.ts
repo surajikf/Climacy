@@ -54,6 +54,9 @@ const generateCampaignSchema = z.object({
     excludedClientIds: z.array(z.string()).optional().default([]),
     sampleClientId: z.string().optional(),
     singleClientId: z.string().optional(),
+    batchSize: z.number().int().min(1).max(500).optional().default(50),
+    batchDelayMinutes: z.number().min(0).max(60).optional().default(5),
+    scheduledAt: z.string().nullable().optional(),
 });
 
 export async function POST(request: Request) {
