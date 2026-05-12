@@ -424,22 +424,20 @@ export default function CampaignGenerator() {
             .then(async res => {
                 const contentType = res.headers.get("content-type");
                 if (!res.ok || !contentType?.includes("application/json")) {
-                    const text = await res.text();
-                    throw new Error("Request failed. Please try again.");
+                    setAudienceData({ count: 0, industries: [] });
+                    return null;
                 }
                 return res.json();
             })
             .then(data => {
+                if (!data) return;
                 if (data.success) {
                     setAudienceData({ count: data.data.count, industries: data.data.industries });
                 } else {
-                    toast.error(data.error?.message || "Could not load audience data.");
                     setAudienceData({ count: 0, industries: [] });
                 }
             })
-            .catch(err => {
-                console.error("Audience estimation error:", err);
-                toast.error(err.message || "Network error. Please retry.");
+            .catch(() => {
                 setAudienceData({ count: 0, industries: [] });
             })
             .finally(() => setLoadingAudience(false));

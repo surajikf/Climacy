@@ -497,14 +497,14 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                                 <div className="fixed inset-0 z-40" onClick={() => setShowMagicMenu(false)} />
                                 <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-1 max-h-[65vh] overflow-y-auto">
                                     <div className="px-3 py-2 mb-1 bg-indigo-50 rounded-xl border border-indigo-100">
-                                        <p className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.1em]">
+                                        <p className="text-[9px] font-medium text-indigo-600">
                                             {editor.state.selection.from !== editor.state.selection.to ? "Selection detected" : "Full body mode"}
                                         </p>
                                     </div>
                                     {magicPenCategories.map((cat, idx) => (
                                         <div key={cat.title}>
                                             {idx > 0 && <div className="border-t border-slate-100 my-1" />}
-                                            <p className="text-[9px] font-black text-slate-400 px-3 pt-2 pb-1 uppercase tracking-tighter">{cat.title}</p>
+                                            <p className="text-[9px] font-medium text-slate-400 px-3 pt-2 pb-1">{cat.title}</p>
                                             {cat.items.map(opt => (
                                                 <button
                                                     key={opt.label}
@@ -591,7 +591,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                 )}
 
                 {isLivePreview && (
-                    <div className="absolute top-3 right-4 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-emerald-200 shadow-sm animate-pulse">
+                    <div className="absolute top-3 right-4 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-medium border border-emerald-200 shadow-sm animate-pulse">
                         Previewing Live Data
                     </div>
                 )}

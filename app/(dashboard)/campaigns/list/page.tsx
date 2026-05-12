@@ -339,7 +339,7 @@ export default function CampaignListPage() {
 
                 {/* Desktop table */}
                 <div className="hidden lg:block bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-12 gap-3 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50">
+                    <div className="grid grid-cols-12 gap-3 px-5 py-3 text-xs font-medium text-slate-400 border-b border-slate-100 bg-slate-50">
                         <div className="col-span-4">Client / Subject</div>
                         <div className="col-span-2">Type</div>
                         <div className="col-span-2">Status</div>

@@ -540,6 +540,10 @@ async function runDispatchBatch(job: JobRow) {
   let successCount = 0;
   const failures: Array<{ campaignId: string; error: string }> = [];
 
+  // Deduplicate: track which email addresses have already been sent to in this batch.
+  // If the same email appears across Invoice, Gmail, or Zoho clients, only the first campaign wins.
+  const sentEmails = new Set<string>();
+
   console.log(`[job-worker] Dispatch batch: ${total} campaigns, batchSize=${batchSize}, delay=${batchDelayMs / 60000}min, mode=${dispatchMode}`);
 
   for (let i = 0; i < campaignIds.length; i++) {
@@ -553,6 +557,19 @@ async function runDispatchBatch(job: JobRow) {
       if (!campaign || !campaign.client || !campaign.client.email) {
         throw new Error("Campaign client email missing.");
       }
+
+      // Deduplicate across all email addresses on this client record
+      const recipientEmails = campaign.client.email
+        .split(",")
+        .map((e: string) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isDuplicate = recipientEmails.some((e: string) => sentEmails.has(e));
+      if (isDuplicate) {
+        console.log(`[job-worker] Skipping duplicate email(s) ${recipientEmails.join(", ")} for campaign ${campaignId}`);
+        failures.push({ campaignId, error: "Duplicate email — already sent in this batch." });
+        continue;
+      }
+      recipientEmails.forEach((e: string) => sentEmails.add(e));
 
       const parsedOutput = parseCampaignGeneratedOutput(campaign.generatedOutput);
       const { subject, body } = parsedOutput;

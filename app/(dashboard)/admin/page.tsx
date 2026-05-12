@@ -195,11 +195,11 @@ export default function AdminDashboard() {
           <table className="w-full text-left min-w-[860px]">
             <thead className="bg-slate-50/70 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">User</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Account</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Role</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Invoice</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 text-right">Action</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">User</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Account</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Role</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Invoice</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -383,7 +383,7 @@ function SummaryCard({
 
   return (
     <div className={`rounded-xl border px-4 py-3 ${tones[tone]}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-semibold">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
     </div>
   );

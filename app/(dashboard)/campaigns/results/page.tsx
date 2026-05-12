@@ -99,7 +99,7 @@ const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: numbe
             </div>
             <div className="text-center space-y-0.5">
                 <span className="block text-lg font-bold text-slate-900 leading-none">{safeValue}%</span>
-                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</span>
+                <span className="block text-[11px] font-medium text-slate-500">{label}</span>
             </div>
         </div>
     );
@@ -693,7 +693,7 @@ function CampaignResultsContent() {
                 </p>
             </div>
             <div className="w-full max-w-xs space-y-2">
-                <div className="flex justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                <div className="flex justify-between text-[11px] font-semibold text-slate-400">
                     <span>Progress</span>
                     <span>{generationProgress}%</span>
                 </div>
@@ -832,7 +832,7 @@ function CampaignResultsContent() {
                         {filteredCampaigns.length === 0 ? (
                             <div className="p-8 text-center space-y-2">
                                 <Search className="w-8 h-8 text-slate-200 mx-auto" />
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                <p className="text-xs font-medium text-slate-400">
                                     {isJobActive ? "Scanning Contacts..." : "No matches found"}
                                 </p>
                             </div>
@@ -967,7 +967,7 @@ function CampaignResultsContent() {
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 group">
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Subject</label>
+                                    <label className="text-xs font-medium text-slate-400">Subject</label>
                                 </div>
                                 <input
                                     type="text"
@@ -1017,19 +1017,19 @@ function CampaignResultsContent() {
                             <div className="flex items-center gap-4 sm:gap-6">
                                 <div className="flex items-center gap-2">
                                     <AlignLeft className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-[10px] font-bold text-slate-500 tabular-nums">
+                                    <span className="text-[10px] font-medium text-slate-500 tabular-nums">
                                         {editedBody.replace(/<[^>]*>/g, '').length} Chars
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] tabular-nums">{readingTime}m read</span>
+                                    <span className="text-[10px] font-medium text-slate-400 tabular-nums">{readingTime}m read</span>
                                 </div>
                             </div>
                                 <button
                                     onClick={handleSaveEvolution}
                                     disabled={isSaving}
-                                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 hover:text-blue-600 transition-all px-4 py-2 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
+                                    className="flex items-center gap-2 text-[10px] font-medium text-slate-400 hover:text-blue-600 transition-all px-4 py-2 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
                                     aria-label="Save changes to campaign"
                                 >
                                     {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -1073,7 +1073,7 @@ function CampaignResultsContent() {
                         <div className="space-y-4 hidden md:block">
                             {isDispatching && (
                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
-                                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest tabular-nums">
+                                    <div className="flex justify-between items-center text-[10px] font-medium text-slate-500 tabular-nums">
                                         <span>{dispatchMode === "DRAFT" ? "Drafting…" : "Sending…"}</span>
                                         <span>{dispatchProgress}%</span>
                                     </div>
@@ -1138,7 +1138,7 @@ function CampaignResultsContent() {
                                     <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-slate-900" />
                                     <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-slate-900" />
                                 </div>
-                                <span className="text-[9px] font-bold text-slate-500 uppercase">Confidence: High</span>
+                                <span className="text-[10px] font-medium text-slate-500">Confidence: High</span>
                             </div>
                         </div>
                     </div>
