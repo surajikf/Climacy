@@ -554,21 +554,16 @@ function CampaignResultsContent() {
             setDispatchMode(mode);
             setDispatchProgress(0);
 
-            const currentUserId = (session?.user as any)?.id || (session?.user as any)?.sub;
-            
-            if (!currentUserId) {
-                toast.error("User session is invalid. Please sign in again.");
-                setIsDispatching(false);
-                return;
-            }
+            // id is now always set by the session callback (token.sub → session.user.id)
+            const currentUserId = (session?.user as any)?.id || (session?.user as any)?.sub || null;
 
             const res = await fetch(apiPath("/campaigns/dispatch/batch"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    campaignIds: idsToDispatch, 
+                body: JSON.stringify({
+                    campaignIds: idsToDispatch,
                     dispatchMode: mode,
-                    userId: currentUserId 
+                    userId: currentUserId
                 })
             });
 
