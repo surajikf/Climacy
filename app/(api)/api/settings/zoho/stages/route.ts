@@ -7,6 +7,16 @@ const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_1
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, "0").substring(0, 32);
 const RAW_ENCRYPTION_IV = process.env.ENCRYPTION_IV || "default_iv_12345";
 const ENCRYPTION_IV = RAW_ENCRYPTION_IV.padEnd(16, "0").substring(0, 16);
+const DEFAULT_STAGES = [
+    "Qualification",
+    "Needs Analysis",
+    "Value Proposition",
+    "Identify Decision Makers",
+    "Proposal/Price Quote",
+    "Negotiation/Review",
+    "Closed Won",
+    "Closed Lost",
+];
 
 function decrypt(encryptedText: string | null): string | null {
     if (!encryptedText) return null;
@@ -51,7 +61,12 @@ export async function GET(req: Request) {
 
         if (!clientId || !clientSecret || !refreshToken) {
             console.error("[ZOHO_STAGES] Decryption failed or empty credentials.");
-            return error("ZOHO_CONFIG_ERROR", "Failed to decrypt Zoho credentials.");
+            return ok({
+                stages: Array.isArray(settings.zohoStages) && settings.zohoStages.length > 0 ? settings.zohoStages : DEFAULT_STAGES,
+                pipelineName: settings.zohoPipelineName || "Sales Pipeline",
+                degraded: true,
+                reason: "ZOHO_CREDENTIAL_DECRYPT_FAILED",
+            });
         }
 
         console.log("[ZOHO_STAGES] Refreshing access token...");
@@ -71,7 +86,12 @@ export async function GET(req: Request) {
 
         if (!accessToken) {
             console.error("[ZOHO_STAGES] Token refresh failed:", tokenData);
-            return error("ZOHO_AUTH_FAILED", `Failed to refresh Zoho token: ${tokenData.error || 'Unknown error'}`);
+            return ok({
+                stages: Array.isArray(settings.zohoStages) && settings.zohoStages.length > 0 ? settings.zohoStages : DEFAULT_STAGES,
+                pipelineName: settings.zohoPipelineName || "Sales Pipeline",
+                degraded: true,
+                reason: "ZOHO_TOKEN_REFRESH_FAILED",
+            });
         }
         
         const targetPipelineName = settings.zohoPipelineName || "Sales Pipeline";

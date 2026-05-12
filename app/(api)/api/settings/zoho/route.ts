@@ -42,16 +42,26 @@ export async function GET(req: Request) {
         const session = await getBackendSession(req);
         if (!session?.user?.id) return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
 
-        const settings = await prisma.globalSettings.findFirst();
-        const zohoConnection = await prisma.zohoConnection.findUnique({
-            where: { userId: session.user.id },
-            select: { id: true },
-        });
+        const [settings, zohoConnection, clientCount, lastClient] = await Promise.all([
+            prisma.globalSettings.findFirst(),
+            prisma.zohoConnection.findUnique({
+                where: { userId: session.user.id },
+                select: { id: true },
+            }),
+            prisma.client.count({ where: { source: "ZOHO_BIGIN" } }),
+            prisma.client.findFirst({
+                where: { source: "ZOHO_BIGIN" },
+                orderBy: { updatedAt: "desc" },
+                select: { updatedAt: true }
+            })
+        ]);
 
         return ok({
             hasClientId: !!process.env.ZOHO_CLIENT_ID || !!settings?.zohoClientIdEncrypted,
             hasClientSecret: !!process.env.ZOHO_CLIENT_SECRET || !!settings?.zohoClientSecretEncrypted,
             hasRefreshToken: !!zohoConnection,
+            clientCount,
+            lastSyncAt: lastClient?.updatedAt || null,
             pipelineName: settings?.zohoPipelineName || "Sales Pipeline",
             stageName: settings?.zohoStageName || "Closed Won",
             zohoFieldMapping: settings?.zohoFieldMapping || [],

@@ -6,10 +6,14 @@ export async function GET() {
         const db = prisma as any;
         const result = await db.globalSettings.upsert({
             where: { id: "singleton" },
-            update: { projectName: "IKF Outreach" },
+            update: { 
+                projectName: "IKF Outreach",
+                smtpSenderName: "IKF Outreach"
+            },
             create: {
                 id: "singleton",
                 projectName: "IKF Outreach",
+                smtpSenderName: "IKF Outreach",
                 aiProvider: "Groq",
                 aiModel: "llama-3.3-70b-versatile"
             },

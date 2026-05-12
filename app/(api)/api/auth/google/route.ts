@@ -3,6 +3,15 @@ import prisma from "@/lib/prisma";
 import { decrypt } from "@/services/encryption";
 
 type GmailConnectIntent = "send" | "sync" | "both";
+type PendingGmailSyncProfile = {
+    sourceFolders?: Array<"INBOX" | "SENT" | "LABEL">;
+    customLabels?: string[];
+    extractHeaders?: Array<"from" | "to" | "cc" | "bcc">;
+    excludedDomains?: string[];
+    excludedKeywords?: string[];
+    persistBlockList?: boolean;
+    includeAutomatedEmails?: boolean;
+};
 
 function parseIntent(raw: string | null): GmailConnectIntent {
     if (raw === "send" || raw === "sync" || raw === "both") return raw;
@@ -26,6 +35,16 @@ export async function GET(request: Request) {
         const label = (searchParams.get("label") || searchParams.get("state") || "").trim(); // legacy compatibility
         const intent = parseIntent(searchParams.get("intent"));
         const returnTo = (searchParams.get("returnTo") || "/settings").trim();
+        const syncProfileRaw = (searchParams.get("syncProfile") || "").trim();
+        let syncProfile: PendingGmailSyncProfile | null = null;
+        if (syncProfileRaw) {
+            try {
+                const parsed = JSON.parse(syncProfileRaw);
+                syncProfile = typeof parsed === "object" && parsed ? parsed as PendingGmailSyncProfile : null;
+            } catch {
+                syncProfile = null;
+            }
+        }
 
         const clientId = await resolveGoogleClientId();
         if (!clientId) {
@@ -49,6 +68,7 @@ export async function GET(request: Request) {
             label: label || "",
             intent,
             returnTo: returnTo.startsWith("/") ? returnTo : "/settings",
+            syncProfile,
             version: 1,
         };
 

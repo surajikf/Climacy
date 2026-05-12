@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const backendInternalUrl =
-  process.env.BACKEND_INTERNAL_URL?.trim().replace(/\/+$/, "") || "http://localhost:3001";
-
-function buildBackendUrl() {
-  return `${backendInternalUrl}/api/auth/sync-session`;
+function buildBackendUrl(req: NextRequest) {
+  return new URL("/api/auth/sync-session", req.nextUrl.origin).toString();
 }
 
 function buildForwardHeaders(req: NextRequest) {
@@ -22,7 +19,7 @@ function buildForwardHeaders(req: NextRequest) {
 
 export async function OPTIONS(req: NextRequest) {
   try {
-    const response = await fetch(buildBackendUrl(), {
+    const response = await fetch(buildBackendUrl(req), {
       method: "OPTIONS",
       headers: buildForwardHeaders(req),
       cache: "no-store",
@@ -50,7 +47,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
-    const response = await fetch(buildBackendUrl(), {
+    const response = await fetch(buildBackendUrl(req), {
       method: "POST",
       headers: buildForwardHeaders(req),
       body,

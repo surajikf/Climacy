@@ -6,6 +6,7 @@ import { z } from "zod";
 
 const gmailImportSchema = z.object({
     accountId: z.string().min(1, "Account ID required"),
+    cleanupMode: z.enum(["none", "safe_cleanup"]).optional(),
     options: z.object({
         sourceFolders: z.array(z.enum(["INBOX", "SENT", "LABEL"])).min(1).max(3).optional(),
         customLabels: z.array(z.string().min(1)).max(10).optional(),
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
             });
         }
 
-        const { accountId, options } = parsed.data;
+        const { accountId, options, cleanupMode } = parsed.data;
 
         const account = await prisma.gmailAccount.findFirst({
             where: { id: accountId, userId: session.user.id },
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
         if (immediate) {
             console.log(`[GMAIL_ROUTE] Running immediate sync for account: ${accountId}`);
             try {
-                const result = await runGmailSync(accountId, options);
+                const result = await runGmailSync(accountId, options, cleanupMode);
                 return ok({ ...result, immediate: true });
             } catch (syncErr: any) {
                 console.error("[GMAIL_ROUTE] Immediate sync failed:", syncErr);
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
                 type: "GMAIL_IMPORT",
                 status: "QUEUED",
                 progress: 0,
-                payload: { accountId, options: options || null },
+                payload: { accountId, options: options || null, cleanupMode: cleanupMode || "none" },
             },
         });
 

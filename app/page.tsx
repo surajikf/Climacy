@@ -135,16 +135,39 @@ export default function Dashboard() {
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
             <p className="text-sm font-medium text-slate-500 mt-1">Easily see your client status and what needs attention next.</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              Updated {formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })} ┬╖ Confidence {safe.confidence}
-              {lastRefreshedAt ? ` ┬╖ Refreshed ${formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}` : ""}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <div 
+                  className={`w-1.5 h-1.5 rounded-full ${safe.confidence === 'High' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-amber-500'}`} 
+                  title={`${safe.confidence} Confidence`}
+                />
+                <span className="text-[10px] font-bold text-slate-700">{safe.confidence}</span>
+              </div>
+              
+              <div className="w-px h-3 bg-slate-200" />
+              
+              <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500">
+                <span title={`Data updated ${formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })}`}>
+                  Updated {formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })}
+                </span>
+                {lastRefreshedAt && (
+                  <>
+                    <div className="w-1 h-1 rounded-full bg-slate-300" />
+                    <span title={`Last refreshed ${formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}`}>
+                      Refreshed {formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
+
             <button
               onClick={() => fetchStats(true)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
               Refresh
             </button>
           </div>

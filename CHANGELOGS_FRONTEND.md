@@ -1,5 +1,14 @@
 # Frontend Changelogs
 
+## 2026-05-12 - Pass 59 (Integration Clarity: Gmail vs Google Contacts)
+- Added a separate **Google Contacts** integration card in Import Studio with independent connect/sync actions.
+- Kept Gmail integration focused on Gmail-only behavior to avoid mixed mental model with Contacts API.
+- Improved Gmail sync filter UX copy:
+  - clearer “Send / Sync / Do Both” option text
+  - clarified `Block domains` and `Block keywords` behavior with inline helper text.
+- Added source-channel badges in Clients table from `metadata.importChannels`:
+  - `Gmail Inbox`, `Gmail Sent`, `Gmail Label`, `Google Contacts`.
+
 ## 2026-05-05 - Pass 58 (Bug Fix: Outreach Wizard Module Resolution)
 - **Import Resolution Fix:** Corrected a broken relative import path in the `OutreachCampaignWizard` (`page.tsx`) and re-routed `apiPath` to the correct internal library.
 

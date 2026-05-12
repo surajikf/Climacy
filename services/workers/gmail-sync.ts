@@ -14,6 +14,7 @@ type GmailSyncOptions = {
   persistBlockList?: boolean;
   includeAutomatedEmails?: boolean;
 };
+type GmailCleanupMode = "none" | "safe_cleanup";
 
 function toTitleCase(value: string) {
   return value
@@ -138,7 +139,7 @@ async function mapLimit<T, R>(
   });
 }
 
-export async function runGmailSync(accountId: string, options?: GmailSyncOptions) {
+export async function runGmailSync(accountId: string, options?: GmailSyncOptions, cleanupMode: GmailCleanupMode = "none") {
   console.log(`[GMAIL_SYNC] Starting sync for account: ${accountId}`);
   const syncOptions = normalizeSyncOptions(options);
 
@@ -279,7 +280,10 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   };
 
   const headerList = Array.from(new Set(syncOptions.extractHeaders.map((h) => h.toLowerCase())));
-  const metadataParams = headerList.map((h) => `metadataHeaders=${encodeURIComponent(h.charAt(0).toUpperCase() + h.slice(1))}`).join("&");
+  const metadataHeaderNames = Array.from(new Set([...headerList, "subject"]));
+  const metadataParams = metadataHeaderNames
+    .map((h) => `metadataHeaders=${encodeURIComponent(h.charAt(0).toUpperCase() + h.slice(1))}`)
+    .join("&");
   const detailItems = await mapLimit(messages, 5, async (msg: any) => {
     const detailRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&${metadataParams}`,
@@ -291,6 +295,9 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
 
   for (const detail of detailItems) {
     const headers = (detail as any)?.payload?.headers || [];
+    const snippet = String((detail as any)?.snippet || "").toLowerCase();
+    const subjectHeader = headers.find((h: any) => String(h?.name || "").toLowerCase() === "subject");
+    const subject = String(subjectHeader?.value || "").toLowerCase();
     headers.forEach((h: any) => {
       const headerName = String(h?.name || "").toLowerCase();
       if (!headerList.includes(headerName)) return;
@@ -299,7 +306,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
         const emailLower = String(res.email || "").toLowerCase();
         const domain = emailLower.split("@")[1] || "";
         const isExcludedByDomain = syncOptions.excludedDomains.has(domain);
-        const payload = `${emailLower} ${String(res.name || "").toLowerCase()}`;
+        const payload = `${emailLower} ${String(res.name || "").toLowerCase()} ${subject} ${snippet}`;
         const isExcludedByKeyword = syncOptions.excludedKeywords.some((keyword) => payload.includes(keyword));
         const automatedCategory = classifyAutomatedEmail(emailLower, String(res.name || ""));
         const isAutomatedBlocked = !syncOptions.includeAutomatedEmails && !!automatedCategory;
@@ -342,6 +349,26 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
     }
   }
 
+  if (cleanupMode === "safe_cleanup") {
+    // Safe cleanup: only mark clearly out-of-scope records as blocked.
+    // This is intentionally non-destructive and reversible.
+    const excludedDomains = Array.from(syncOptions.excludedDomains.values()).map((d) => d.trim().toLowerCase()).filter(Boolean);
+    if (excludedDomains.length > 0) {
+      for (const domain of excludedDomains) {
+        await prisma.client.updateMany({
+          where: {
+            source: "GMAIL",
+            gmailSourceAccount: account.email,
+            email: { endsWith: `@${domain}` },
+          },
+          data: { isBlocked: true },
+        }).catch(() => {
+          // non-fatal
+        });
+      }
+    }
+  }
+
   // 4) Upsert Clients
   console.log(`[GMAIL_SYNC] Processing ${contacts.size} extracted contacts...`);
   const emailList = Array.from(contacts.keys());
@@ -352,6 +379,10 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const existingMap = new Map(existing.map((c) => [String(c.email).toLowerCase(), c.source]));
 
   const contactEntries = Array.from(contacts.entries());
+  const importChannels: string[] = [];
+  if (syncOptions.sourceFolders.includes("INBOX")) importChannels.push("gmail_inbox");
+  if (syncOptions.sourceFolders.includes("SENT")) importChannels.push("gmail_sent");
+  if (syncOptions.sourceFolders.includes("LABEL")) importChannels.push("gmail_label");
   const upsertResults = await mapLimit(contactEntries, 5, async ([email, info]: any) => {
     const existingSource = existingMap.get(String(email).toLowerCase());
     const isConflict = !!(existingSource && existingSource !== "GMAIL");
@@ -361,6 +392,13 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
     const resolvedContactPerson = resolvedName || null;
 
     try {
+      const prev = await prisma.client.findUnique({ where: { email }, select: { metadata: true } });
+      const prevMeta = prev?.metadata && typeof prev.metadata === "object" ? (prev.metadata as any) : {};
+      const prevChannels = Array.isArray(prevMeta.importChannels) ? prevMeta.importChannels : [];
+      const metadata = {
+        ...prevMeta,
+        importChannels: Array.from(new Set([...prevChannels, ...importChannels])),
+      };
       await prisma.client.upsert({
         where: {
           source_externalId: {
@@ -373,6 +411,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
           contactPerson: resolvedContactPerson,
           gmailSourceAccount: account.email,
           isRoleBased: roleBased,
+          metadata,
         },
         create: {
           clientName: resolvedClientName,
@@ -384,6 +423,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
           externalId: `${account.id}:${email}`,
           gmailSourceAccount: account.email,
           isRoleBased: roleBased,
+          metadata: { importChannels },
         },
       });
     } catch (err) {
@@ -406,4 +446,3 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
     skippedAutomatedSamples,
   };
 }
-
