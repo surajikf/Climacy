@@ -16,9 +16,9 @@ jobs:
       - name: Sync Project Files
         run: |
           sudo rsync -av --delete \
-          --exclude='.env' \
-          --exclude='node_modules' \
-          ./ /var/www/apps/outreach/
+            --exclude='.env' \
+            --exclude='node_modules' \
+            ./ /var/www/apps/outreach/
 
       - name: Set Permissions
         run: |
@@ -45,6 +45,6 @@ jobs:
           cd /var/www/apps/outreach
           pm2 restart outreach --update-env
 
-          - name: Save PM2
-          run: |
+      - name: Save PM2
+        run: |
           pm2 save
