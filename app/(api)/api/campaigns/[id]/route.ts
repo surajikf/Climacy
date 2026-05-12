@@ -51,3 +51,32 @@ export async function PATCH(
         return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
     }
 }
+
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { id } = await params;
+    try {
+        const session = await getBackendSession(request);
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const userId = session.user.id;
+        const isAdmin = (session.user as any)?.role === "ADMIN";
+
+        const record = await prisma.campaignHistory.findUnique({ where: { id } });
+        if (!record) {
+            return NextResponse.json({ error: "Not found." }, { status: 404 });
+        }
+        if (!isAdmin && record.userId !== userId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
+        await prisma.campaignHistory.delete({ where: { id } });
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error("Failed to delete campaign:", error);
+        return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    }
+}
