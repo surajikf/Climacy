@@ -72,7 +72,8 @@ export async function GET(request: Request) {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
         const isAdmin = session?.user?.role === "ADMIN";
-        // Admins can view full portfolio; regular users are scoped to their own client list.
+        // Admins can view the full invoice/zoho portfolio but Gmail/Google Contacts are personal
+        // sync data — always scoped to the requesting user regardless of role.
         const scopedUserId = isAdmin ? undefined : userId;
         const { searchParams } = new URL(request.url);
         const industries = searchParams.getAll("industry");
@@ -98,9 +99,16 @@ export async function GET(request: Request) {
         const pageSizeRaw = parseInt(searchParams.get("pageSize") || "25", 10) || 25;
 
         // Fetch granular source stats for the mini dashboard
+        // Invoice records are org-wide (no userId). For users with invoice access, don't apply userId
+        // scope on invoice source — use OR(userId, source=INVOICE_SYSTEM) instead.
         const userScope = scopedUserId ? { userId: scopedUserId } : {};
-        const statsBaseWhere: any = { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
-        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts, googleContactsStatsRaw] = await Promise.all([
+        const gmailUserScope = userId ? { userId } : {};
+        // Stats base: for non-admin users with invoice access, show their own records + all invoice records
+        const statsBaseWhere: any = scopedUserId && canUseInvoice
+            ? { OR: [{ userId: scopedUserId }, { source: "INVOICE_SYSTEM" }] }
+            : { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
+        const gmailStatsBaseWhere: any = { ...gmailUserScope };
+        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts, googleContactsStatsRaw, roleBasedStatsRaw] = await Promise.all([
             prisma.client.groupBy({
                 by: ['source', 'relationshipLevel'],
                 _count: { _all: true },
@@ -108,7 +116,7 @@ export async function GET(request: Request) {
             }),
             prisma.client.groupBy({
                 by: ['gmailSourceAccount'],
-                where: { ...statsBaseWhere, source: 'GMAIL' },
+                where: { ...gmailStatsBaseWhere, source: 'GMAIL' },
                 _count: { _all: true }
             }),
             prisma.gmailAccount.findMany({
@@ -119,10 +127,15 @@ export async function GET(request: Request) {
                 by: ['relationshipLevel'],
                 _count: { _all: true },
                 where: {
-                    ...statsBaseWhere,
+                    ...gmailStatsBaseWhere,
                     source: 'GMAIL',
                     metadata: { path: ["importChannels"], array_contains: "google_contacts" },
                 },
+            }),
+            prisma.client.groupBy({
+                by: ['source', 'isRoleBased'],
+                _count: { _all: true },
+                where: statsBaseWhere,
             }),
         ]);
 
@@ -131,6 +144,8 @@ export async function GET(request: Request) {
         sourceStatsRaw.forEach(curr => {
             const s = curr.source;
             if (!sourceStats[s]) sourceStats[s] = { total: 0, active: 0, inactive: 0 };
+            // Gmail rows are personal — count only the requesting user's synced contacts for the tab badge
+            if (s === 'GMAIL') return;
             sourceStats[s].total += curr._count._all;
             if (curr.relationshipLevel === 'Active') {
                 sourceStats[s].active += curr._count._all;
@@ -138,6 +153,21 @@ export async function GET(request: Request) {
                 sourceStats[s].inactive += curr._count._all;
             }
         });
+
+        // Gmail tab badge: always scoped to requesting user
+        const gmailUserStats = await prisma.client.groupBy({
+            by: ['relationshipLevel'],
+            _count: { _all: true },
+            where: { ...gmailUserScope, source: 'GMAIL' },
+        });
+        if (gmailUserStats.length > 0) {
+            sourceStats['GMAIL'] = gmailUserStats.reduce((acc: any, curr: any) => {
+                acc.total += curr._count._all;
+                if (curr.relationshipLevel === 'Active') acc.active += curr._count._all;
+                else acc.inactive += curr._count._all;
+                return acc;
+            }, { total: 0, active: 0, inactive: 0 });
+        }
 
         // Add Gmail specifics
         if (sourceStats['GMAIL']) {
@@ -157,6 +187,35 @@ export async function GET(request: Request) {
                 return acc;
             }, { total: 0, active: 0, inactive: 0 });
         }
+
+        // Attach generic/roleBased counts to each source stat entry
+        const roleBasedMap: Record<string, { generic: number; roleBased: number }> = {};
+        const addToRoleMap = (map: Record<string, { generic: number; roleBased: number }>, key: string, r: any) => {
+            if (!map[key]) map[key] = { generic: 0, roleBased: 0 };
+            if (r.isRoleBased === true) map[key].roleBased += r._count._all;
+            else map[key].generic += r._count._all; // false AND null both treated as generic
+        };
+        roleBasedStatsRaw.forEach((r: any) => addToRoleMap(roleBasedMap, r.source, r));
+        // For GMAIL use user-scoped counts
+        const gmailRoleRaw = await prisma.client.groupBy({
+            by: ['isRoleBased'],
+            _count: { _all: true },
+            where: { ...gmailUserScope, source: 'GMAIL' },
+        });
+        roleBasedMap['GMAIL'] = { generic: 0, roleBased: 0 };
+        gmailRoleRaw.forEach((r: any) => addToRoleMap(roleBasedMap, 'GMAIL', r));
+        // For GOOGLE_CONTACTS use user-scoped + importChannels filter
+        const gcRoleRaw = await prisma.client.groupBy({
+            by: ['isRoleBased'],
+            _count: { _all: true },
+            where: { ...gmailUserScope, source: 'GMAIL', metadata: { path: ["importChannels"], array_contains: "google_contacts" } },
+        });
+        roleBasedMap['GOOGLE_CONTACTS'] = { generic: 0, roleBased: 0 };
+        gcRoleRaw.forEach((r: any) => addToRoleMap(roleBasedMap, 'GOOGLE_CONTACTS', r));
+        Object.keys(sourceStats).forEach(s => {
+            const rb = roleBasedMap[s];
+            if (rb) { sourceStats[s].generic = rb.generic; sourceStats[s].roleBased = rb.roleBased; }
+        });
 
         // Add Zoho specifics (Tags breakdown for the mini-dashboard tooltips)
         if (sourceStats['ZOHO_BIGIN']) {
@@ -222,6 +281,10 @@ export async function GET(request: Request) {
             }, {} as Record<string, number>)
         };
 
+        // Gmail/Google Contacts rows are personal — always filter by the requesting user's ID
+        const isGmailOnlyQuery = sources.length > 0 && sources.every((s) => s === "GMAIL");
+        const effectiveUserId = isGmailOnlyQuery ? userId : scopedUserId;
+
         const { data: clients, total, page: resolvedPage, pageSize } = await listClients({
             industries,
             levels,
@@ -233,8 +296,9 @@ export async function GET(request: Request) {
             sortDir,
             page,
             pageSize: pageSizeRaw,
-            userId: scopedUserId,
+            userId: effectiveUserId,
             googleContactsOnly: wantsGoogleContacts,
+            invoiceAccess: canUseInvoice,
         });
 
         const emails = clients

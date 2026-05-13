@@ -16,6 +16,7 @@ export interface ListClientsParams {
   pageSize?: number;
   userId?: string;
   googleContactsOnly?: boolean;
+  invoiceAccess?: boolean; // when true, INVOICE_SYSTEM records are visible without userId scoping
 }
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -36,13 +37,39 @@ export async function listClients(params: ListClientsParams) {
     pageSize: rawPageSize = DEFAULT_PAGE_SIZE,
     userId,
     googleContactsOnly = false,
+    invoiceAccess = false,
   } = params;
 
   const pageSize = Math.min(Math.max(rawPageSize || DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
   const safePage = Math.max(page || 1, 1);
 
+  // Build userId scoping: INVOICE_SYSTEM records are org-wide (no userId), so skip userId filter for them.
+  // If user has invoice access and is querying across sources, use OR to show both their own records
+  // and all invoice records.
+  const nonInvoiceSources = sources.filter((s) => s !== "INVOICE_SYSTEM");
+  const invoiceSourceIncluded = sources.includes("INVOICE_SYSTEM") || sources.length === 0;
+  const hasUserScope = !!userId;
+
+  let userScopeClause: any = {};
+  if (hasUserScope && invoiceAccess && invoiceSourceIncluded) {
+    // Show user's own non-invoice records OR any invoice record
+    if (sources.length === 0 || (nonInvoiceSources.length > 0)) {
+      userScopeClause = {
+        OR: [
+          { userId },
+          { source: "INVOICE_SYSTEM" },
+        ],
+      };
+    } else {
+      // Only invoice source requested — no userId filter needed
+      userScopeClause = {};
+    }
+  } else if (hasUserScope) {
+    userScopeClause = { userId };
+  }
+
   const where: any = {
-    ...(userId && { userId }),
+    ...userScopeClause,
     ...(industries.length > 0 && { industry: { in: industries } }),
     ...(levels.length > 0 && { relationshipLevel: { in: levels } }),
     ...(sources.length > 0 && { source: { in: sources as any } }),
