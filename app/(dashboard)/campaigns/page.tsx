@@ -382,7 +382,7 @@ export default function CampaignGenerator() {
         const saved = readCampaignSession();
         if (saved) {
             const restoredSources = Array.isArray(saved.audienceSources)
-                ? saved.audienceSources.filter((s): s is AudienceSource => ["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"].includes(s))
+                ? saved.audienceSources.filter((s): s is AudienceSource => ["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL", "GOOGLE_CONTACTS"].includes(s))
                 : [];
             if (restoredSources.length > 0) setAudienceSources(restoredSources);
             if (typeof saved.selectedType === "string") setSelectedType(saved.selectedType);
@@ -1155,18 +1155,18 @@ export default function CampaignGenerator() {
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-sm font-semibold text-slate-900">0. Select Audience Source</h3>
                         </div>
-                        <div className="p-4 sm:p-5 md:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="p-4 sm:p-5 md:p-6 grid grid-cols-2 xl:grid-cols-4 gap-3">
                             {audienceSourceOptions.map((source) => (
-                                <button key={source.id} type="button" onClick={() => toggleAudienceSource(source.id)} className={cn("text-left p-5 rounded-lg border transition-all", audienceSources.includes(source.id) ? "bg-blue-50/60 border-blue-500 ring-1 ring-blue-500" : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <source.icon className={cn("w-5 h-5", audienceSources.includes(source.id) ? "text-blue-600" : "text-slate-400")} />
-                                            <h4 className="text-sm font-semibold text-slate-900">{source.name}</h4>
+                                <button key={source.id} type="button" onClick={() => toggleAudienceSource(source.id)} className={cn("text-left p-3.5 rounded-lg border transition-all", audienceSources.includes(source.id) ? "bg-blue-50/60 border-blue-500 ring-1 ring-blue-500" : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <source.icon className={cn("w-4 h-4 shrink-0", audienceSources.includes(source.id) ? "text-blue-600" : "text-slate-400")} />
+                                            <h4 className="text-xs font-semibold text-slate-900 leading-tight">{source.name}</h4>
                                         </div>
-                                        {audienceSources.includes(source.id) && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
+                                        {audienceSources.includes(source.id) && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
                                     </div>
-                                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{source.desc}</p>
-                                    <p className="text-[10px] font-medium text-blue-500 mt-2 leading-snug">{source.note}</p>
+                                    <p className="text-[10px] text-slate-500 leading-relaxed">{source.desc}</p>
+                                    <p className="text-[10px] font-medium text-blue-500 mt-1.5 leading-snug">{source.note}</p>
                                 </button>
                             ))}
                         </div>

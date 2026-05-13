@@ -75,26 +75,17 @@ function buildAudienceWhere(
 
   const sourceClauses = sources.map((source) => {
     if (source === "GOOGLE_CONTACTS") {
-      // Google Contacts are stored as source=GMAIL with importChannels containing "google_contacts"
+      // Google Contacts are stored as source=GMAIL; distinguished by importChannels metadata
       return {
         AND: [
-          { source: "GMAIL" },
+          { source: "GMAIL" as any },
           { metadata: { path: ["importChannels"], array_contains: "google_contacts" } },
-          { email: { not: null } },
-          { email: { not: "" } },
         ],
       };
     }
     if (source === "GMAIL") {
-      // Plain Gmail — exclude pure Google Contacts directory entries to avoid double-count
-      // when both GMAIL and GOOGLE_CONTACTS are selected simultaneously
-      const gmailClause: any[] = [
-        { source: "GMAIL" },
-        { email: { not: null } },
-        { email: { not: "" } },
-      ];
-      // If GOOGLE_CONTACTS is also selected, don't restrict further — dedup handles overlap
-      return { AND: gmailClause };
+      // All GMAIL-source clients (includes Google Contacts); deduplication in getTargetClients handles overlap
+      return { AND: [{ source: "GMAIL" as any }] };
     }
     const srcClause: any[] = [{ source }];
     if (source === "INVOICE_SYSTEM" && serviceQueries.length > 0) {
