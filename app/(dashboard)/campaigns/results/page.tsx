@@ -984,7 +984,7 @@ function CampaignResultsContent() {
                                     type="text"
                                     value={editedSubject}
                                     onChange={(e) => { setEditedSubject(e.target.value); setHasEditedSinceLoad(true); }}
-                                    className="w-full bg-transparent border-none text-[1.25rem] sm:text-[1.5rem] font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 leading-tight p-0 text-wrap-balance"
+                                    className="w-full bg-transparent border-none text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 leading-tight p-0"
                                     placeholder={isJobActive ? "Crafting your first draft..." : "Write your subject line…"}
                                     aria-label="Email Subject"
                                     disabled={campaigns.length === 0}
