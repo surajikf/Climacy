@@ -35,7 +35,10 @@ import {
     X,
     Eye,
     EyeOff,
-    MoreVertical
+    MoreVertical,
+    AlertTriangle,
+    ChevronDown,
+    Calendar
 } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 import { toast } from "sonner";
@@ -148,6 +151,11 @@ function CampaignResultsContent() {
     const [isDispatching, setIsDispatching] = useState(false);
     const [dispatchProgress, setDispatchProgress] = useState(0);
     const [dispatchMode, setDispatchMode] = useState<"SEND" | "DRAFT">("SEND");
+    const [sendMode, setSendMode] = useState<"now" | "schedule">("now");
+    const [scheduledAt, setScheduledAt] = useState("");
+    const [batchSize, setBatchSize] = useState(50);
+    const [batchDelayMinutes, setBatchDelayMinutes] = useState(5);
+    const [showBatchSettings, setShowBatchSettings] = useState(false);
     const [draftRestored, setDraftRestored] = useState(false);
     const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
     const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
@@ -563,7 +571,10 @@ function CampaignResultsContent() {
                 body: JSON.stringify({
                     campaignIds: idsToDispatch,
                     dispatchMode: mode,
-                    userId: currentUserId
+                    userId: currentUserId,
+                    batchSize,
+                    batchDelayMinutes,
+                    scheduledAt: sendMode === "schedule" && scheduledAt ? new Date(scheduledAt).toISOString() : null,
                 })
             });
 
@@ -1071,6 +1082,86 @@ function CampaignResultsContent() {
                         </div>
 
                         <div className="space-y-4 hidden md:block">
+                            {/* Send Settings */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-slate-600">Send Settings</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowBatchSettings(v => !v)}
+                                        className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
+                                    >
+                                        <AlertTriangle className="w-3 h-3" />
+                                        {(() => {
+                                            const total = selectedIds.size > 0 ? selectedIds.size : (campaigns[activeIndex] ? 1 : 0);
+                                            const batches = Math.ceil(total / batchSize);
+                                            return `${batches} batch · ~${(batches - 1) * batchDelayMinutes}m total`;
+                                        })()}
+                                        <ChevronDown className={cn("w-3 h-3 transition-transform", showBatchSettings && "rotate-180")} />
+                                    </button>
+                                </div>
+
+                                {/* Send Now / Schedule toggle */}
+                                <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-slate-50 p-1 gap-1">
+                                    <button type="button" onClick={() => setSendMode("now")}
+                                        className={cn("flex-1 py-1.5 text-xs font-semibold rounded-md transition-all", sendMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                                        Send Now
+                                    </button>
+                                    <button type="button" onClick={() => setSendMode("schedule")}
+                                        className={cn("flex-1 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center justify-center gap-1", sendMode === "schedule" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                                        <Calendar className="w-3 h-3" /> Schedule
+                                    </button>
+                                </div>
+
+                                {sendMode === "schedule" && (
+                                    <input
+                                        type="datetime-local"
+                                        value={scheduledAt}
+                                        onChange={e => setScheduledAt(e.target.value)}
+                                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 bg-white"
+                                    />
+                                )}
+
+                                {/* Batch Settings expandable */}
+                                {showBatchSettings && (
+                                    <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        {(() => {
+                                            const total = selectedIds.size > 0 ? selectedIds.size : (campaigns[activeIndex] ? 1 : 0);
+                                            return total > 500 ? (
+                                                <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                                    <p className="text-[11px] text-amber-700 leading-snug">Gmail allows ~500/day (free) or 2,000/day (Workspace). Batching prevents blocks.</p>
+                                                </div>
+                                            ) : (
+                                                <p className="text-[11px] text-slate-400">Gmail allows ~500 emails/day (free) or 2,000/day (Workspace). Batching prevents blocks.</p>
+                                            );
+                                        })()}
+                                        <div className="space-y-2">
+                                            <p className="text-[11px] font-medium text-slate-500">Emails per batch</p>
+                                            <div className="flex gap-1.5">
+                                                {[10, 25, 50, 100].map(n => (
+                                                    <button key={n} type="button" onClick={() => setBatchSize(n)}
+                                                        className={cn("flex-1 py-1 text-xs font-semibold rounded-lg border transition-all", batchSize === n ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300")}>
+                                                        {n}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-[11px] font-medium text-slate-500">Delay between batches</p>
+                                            <div className="flex gap-1.5">
+                                                {[1, 5, 10, 15, 30].map(m => (
+                                                    <button key={m} type="button" onClick={() => setBatchDelayMinutes(m)}
+                                                        className={cn("flex-1 py-1 text-[10px] font-semibold rounded-lg border transition-all", batchDelayMinutes === m ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300")}>
+                                                        {m}m
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {isDispatching && (
                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
                                     <div className="flex justify-between items-center text-[10px] font-medium text-slate-500 tabular-nums">
