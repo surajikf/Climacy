@@ -31,8 +31,8 @@ function scrubLiteralName(content: string, nameToScrub: string, replacementVaria
 }
 
 const generateCampaignSchema = z.object({
-    audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"]).optional(),
-    audienceSources: z.array(z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"])).optional(),
+    audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL", "GOOGLE_CONTACTS"]).optional(),
+    audienceSources: z.array(z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL", "GOOGLE_CONTACTS"])).optional(),
     type: z.string().min(1, "Campaign type is required"),
     topic: z.string().min(1, "Topic is required"),
     coreMessage: z.string().min(1, "Core message is required"),

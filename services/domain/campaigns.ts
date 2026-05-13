@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 
 export type CampaignType = "Broadcast" | "Targeted" | "Cross-Sell" | "Reactivation" | "Reactivate" | string;
-export type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL";
+export type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL" | "GOOGLE_CONTACTS";
 type AudienceSourceInput = AudienceSource | AudienceSource[];
 
 function getRelationshipFilterForType(type: CampaignType) {
@@ -74,6 +74,19 @@ function buildAudienceWhere(
     : [];
 
   const sourceClauses = sources.map((source) => {
+    if (source === "GOOGLE_CONTACTS") {
+      // Google Contacts are stored as source=GMAIL; distinguished by importChannels metadata
+      return {
+        AND: [
+          { source: "GMAIL" as any },
+          { metadata: { path: ["importChannels"], array_contains: "google_contacts" } },
+        ],
+      };
+    }
+    if (source === "GMAIL") {
+      // All GMAIL-source clients (includes Google Contacts); deduplication in getTargetClients handles overlap
+      return { AND: [{ source: "GMAIL" as any }] };
+    }
     const srcClause: any[] = [{ source }];
     if (source === "INVOICE_SYSTEM" && serviceQueries.length > 0) {
       srcClause.push(serviceLogic === "AND" ? { AND: serviceQueries } : { OR: serviceQueries });
@@ -180,7 +193,7 @@ export async function getTargetClients(
   const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
   if (userId) where.userId = userId;
 
-  return await prisma.client.findMany({
+  const clients = await prisma.client.findMany({
     where,
     select: {
       id: true,
@@ -194,8 +207,38 @@ export async function getTargetClients(
       invoiceServiceNames: true,
       source: true,
     },
-    orderBy: { clientName: "asc" },
+    // Source priority for dedup: INVOICE_SYSTEM > ZOHO_BIGIN > GMAIL (Google Contacts fall under GMAIL)
+    orderBy: [
+      { source: "asc" },
+      { clientName: "asc" },
+    ],
   });
+
+  // Deduplicate by email — each unique email receives exactly one campaign.
+  // When the same email exists in multiple sources, the record with the richest
+  // source is kept (INVOICE_SYSTEM > ZOHO_BIGIN > GMAIL/GOOGLE_CONTACTS).
+  const SOURCE_PRIORITY: Record<string, number> = {
+    INVOICE_SYSTEM: 0,
+    ZOHO_BIGIN: 1,
+    GMAIL: 2,
+    MANUAL: 3,
+  };
+  const seen = new Map<string, typeof clients[number]>();
+  for (const c of clients) {
+    const key = String(c.email || "").toLowerCase().trim();
+    if (!key) continue;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, c);
+    } else {
+      const existingPriority = SOURCE_PRIORITY[existing.source] ?? 99;
+      const currentPriority = SOURCE_PRIORITY[c.source] ?? 99;
+      if (currentPriority < existingPriority) seen.set(key, c);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    String(a.clientName).localeCompare(String(b.clientName))
+  );
 }
 
 

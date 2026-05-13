@@ -4,8 +4,8 @@ import { hasInvoiceAccess, getBackendSession } from "@/services/auth";
 import { z } from "zod";
 
 const targetClientsQuerySchema = z.object({
-  audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"]).optional(),
-  audienceSources: z.array(z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"])).optional(),
+  audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL", "GOOGLE_CONTACTS"]).optional(),
+  audienceSources: z.array(z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL", "GOOGLE_CONTACTS"])).optional(),
   type: z.string().min(1, "Campaign type is required"),
   serviceFilters: z.array(z.string()).optional().default([]),
   serviceLogic: z.enum(["AND", "OR"]).optional().default("OR"),

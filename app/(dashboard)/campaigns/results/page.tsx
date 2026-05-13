@@ -13,12 +13,9 @@ import {
     User,
     Mail as MailIcon,
     ChevronRight,
-    Sparkles,
     Edit3,
     Bot,
     RefreshCw,
-    Target,
-    ShieldCheck,
     SendHorizontal,
     ArrowLeft,
     Send,
@@ -35,7 +32,10 @@ import {
     X,
     Eye,
     EyeOff,
-    MoreVertical
+    MoreVertical,
+    AlertTriangle,
+    ChevronDown,
+    Calendar
 } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 import { toast } from "sonner";
@@ -47,63 +47,6 @@ import { clearCampaignSession, readCampaignSession, writeCampaignSession } from 
 
 const isTerminalJobStatus = (status?: string) => status === "SUCCEEDED" || status === "FAILED";
 
-const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: number, label: string, icon: any, color?: "blue" | "red" | "emerald" | "slate" }) => {
-    const radius = 18;
-    const circumference = 2 * Math.PI * radius;
-    const safeValue = isNaN(value) || value === undefined || value === null ? 0 : value;
-    const offset = circumference - (safeValue / 100) * circumference;
-
-    const colorMap = {
-        blue: "text-blue-600",
-        red: "text-red-500",
-        emerald: "text-emerald-500",
-        slate: "text-slate-900"
-    };
-
-    const bgMap = {
-        blue: "bg-blue-50",
-        red: "bg-red-50",
-        emerald: "bg-emerald-50",
-        slate: "bg-slate-50"
-    };
-
-    return (
-        <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 group/gauge">
-            <div className="relative w-16 h-16">
-                <svg className="w-full h-full -rotate-90 drop-shadow-sm">
-                    <circle
-                        cx="32"
-                        cy="32"
-                        r={radius}
-                        fill="transparent"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        className="text-slate-50"
-                    />
-                    <circle
-                        cx="32"
-                        cy="32"
-                        r={radius}
-                        fill="transparent"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={offset}
-                        strokeLinecap="round"
-                        className={cn("transition-all duration-[1500ms] ease-in-out", colorMap[color])}
-                    />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <Icon className={cn("w-5 h-5 opacity-20 group-hover/gauge:opacity-40 transition-opacity", colorMap[color])} />
-                </div>
-            </div>
-            <div className="text-center space-y-0.5">
-                <span className="block text-lg font-bold text-slate-900 leading-none">{safeValue}%</span>
-                <span className="block text-[11px] font-medium text-slate-500">{label}</span>
-            </div>
-        </div>
-    );
-};
 
 const StudioSkeleton = () => (
     <div className="space-y-12 animate-pulse">
@@ -148,6 +91,12 @@ function CampaignResultsContent() {
     const [isDispatching, setIsDispatching] = useState(false);
     const [dispatchProgress, setDispatchProgress] = useState(0);
     const [dispatchMode, setDispatchMode] = useState<"SEND" | "DRAFT">("SEND");
+    const [sendMode, setSendMode] = useState<"now" | "schedule">("now");
+    const [scheduledAt, setScheduledAt] = useState("");
+    const [batchSize, setBatchSize] = useState(50);
+    const [batchDelayMinutes, setBatchDelayMinutes] = useState(5);
+    const [showBatchSettings, setShowBatchSettings] = useState(false);
+    const [sendPopoverOpen, setSendPopoverOpen] = useState(false);
     const [draftRestored, setDraftRestored] = useState(false);
     const [pendingDraft, setPendingDraft] = useState<{ subject?: string; bodyHtml?: string; updatedAt?: string } | null>(null);
     const [hasEditedSinceLoad, setHasEditedSinceLoad] = useState(false);
@@ -554,7 +503,7 @@ function CampaignResultsContent() {
             setDispatchMode(mode);
             setDispatchProgress(0);
 
-            // id is now always set by the session callback (token.sub → session.user.id)
+            // id is now always set by the session callback (token.sub ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ session.user.id)
             const currentUserId = (session?.user as any)?.id || (session?.user as any)?.sub || null;
 
             const res = await fetch(apiPath("/campaigns/dispatch/batch"), {
@@ -563,7 +512,10 @@ function CampaignResultsContent() {
                 body: JSON.stringify({
                     campaignIds: idsToDispatch,
                     dispatchMode: mode,
-                    userId: currentUserId
+                    userId: currentUserId,
+                    batchSize,
+                    batchDelayMinutes,
+                    scheduledAt: sendMode === "schedule" && scheduledAt ? new Date(scheduledAt).toISOString() : null,
                 })
             });
 
@@ -688,8 +640,8 @@ function CampaignResultsContent() {
                 <h3 className="text-lg font-bold text-slate-900 tracking-tight">Generating Your Campaigns</h3>
                 <p className="text-sm text-slate-500">
                     {generationProgress > 0
-                        ? `AI is personalising emails — ${generationProgress}% done. First drafts appear as they're ready.`
-                        : "AI is scanning your contacts and crafting personalised emails. This takes 30–60 seconds."}
+                        ? `AI is personalizing emails - ${generationProgress}% done. First drafts appear as they're ready.`
+                        : "AI is scanning your contacts and crafting personalized emails. This takes 30-60 seconds."}
                 </p>
             </div>
             <div className="w-full max-w-xs space-y-2">
@@ -704,7 +656,7 @@ function CampaignResultsContent() {
                     />
                 </div>
             </div>
-            <p className="text-[11px] text-slate-400">You can stay on this page — drafts will appear automatically.</p>
+            <p className="text-[11px] text-slate-400">You can stay on this page - drafts will appear automatically.</p>
         </div>
     );
 
@@ -713,14 +665,14 @@ function CampaignResultsContent() {
         <div className="w-full py-8 px-3 sm:px-4 lg:px-6">
             <div className="mb-4 text-sm text-slate-500 font-medium flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-                {jobStatusText ? `Preparing… (${jobStatusText})` : "Preparing…"}
+                {jobStatusText ? `Preparing... (${jobStatusText})` : "Preparing..."}
             </div>
             <StudioSkeleton />
         </div>
     );
 
-    // If we have no campaigns AND no active job, show empty state
-    if (campaigns.length === 0 && !isJobActive) {
+    // If we have no campaigns AND no active job AND finished loading, show empty state
+    if (!loading && campaigns.length === 0 && !isJobActive) {
         return (
             <div className="w-full min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
                 <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-sm">
@@ -745,7 +697,7 @@ function CampaignResultsContent() {
     const activeCampaign = campaigns[activeIndex];
 
     return (
-        <div className="w-full space-y-6 pb-24 px-3 sm:px-4 lg:px-6 max-w-[1600px] mx-auto">
+        <div className="w-full space-y-5 pb-16 px-3 sm:px-4 lg:px-6 max-w-[1500px] mx-auto">
             <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-2 py-4">
                 <div className="flex items-center gap-4">
                     <button 
@@ -786,16 +738,152 @@ function CampaignResultsContent() {
                             clearCampaignSession();
                             router.push(appPath("/campaigns"));
                         }}
-                        className="flex-1 sm:flex-none text-xs font-bold text-rose-600 hover:text-rose-700 transition-all px-4 py-2 rounded-lg hover:bg-rose-50 border border-rose-200"
+                        className="flex-1 sm:flex-none text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all px-4 py-2 rounded-lg hover:bg-slate-100 border border-slate-200"
                     >
                         New Campaign
                     </button>
+
+                    {/* Send popover trigger */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setSendPopoverOpen(v => !v)}
+                            disabled={isDispatching || (selectedIds.size === 0 && !campaigns[activeIndex])}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-all shadow-sm disabled:opacity-50 active:scale-[0.98]"
+                        >
+                            {isDispatching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            {isDispatching ? (dispatchMode === "DRAFT" ? "Drafting..." : `Sending... ${dispatchProgress}%`) : "Send"}
+                            {!isDispatching && <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", sendPopoverOpen && "rotate-180")} />}
+                        </button>
+
+                        <AnimatePresence>
+                            {sendPopoverOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute right-0 top-full mt-2 w-[min(92vw,34rem)] sm:w-[30rem] md:w-[32rem] lg:w-[34rem] max-h-[min(82vh,44rem)] bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 overflow-y-auto overscroll-contain"
+                                >
+                                    {/* Header + quality summary */}
+                                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-900">Review & Send</p>
+                                                <p className="text-[11px] text-slate-500">Set timing, then send.</p>
+                                            </div>
+                                            <button onClick={() => setSendPopoverOpen(false)} aria-label="Close send panel" className="text-slate-400 hover:text-slate-600">
+                                                <X className="w-4 h-4" aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700">
+                                                {selectedIds.size || 1} emails
+                                            </span>
+                                            <span className="inline-flex items-center rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
+                                                Strength {activeCampaign?.content?.leadStrength || 0}%
+                                            </span>
+                                            <span className="inline-flex items-center rounded-md border border-rose-100 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-600">
+                                                Spam {activeCampaign?.content?.spamRisk || 0}%
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 space-y-3.5">
+                                        <div className="space-y-2">
+                                            <p className="text-[11px] font-semibold text-slate-500">Send Time</p>
+                                            <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-slate-50 p-1 gap-1">
+                                                <button type="button" onClick={() => setSendMode("now")}
+                                                    className={cn("flex-1 py-1.5 text-xs font-semibold rounded-md transition-all", sendMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                                                    Send Now
+                                                </button>
+                                                <button type="button" onClick={() => setSendMode("schedule")}
+                                                    className={cn("flex-1 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center justify-center gap-1", sendMode === "schedule" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                                                    <Calendar className="w-3 h-3" /> Schedule
+                                                </button>
+                                            </div>
+                                            {sendMode === "schedule" && (
+                                                <div className="space-y-1">
+                                                    <label htmlFor="schedule-at" className="text-[11px] font-medium text-slate-500">Schedule Date & Time</label>
+                                                    <input id="schedule-at" type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
+                                                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 bg-white" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <p className="text-[11px] font-semibold text-slate-500">Sending Pace</p>
+                                            <button type="button" onClick={() => setShowBatchSettings(v => !v)}
+                                                className="flex items-center justify-between w-full text-xs font-medium text-slate-500 hover:text-slate-700">
+                                                <span>Batch settings</span>
+                                                <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                                                    {Math.ceil((selectedIds.size || 1) / batchSize)} batches - ~{(Math.ceil((selectedIds.size || 1) / batchSize) - 1) * batchDelayMinutes} min total pause
+                                                    <ChevronDown className={cn("w-3 h-3 transition-transform", showBatchSettings && "rotate-180")} />
+                                                </span>
+                                            </button>
+                                            {showBatchSettings && (
+                                                <div className="space-y-2.5 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                                    {(selectedIds.size || 1) > 500 && (
+                                                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                                            <p className="text-[11px] text-amber-700">Gmail ~500/day free, 2,000/day Workspace. Batching prevents blocks.</p>
+                                                        </div>
+                                                    )}
+                                                    <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-2.5 py-2">
+                                                        <p className="text-[11px] font-medium text-blue-700">
+                                                            {selectedIds.size || 1} emails in {Math.ceil((selectedIds.size || 1) / batchSize)} batches with ~{(Math.ceil((selectedIds.size || 1) / batchSize) - 1) * batchDelayMinutes} min pause.
+                                                        </p>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-[11px] font-medium text-slate-500">Emails per batch</p>
+                                                        <div className="flex gap-1.5">
+                                                            {[25, 50, 100].map(n => (
+                                                                <button key={n} type="button" onClick={() => setBatchSize(n)}
+                                                                    className={cn("flex-1 py-1 text-xs font-semibold rounded-lg border transition-all", batchSize === n ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300")}>
+                                                                    {n} emails
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-[11px] font-medium text-slate-500">Delay between batches</p>
+                                                        <div className="flex gap-1.5">
+                                                            {[1, 5, 10].map(m => (
+                                                                <button key={m} type="button" onClick={() => setBatchDelayMinutes(m)}
+                                                                    className={cn("flex-1 py-1 text-[10px] font-semibold rounded-lg border transition-all", batchDelayMinutes === m ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300")}>
+                                                                    {m} min
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-2 pt-2 border-t border-slate-100">
+                                            <button onClick={() => { setSendPopoverOpen(false); handleBatchDispatch("DRAFT"); }}
+                                                disabled={isDispatching}
+                                                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-all disabled:opacity-50">
+                                                <FileDown className="w-3.5 h-3.5" />
+                                                {selectedIds.size > 1 ? `Save ${selectedIds.size} Drafts` : "Save Draft"}
+                                            </button>
+                                            <button onClick={() => { setSendPopoverOpen(false); handleBatchDispatch("SEND"); }}
+                                                disabled={isDispatching}
+                                                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-50">
+                                                <Send className="w-3.5 h-3.5" />
+                                                {selectedIds.size > 1 ? `Send ${selectedIds.size} Emails` : "Send Email"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 lg:grid-cols-12 gap-6 items-start relative">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start relative">
                 {/* Left: Campaign List (Desktop/Tablet) */}
-                <div className="hidden md:block md:col-span-4 lg:col-span-3 space-y-4 sticky top-6">
+                <div className="hidden md:block md:col-span-3 space-y-4 sticky top-4">
                     <div className="flex items-center justify-between px-2">
                         <h3 className="text-xs font-semibold text-slate-500">Company Queue</h3>
                         {campaigns.length > 1 && (
@@ -821,7 +909,7 @@ function CampaignResultsContent() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                         <input 
                             type="text" 
-                            placeholder="Search clients…"
+                            placeholder="Search clients..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-slate-100/50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all"
@@ -916,7 +1004,7 @@ function CampaignResultsContent() {
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                         <input 
                                             type="text" 
-                                            placeholder="Search clients…"
+                                            placeholder="Search clients..."
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all"
@@ -961,8 +1049,8 @@ function CampaignResultsContent() {
                     )}
                 </AnimatePresence>
 
-                <div className="col-span-1 md:col-span-8 lg:col-span-6 space-y-6">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[680px] sm:h-[720px] transition-all relative">
+                <div className="col-span-1 md:col-span-9 space-y-5">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[calc(100vh-220px)] min-h-[520px] max-h-[800px] transition-all relative">
                         <div className="p-4 sm:p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar bg-white">
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 group">
@@ -973,8 +1061,8 @@ function CampaignResultsContent() {
                                     type="text"
                                     value={editedSubject}
                                     onChange={(e) => { setEditedSubject(e.target.value); setHasEditedSinceLoad(true); }}
-                                    className="w-full bg-transparent border-none text-[1.25rem] sm:text-[1.5rem] font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 leading-tight p-0 text-wrap-balance"
-                                    placeholder={isJobActive ? "Crafting your first draft..." : "Write your subject line…"}
+                                    className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 hover:bg-white focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    placeholder={isJobActive ? "Crafting your first draft..." : "Write your subject line..."}
                                     aria-label="Email Subject"
                                     disabled={campaigns.length === 0}
                                 />
@@ -1005,7 +1093,7 @@ function CampaignResultsContent() {
                                         onChange={(v) => { setEditedBody(v); setHasEditedSinceLoad(true); }}
                                         onSave={handleSaveEvolution}
                                         onSend={() => handleBatchDispatch("SEND")}
-                                        placeholder={isJobActive ? "Drafting narrative..." : "Refine the narrative…"}
+                                        placeholder={isJobActive ? "Drafting narrative..." : "Refine the narrative..."}
                                         sampleData={activeCampaign?.client}
                                     />
                                 )}
@@ -1039,110 +1127,6 @@ function CampaignResultsContent() {
                     </div>
                 </div>
 
-                {/* Right: Controls & Metrics */}
-                <div className="md:col-span-12 lg:col-span-3 space-y-6 lg:sticky lg:top-8">
-                    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-8">
-                        <div className="space-y-6">
-                            <h3 className="text-xs font-semibold text-slate-500 text-center">Email Quality</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="relative group/tooltip flex justify-center cursor-help">
-                                    <MicroGauge
-                                        value={activeCampaign?.content?.leadStrength || 0}
-                                        label="Strength"
-                                        icon={Target}
-                                        color="blue"
-                                    />
-                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/tooltip:opacity-100 transition-all duration-300 translate-y-2 group-hover/tooltip:translate-y-0 bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl pointer-events-none">
-                                        Estimated impact
-                                    </div>
-                                </div>
-                                <div className="relative group/tooltip flex justify-center cursor-help">
-                                    <MicroGauge
-                                        value={activeCampaign?.content?.spamRisk || 0}
-                                        label="Risk"
-                                        icon={ShieldCheck}
-                                        color="red"
-                                    />
-                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/tooltip:opacity-100 transition-all duration-300 translate-y-2 group-hover/tooltip:translate-y-0 bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl pointer-events-none">
-                                        Deliverability Risk
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4 hidden md:block">
-                            {isDispatching && (
-                                <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
-                                    <div className="flex justify-between items-center text-[10px] font-medium text-slate-500 tabular-nums">
-                                        <span>{dispatchMode === "DRAFT" ? "Drafting…" : "Sending…"}</span>
-                                        <span>{dispatchProgress}%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-blue-600 transition-all duration-300"
-                                            style={{ width: `${dispatchProgress}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="p-1.5 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                                <button
-                                    onClick={() => handleBatchDispatch("DRAFT")}
-                                    disabled={isDispatching || (selectedIds.size === 0 && !campaigns[activeIndex])}
-                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                                    aria-label="Save draft to Gmail"
-                                >
-                                    {isDispatching && dispatchMode === "DRAFT" ? (
-                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                        <FileDown className="w-3.5 h-3.5" />
-                                    )}
-                                    {isDispatching && dispatchMode === "DRAFT"
-                                        ? "Creating…"
-                                        : selectedIds.size > 1
-                                            ? `Save ${selectedIds.size} Drafts`
-                                            : "Save Draft"}
-                                </button>
-                                <button
-                                    onClick={() => handleBatchDispatch("SEND")}
-                                    disabled={isDispatching || (selectedIds.size === 0 && !campaigns[activeIndex])}
-                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-blue-600 border border-blue-700 text-white text-sm font-semibold shadow-[0_4px_12px_rgba(37,99,235,0.15)] hover:bg-blue-700 active:scale-[0.98] transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                                    aria-label="Send email via Gmail"
-                                >
-                                    {isDispatching && dispatchMode === "SEND" ? (
-                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                        <Send className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                                    )}
-                                    {isDispatching && dispatchMode === "SEND"
-                                        ? "Sending…"
-                                        : selectedIds.size > 1
-                                            ? `Send ${selectedIds.size} Emails`
-                                            : "Send Email"}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="bg-slate-900 p-6 rounded-2xl space-y-4 shadow-xl relative group overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-12 -mt-12" />
-                            <div className="flex items-center gap-2 relative z-10">
-                                <Sparkles className="w-4 h-4 text-emerald-400" />
-                                <h4 className="text-xs font-semibold text-white">Quick Tip</h4>
-                            </div>
-                            <p className="text-[11px] text-slate-400 leading-relaxed font-medium relative z-10">
-                                This message fits the {activeCampaign?.campaignType} goal. Keep one clear value point and one clear next step.
-                            </p>
-                            <div className="pt-2 flex items-center gap-2 relative z-10">
-                                <div className="flex -space-x-2">
-                                    <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-slate-900" />
-                                    <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-slate-900" />
-                                </div>
-                                <span className="text-[10px] font-medium text-slate-500">Confidence: High</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Floating Action HUD (Mobile/Selection) */}
@@ -1204,7 +1188,7 @@ function CampaignResultsContent() {
                                     className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
                                 />
                             </div>
-                        )}
+                            )}
                     </motion.div>
                 )}
             </AnimatePresence>
