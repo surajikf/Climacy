@@ -429,42 +429,28 @@ export default function ImportIntegrationsPage() {
             const syncOptions = buildSyncOptionsPayload(savedProfile || gmailSyncProfile);
             toast.info(`Syncing ${accountName} with: ${profileSummary(savedProfile || gmailSyncProfile)}`);
             const cleanupMode = accountEmail ? getCleanupModeForAccount(accountEmail.toLowerCase()) : "none";
-            const result = await safeImportRequest<{ jobId: string }>("/api/import/gmail", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ accountId, options: syncOptions, cleanupMode })
-            });
+
+            // Run sync immediately inline — no job worker required
+            const result = await safeImportRequest<{ count: number; conflicts: number; skippedAutomatedTotal?: number; skippedAutomatedByCategory?: Record<string, number>; skippedAutomatedSamples?: string[]; immediate?: boolean }>(
+                "/api/import/gmail?immediate=true",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ accountId, options: syncOptions, cleanupMode }),
+                }
+            );
+
             if (accountEmail) {
                 clearCleanupModeForAccount(accountEmail.toLowerCase());
             }
 
-            const jobId = result.data?.jobId;
-            if (!result.ok || !jobId) {
+            if (!result.ok) {
                 toast.error(result.message || `Failed to sync from ${accountName}`);
                 setGmailStatus(accountId, "error");
                 return;
             }
 
-            const pollJob = async () => {
-                const maxAttempts = 900; // ~30 minutes @ 2s
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    const res = await fetch(apiPath(`/jobs/${encodeURIComponent(jobId)}`));
-                    const json = await res.json().catch(() => null);
-                    const job = json?.data?.job;
-
-                    if (json?.success && job) {
-                        if (job.status === "SUCCEEDED") return job;
-                        if (job.status === "FAILED") throw new Error(job.error || "Gmail import failed.");
-                    }
-
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-
-                throw new Error("Gmail import timed out.");
-            };
-
-            const finalJob: any = await pollJob();
-            const data = finalJob?.result || {};
+            const data = result.data || {} as any;
             const count = Number(data.count || 0);
             const conflicts = Number(data.conflicts || 0);
             const skippedAutomatedTotal = Number(data.skippedAutomatedTotal || 0);

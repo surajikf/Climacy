@@ -8,6 +8,7 @@ import { dedupeLeadingSalutation, normalizeEmailBodyHtml } from "@/lib/shared/em
 import { evaluateEmailQuality } from "@/lib/shared/campaign-quality";
 import { hasInvoiceAccess, getBackendSession } from "@/services/auth";
 import { runAiWithFallback } from "@/services/ai-router";
+import { runCampaignGenerateInline } from "@/services/workers/campaign-generate";
 
 /**
  * Aggressively replaces a literal name with a variable placeholder.
@@ -116,14 +117,36 @@ export async function POST(request: Request) {
         }
 
         if (!payload.sampleOnly) {
+            // Create a job record immediately so the results page can poll it.
+            // Then run generation inline (no separate worker process needed).
             const job = await (prisma as any).job.create({
                 data: {
                     type: "CAMPAIGN_GENERATE",
-                    status: "QUEUED",
+                    status: "RUNNING",
                     progress: 0,
                     payload: { ...payload, _userId: sessionUser?.id ?? null },
+                    startedAt: new Date(),
+                    attempts: 1,
                 },
             });
+
+            // Run generation inline — fire and forget so HTTP response returns immediately.
+            // Client polls /jobs/:id for SUCCEEDED/FAILED status.
+            (async () => {
+                try {
+                    const result = await runCampaignGenerateInline(job.id, { ...payload, _userId: sessionUser?.id ?? null });
+                    await (prisma as any).job.update({
+                        where: { id: job.id },
+                        data: { status: "SUCCEEDED", progress: 100, finishedAt: new Date(), result, error: null },
+                    });
+                } catch (err: any) {
+                    const message = typeof err?.message === "string" ? err.message : String(err || "Unknown error");
+                    await (prisma as any).job.update({
+                        where: { id: job.id },
+                        data: { status: "FAILED", finishedAt: new Date(), error: message },
+                    }).catch(() => {});
+                }
+            })();
 
             return ok({ jobId: job.id }, { status: 202 });
         }

@@ -99,11 +99,15 @@ export async function GET(request: Request) {
         const pageSizeRaw = parseInt(searchParams.get("pageSize") || "25", 10) || 25;
 
         // Fetch granular source stats for the mini dashboard
+        // Invoice records are org-wide (no userId). For users with invoice access, don't apply userId
+        // scope on invoice source — use OR(userId, source=INVOICE_SYSTEM) instead.
         const userScope = scopedUserId ? { userId: scopedUserId } : {};
-        // Gmail/Google Contacts are personal data — always scoped to the requesting user
         const gmailUserScope = userId ? { userId } : {};
-        const statsBaseWhere: any = { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
-        const gmailStatsBaseWhere: any = { ...gmailUserScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
+        // Stats base: for non-admin users with invoice access, show their own records + all invoice records
+        const statsBaseWhere: any = scopedUserId && canUseInvoice
+            ? { OR: [{ userId: scopedUserId }, { source: "INVOICE_SYSTEM" }] }
+            : { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
+        const gmailStatsBaseWhere: any = { ...gmailUserScope };
         const [sourceStatsRaw, gmailStatsRaw, gmailAccounts, googleContactsStatsRaw] = await Promise.all([
             prisma.client.groupBy({
                 by: ['source', 'relationshipLevel'],
@@ -260,6 +264,7 @@ export async function GET(request: Request) {
             pageSize: pageSizeRaw,
             userId: effectiveUserId,
             googleContactsOnly: wantsGoogleContacts,
+            invoiceAccess: canUseInvoice,
         });
 
         const emails = clients
