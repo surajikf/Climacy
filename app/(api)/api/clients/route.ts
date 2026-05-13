@@ -6,6 +6,10 @@ import { z } from "zod";
 import { ok, error } from "@/services/api-response";
 import { parseJsonBody } from "@/services/validation";
 import { getBackendSession, hasInvoiceAccess } from "@/services/auth";
+import { after } from "next/server";
+
+// Track if backfill has run this process lifetime to avoid re-running on every request
+let _roleBackfillDone = false;
 
 function computeClientQuality(client: {
     email: string | null;
@@ -355,6 +359,25 @@ export async function GET(request: Request) {
                 },
             };
         });
+
+        // One-time background backfill: fix any stale isRoleBased values in the DB
+        if (!_roleBackfillDone) {
+            _roleBackfillDone = true;
+            after(async () => {
+                try {
+                    const all = await prisma.client.findMany({ select: { id: true, email: true, isRoleBased: true } });
+                    const toFix = all.filter(c => c.email && isRoleBasedEmail(c.email) !== c.isRoleBased);
+                    if (toFix.length > 0) {
+                        await Promise.all(toFix.map(c =>
+                            prisma.client.update({ where: { id: c.id }, data: { isRoleBased: isRoleBasedEmail(c.email!) } }).catch(() => {})
+                        ));
+                        console.log(`[BACKFILL] Fixed isRoleBased for ${toFix.length} records.`);
+                    }
+                } catch (e) {
+                    console.error("[BACKFILL] isRoleBased backfill failed:", e);
+                }
+            });
+        }
 
         return ok({
             clients: enrichedClients,
